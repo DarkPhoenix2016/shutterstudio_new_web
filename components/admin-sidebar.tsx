@@ -11,10 +11,12 @@ import {
   ScrollText,
   LogOut,
   Camera,
+  UserCog,
 } from "lucide-react"
 import { useRouter, usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
-import { useStore } from "@/lib/store"
+// [!code highlight] REMOVED useStore for user management
+import { useAuth } from "@/context/AuthContext"
 import {
   Sidebar,
   SidebarContent,
@@ -27,6 +29,7 @@ import {
   SidebarGroupLabel,
   SidebarGroupContent,
 } from "@/components/ui/sidebar"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 
 const NAV_ITEMS = {
   overview: [
@@ -46,17 +49,41 @@ const NAV_ITEMS = {
 }
 
 export function AdminSidebar() {
-  const setCurrentUser = useStore((state) => state.setCurrentUser)
+  // [!code highlight] CHANGED: Get everything from AuthContext
+  const { currentUser, userData, logout } = useAuth()
+  
   const router = useRouter()
   const pathname = usePathname()
 
-  const handleLogout = () => {
-    setCurrentUser(null)
-    router.push("/")
+  const handleLogout = async () => {
+    try {
+      // 1. Clear Firebase Session
+      await logout()
+      // 2. Redirect
+      router.push("/admin/login")
+    } catch (error) {
+      console.error("Logout failed:", error)
+    }
   }
+
+  // Helper to get initials
+  const getInitials = (name: string) => {
+    return name
+      ?.split(" ")
+      .map((n) => n[0])
+      .join("")
+      .toUpperCase()
+      .substring(0, 2) || "AD"
+  }
+
+  // [!code highlight] CHANGED: Determine display values from Firestore userData
+  const displayName = userData?.name || userData?.displayName || "Admin User"
+  const displayEmail = userData?.email || currentUser?.email || "admin@shutterstudio.com"
+  const displayImage = userData?.profileImage || userData?.photoURL
 
   return (
     <Sidebar className="border-r border-border/50 bg-[#0F2854]">
+      {/* HEADER */}
       <SidebarHeader className="p-4 border-b border-[#1C4D8D]/30 bg-[#0F2854]">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -71,6 +98,7 @@ export function AdminSidebar() {
         </div>
       </SidebarHeader>
 
+      {/* CONTENT */}
       <SidebarContent className="bg-[#0F2854] py-4">
         {/* GROUP 1: OVERVIEW */}
         <SidebarGroup>
@@ -81,7 +109,6 @@ export function AdminSidebar() {
             <SidebarMenu>
               {NAV_ITEMS.overview.map((item) => {
                 const isActive = pathname === item.path
-
                 return (
                   <SidebarMenuItem key={item.id}>
                     <SidebarMenuButton
@@ -116,7 +143,6 @@ export function AdminSidebar() {
             <SidebarMenu>
               {NAV_ITEMS.tenantManagement.map((item) => {
                 const isActive = pathname === item.path
-
                 return (
                   <SidebarMenuItem key={item.id}>
                     <SidebarMenuButton
@@ -151,7 +177,6 @@ export function AdminSidebar() {
             <SidebarMenu>
               {NAV_ITEMS.platformConfig.map((item) => {
                 const isActive = pathname === item.path
-
                 return (
                   <SidebarMenuItem key={item.id}>
                     <SidebarMenuButton
@@ -178,16 +203,35 @@ export function AdminSidebar() {
         </SidebarGroup>
       </SidebarContent>
 
+      {/* FOOTER - USER PROFILE */}
       <SidebarFooter className="p-4 border-t border-[#1C4D8D]/30 bg-[#0F2854]">
-        <div className="flex items-center gap-3 mb-3 px-2">
-          <div className="w-9 h-9 rounded-full bg-gradient-to-br from-[#1C4D8D] to-[#4988C4] flex items-center justify-center text-white font-bold text-sm shadow-md">
-            RA
-          </div>
+        {/* Clickable Profile Area */}
+        <div 
+          onClick={() => router.push('/admin/profile')}
+          className="flex items-center gap-3 mb-3 px-2 py-2 -mx-2 rounded-lg cursor-pointer hover:bg-[#1C4D8D]/30 transition-colors group/profile"
+        >
+          <Avatar className="h-9 w-9 border border-[#4988C4]/50">
+            {/* [!code highlight] Safe check for displayImage */}
+            <AvatarImage src={displayImage || undefined} alt={displayName} />
+            <AvatarFallback className="bg-gradient-to-br from-[#1C4D8D] to-[#4988C4] text-white font-bold text-xs">
+              {getInitials(displayName)}
+            </AvatarFallback>
+          </Avatar>
+          
           <div className="flex flex-col overflow-hidden flex-1">
-            <span className="text-sm font-semibold text-white truncate">Root Admin</span>
-            <span className="text-[10px] text-[#BDE8F5]/70 truncate">admin@shutterstudio.com</span>
+            <div className="flex items-center gap-2">
+               <span className="text-sm font-semibold text-white truncate group-hover/profile:text-[#BDE8F5] transition-colors">
+                 {displayName}
+               </span>
+               <UserCog className="w-3 h-3 text-[#BDE8F5]/50 opacity-0 group-hover/profile:opacity-100 transition-opacity" />
+            </div>
+            <span className="text-[10px] text-[#BDE8F5]/70 truncate" title={displayEmail}>
+              {displayEmail}
+            </span>
           </div>
         </div>
+
+        {/* Logout Button */}
         <button
           onClick={handleLogout}
           className="flex items-center justify-center gap-2 w-full px-3 py-2 rounded-lg text-sm text-[#BDE8F5] hover:text-white hover:bg-red-500/20 transition-all group border border-transparent hover:border-red-500/30"

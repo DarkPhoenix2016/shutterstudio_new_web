@@ -8,8 +8,32 @@ import { Textarea } from "@/components/ui/textarea"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { AlertCircle, Save, Mail, Megaphone } from "lucide-react"
+import Swal from "sweetalert2"
 
 export default function SettingsPage() {
+  
+  const handleBroadcast = () => {
+    Swal.fire({
+      title: 'Send Broadcast?',
+      text: "This message will be visible to all active studios immediately.",
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#1C4D8D',
+      cancelButtonColor: '#d33',
+      confirmButtonText: 'Yes, broadcast it!'
+    }).then((result) => {
+      if (result.isConfirmed) {
+        // Here you would typically trigger an API call to save the notification
+        Swal.fire({
+          title: 'Sent!',
+          text: 'The announcement has been pushed to all dashboards.',
+          icon: 'success',
+          confirmButtonColor: '#1C4D8D'
+        })
+      }
+    })
+  }
+
   return (
     <div className="flex-1 space-y-6 p-6">
       <div>
@@ -17,7 +41,7 @@ export default function SettingsPage() {
         <p className="text-muted-foreground mt-1">Platform-wide configuration and system controls</p>
       </div>
 
-      {/* Maintenance Mode */}
+      {/* Maintenance Mode (Existing) */}
       <Card className="border-none shadow-md">
         <CardHeader className="border-b bg-slate-50/50">
           <CardTitle>System Maintenance</CardTitle>
@@ -43,7 +67,7 @@ export default function SettingsPage() {
         </CardContent>
       </Card>
 
-      {/* Announcements */}
+      {/* Announcements with SweetAlert Hook */}
       <Card className="border-none shadow-md">
         <CardHeader className="border-b bg-slate-50/50">
           <CardTitle className="flex items-center gap-2">
@@ -63,14 +87,17 @@ export default function SettingsPage() {
               className="min-h-[100px]"
             />
           </div>
-          <Button className="bg-[#1C4D8D] hover:bg-[#1C4D8D]/90">
+          <Button 
+            className="bg-[#1C4D8D] hover:bg-[#1C4D8D]/90"
+            onClick={handleBroadcast}
+          >
             <Megaphone className="h-4 w-4 mr-2" />
             Broadcast to All Studios
           </Button>
         </CardContent>
       </Card>
 
-      {/* SMTP Configuration */}
+      {/* SMTP Configuration (Existing) */}
       <Card className="border-none shadow-md">
         <CardHeader className="border-b bg-slate-50/50">
           <CardTitle className="flex items-center gap-2">
