@@ -18,7 +18,7 @@ import {
   CreditCard, Calendar, CheckCircle2, Clock, FileText, Loader2, Link as LinkIcon, AlertTriangle, Edit, Trash2, Plus, ChevronLeft, ChevronRight, Search 
 } from "lucide-react"
 import Swal from "sweetalert2"
-import { collection, doc, getDocs, getDoc, setDoc, updateDoc, query, orderBy, Timestamp, increment } from "firebase/firestore"
+import { collection, doc, getDocs, getDoc, setDoc, updateDoc, deleteDoc, query, orderBy, Timestamp, increment } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 import { logAuditAction } from "@/lib/logger"
 import { format, addMonths, addYears, differenceInDays, parseISO } from "date-fns"
@@ -77,7 +77,7 @@ const Toast = Swal.mixin({
 })
 
 const ITEMS_PER_PAGE = 20
-const DIALOG_ITEMS_PER_PAGE = 5 // Keep smaller limit for the modal view
+const DIALOG_ITEMS_PER_PAGE = 5
 
 export default function BillingPage() {
   const { currentUser } = useAuth()
@@ -90,7 +90,7 @@ export default function BillingPage() {
   const [studioSearch, setStudioSearch] = useState("")
   const [invoiceSearch, setInvoiceSearch] = useState("")
 
-  // Pagination States (Main Tabs)
+  // Pagination States
   const [studioPage, setStudioPage] = useState(1)
   const [invoicePage, setInvoicePage] = useState(1)
 
@@ -113,7 +113,7 @@ export default function BillingPage() {
   const [selectedInvoice, setSelectedInvoice] = useState<InvoiceDetails | null>(null)
   const [isInvoiceOpen, setIsInvoiceOpen] = useState(false)
 
-  // Studio Invoice History State (Dialog)
+  // Studio Invoice History State
   const [historyStudio, setHistoryStudio] = useState<StudioBillingInfo | null>(null)
   const [isHistoryOpen, setIsHistoryOpen] = useState(false)
   const [studioHistoryInvoices, setStudioHistoryInvoices] = useState<InvoiceData[]>([])
@@ -125,7 +125,7 @@ export default function BillingPage() {
   useEffect(() => {
     const loadData = async () => {
       try {
-        // A. Fetch Packages
+        // A. Packages
         const platformPkgDoc = await getDoc(doc(db, "Platform", "packages"))
         const pkgMap: Record<string, PackageConfig> = {}
         if (platformPkgDoc.exists()) {
@@ -140,24 +140,19 @@ export default function BillingPage() {
         }
         setPackages(pkgMap)
 
-        // B. Fetch Studios & Configs
+        // B. Studios
         const studiosSnap = await getDocs(collection(db, "Studios"))
-        
         const studioList = await Promise.all(studiosSnap.docs.map(async (docSnap) => {
             const d = docSnap.data()
             const studioId = docSnap.id
-            
             const configRef = doc(db, `Studios/${studioId}/Subscription/config`)
             const configSnap = await getDoc(configRef)
             const config = configSnap.exists() ? configSnap.data() : null
-
             const isMapped = !!config && !!config.packageId
             const regDateObj = config?.regDate ? safeDate(config.regDate) : (d.createdAt ? safeDate(d.createdAt) : new Date())
             const pkgInfo = isMapped ? pkgMap[config.packageId] : null
-            
             let nextDate = regDateObj
             let daysLeft = 0
-            
             if (isMapped) {
                 const cycle = config.cycle?.toLowerCase() || "monthly"
                 const today = new Date()
@@ -168,11 +163,9 @@ export default function BillingPage() {
                 nextDate = tempDate
                 daysLeft = differenceInDays(nextDate, today)
             }
-
             const currentSeq = config?.invoice_number || 1000
             const prefix = config?.invoice_prefix || "INV"
             const lastInvStr = currentSeq > 1000 ? `${prefix}-${currentSeq - 1}` : "N/A"
-
             return {
                 id: studioId,
                 name: d.name || "Unnamed",
@@ -191,10 +184,9 @@ export default function BillingPage() {
                 daysPending: isMapped ? daysLeft : 0
             } as StudioBillingInfo
         }))
-
         setStudios(studioList)
 
-        // C. Fetch All Invoices (Root)
+        // C. Invoices
         const invQuery = query(collection(db, "Invoices"), orderBy("generatedDate", "desc"))
         const invSnap = await getDocs(invQuery)
         const invList: InvoiceData[] = invSnap.docs.map(doc => {
@@ -218,7 +210,7 @@ export default function BillingPage() {
     loadData()
   }, [])
 
-  // --- FILTER & PAGINATION LOGIC (Active Studios) ---
+  // --- FILTERS ---
   const filteredStudios = studios.filter(s => 
     s.name.toLowerCase().includes(studioSearch.toLowerCase()) || 
     s.packageName.toLowerCase().includes(studioSearch.toLowerCase()) ||
@@ -226,12 +218,8 @@ export default function BillingPage() {
   )
   const totalStudioPages = Math.ceil(filteredStudios.length / ITEMS_PER_PAGE)
   const currentStudioItems = filteredStudios.slice((studioPage - 1) * ITEMS_PER_PAGE, studioPage * ITEMS_PER_PAGE)
-
-  // Reset page on search
   useEffect(() => { setStudioPage(1) }, [studioSearch])
 
-
-  // --- FILTER & PAGINATION LOGIC (Main Invoice History) ---
   const filteredInvoices = invoices.filter(inv => 
     inv.id.toLowerCase().includes(invoiceSearch.toLowerCase()) || 
     inv.studioName.toLowerCase().includes(invoiceSearch.toLowerCase()) ||
@@ -239,12 +227,9 @@ export default function BillingPage() {
   )
   const totalInvoicePages = Math.ceil(filteredInvoices.length / ITEMS_PER_PAGE)
   const currentInvoiceItems = filteredInvoices.slice((invoicePage - 1) * ITEMS_PER_PAGE, invoicePage * ITEMS_PER_PAGE)
-
-  // Reset page on search
   useEffect(() => { setInvoicePage(1) }, [invoiceSearch])
 
-
-  // --- ACTIONS: MAPPING ---
+  // --- MAPPING ---
   const openMappingDialog = (studio: StudioBillingInfo) => {
     setMappingStudio(studio)
     setMapForm({
@@ -262,7 +247,6 @@ export default function BillingPage() {
     try {
         const pkgName = packages[mapForm.packageId]?.name || mapForm.packageId
         const subConfigRef = doc(db, `Studios/${mappingStudio.id}/Subscription/config`)
-        
         const updateData: any = {
             packageId: mapForm.packageId,
             packageName: pkgName,
@@ -273,9 +257,7 @@ export default function BillingPage() {
             mappedAt: new Date().toISOString()
         }
         if (!mappingStudio.isMapped) updateData.invoice_number = 1000
-
         await setDoc(subConfigRef, updateData, { merge: true })
-
         setStudios(prev => prev.map(s => {
             if (s.id === mappingStudio.id) {
                 const regDateObj = new Date(mapForm.regDate)
@@ -300,9 +282,9 @@ export default function BillingPage() {
             }
             return s
         }))
-
         Toast.fire({ icon: 'success', title: 'Configuration saved' })
         setIsMappingOpen(false)
+        if (currentUser) await logAuditAction("MAP_PACKAGE", `Updated billing for ${mappingStudio.name}`, currentUser, "Billing")
     } catch (e) {
         Toast.fire({ icon: 'error', title: 'Mapping failed' })
     } finally {
@@ -310,7 +292,7 @@ export default function BillingPage() {
     }
   }
 
-  // --- ACTIONS: INVOICE GEN ---
+  // --- INVOICE GEN ---
   const addCustomItem = () => setCustomItems([...customItems, { desc: "", qty: 1, price: 0, discount: 0 }])
   const removeCustomItem = (idx: number) => setCustomItems(customItems.filter((_, i) => i !== idx))
   const updateCustomItem = (idx: number, field: string, value: any) => {
@@ -335,23 +317,17 @@ export default function BillingPage() {
 
   const handleGenerateInvoice = async () => {
     if (!targetStudio) return
-
     const prefix = targetStudio.invoicePrefix || "INV"
     const seq = targetStudio.nextInvoiceSeq || 1000
     const invId = `${prefix}-${seq}`
     const dueDate = addDays(new Date(), 7)
-    
-    let finalAmount = 0
-    let subTotal = 0
-    let itemsSummary = ""
-    let lineItems: InvoiceItem[] = []
+    let finalAmount = 0, subTotal = 0, itemsSummary = "", lineItems: InvoiceItem[] = []
 
     if (genInvType === "custom") {
         const totals = calculateCustomTotals()
         finalAmount = totals.total
         subTotal = totals.subTotal
         if (finalAmount <= 0) return Toast.fire({ icon: 'warning', title: 'Total > 0 required' })
-        
         lineItems = customItems.map(i => ({
             description: i.desc || "Item",
             quantity: i.qty,
@@ -388,7 +364,6 @@ export default function BillingPage() {
             items: itemsSummary || "Invoice",
             lineItems: lineItems
         }
-
         await setDoc(doc(db, "Invoices", invId), newInvoice)
         await setDoc(doc(db, `Studios/${targetStudio.id}/Subscription/config/Invoices/${invId}`), newInvoice)
         await updateDoc(doc(db, `Studios/${targetStudio.id}/Subscription/config`), {
@@ -396,17 +371,12 @@ export default function BillingPage() {
             last_invoice_date: new Date().toISOString(),
             last_invoice_amount: finalAmount
         })
-
         setInvoices(prev => [newInvoice, ...prev])
         setStudios(prev => prev.map(s => {
-            if (s.id === targetStudio.id) {
-                return { ...s, nextInvoiceSeq: s.nextInvoiceSeq + 1, lastInvoiceNo: invId }
-            }
+            if (s.id === targetStudio.id) return { ...s, nextInvoiceSeq: s.nextInvoiceSeq + 1, lastInvoiceNo: invId }
             return s
         }))
-        
         if (currentUser) await logAuditAction("GENERATE_INVOICE", `Generated ${invId}`, currentUser, "Billing")
-        
         Toast.fire({ icon: 'success', title: 'Invoice Generated' })
         setIsGenInvoiceOpen(false)
     } catch (e: any) {
@@ -414,7 +384,8 @@ export default function BillingPage() {
     }
   }
 
-  // --- ACTIONS: HISTORY VIEW ---
+  // --- ACTIONS: INVOICE MANAGEMENT ---
+  
   const handleViewHistory = async (studio: StudioBillingInfo) => {
       setHistoryStudio(studio)
       setIsHistoryOpen(true)
@@ -422,7 +393,6 @@ export default function BillingPage() {
       setHistorySearch("")
       setHistoryPage(1)
       setStudioHistoryInvoices([])
-
       try {
           const q = query(collection(db, `Studios/${studio.id}/Subscription/config/Invoices`), orderBy("generatedDate", "desc"))
           const snapshot = await getDocs(q)
@@ -437,8 +407,8 @@ export default function BillingPage() {
               } as InvoiceData
           })
           setStudioHistoryInvoices(list)
+          if(currentUser) await logAuditAction("VIEW_HISTORY", `Viewed invoices for ${studio.name}`, currentUser, "Billing")
       } catch (e) {
-          console.error(e)
           Toast.fire({ icon: 'error', title: 'Failed to load history' })
       } finally {
           setHistoryLoading(false)
@@ -456,17 +426,46 @@ export default function BillingPage() {
     }).then(async (res) => {
         if (res.isConfirmed) {
             const paidData = { status: "Paid", paidAt: new Date().toISOString(), paidBy: currentUser?.uid || "admin" }
-            
-            // Update Root
             await updateDoc(doc(db, "Invoices", invoice.id), paidData)
-            // Update Subcollection
             try { await updateDoc(doc(db, `Studios/${invoice.studioId}/Subscription/config/Invoices/${invoice.id}`), paidData) } catch (e) {}
             
-            // Update UI
+            // UI Updates
             setInvoices(prev => prev.map(inv => inv.id === invoice.id ? { ...inv, status: "Paid" } : inv))
             setStudioHistoryInvoices(prev => prev.map(inv => inv.id === invoice.id ? { ...inv, status: "Paid" } : inv))
             
+            if (currentUser) await logAuditAction("MARK_PAID", `Marked ${invoice.id} as paid`, currentUser, "Billing")
             Toast.fire({ icon: 'success', title: 'Payment Recorded' })
+        }
+    })
+  }
+
+  // [!code highlight] DELETE INVOICE ACTION
+  const handleDeleteInvoice = async (invoice: InvoiceData) => {
+    Swal.fire({
+        title: 'Delete Invoice?',
+        text: `Permanently delete ${invoice.id}? This cannot be undone.`,
+        icon: 'error',
+        showCancelButton: true,
+        confirmButtonColor: '#EF4444',
+        confirmButtonText: 'Yes, Delete'
+    }).then(async (res) => {
+        if (res.isConfirmed) {
+            try {
+                // Delete from Root
+                await deleteDoc(doc(db, "Invoices", invoice.id))
+                // Delete from Sub-collection
+                await deleteDoc(doc(db, `Studios/${invoice.studioId}/Subscription/config/Invoices/${invoice.id}`))
+
+                // Update UI
+                setInvoices(prev => prev.filter(inv => inv.id !== invoice.id))
+                setStudioHistoryInvoices(prev => prev.filter(inv => inv.id !== invoice.id))
+
+                if (currentUser) await logAuditAction("DELETE_INVOICE", `Deleted invoice ${invoice.id}`, currentUser, "Billing")
+                Toast.fire({ icon: 'success', title: 'Invoice Deleted' })
+            } catch (e) {
+                console.error(e)
+                Toast.fire({ icon: 'error', title: 'Delete Failed' })
+            }
         }
     })
   }
@@ -487,7 +486,6 @@ export default function BillingPage() {
     return result;
   }
 
-  // Filter History Dialog
   const filteredHistory = studioHistoryInvoices.filter(inv => inv.id.toLowerCase().includes(historySearch.toLowerCase()))
   const totalHistoryPages = Math.ceil(filteredHistory.length / DIALOG_ITEMS_PER_PAGE)
   const currentHistoryPage = filteredHistory.slice((historyPage - 1) * DIALOG_ITEMS_PER_PAGE, historyPage * DIALOG_ITEMS_PER_PAGE)
@@ -569,7 +567,6 @@ export default function BillingPage() {
                             ))}
                         </TableBody>
                     </Table>
-                    {/* STUDIO PAGINATION */}
                     {totalStudioPages > 1 && (
                         <div className="border-t p-4 flex items-center justify-between bg-slate-50/30">
                             <p className="text-xs text-muted-foreground">Showing {((studioPage - 1) * ITEMS_PER_PAGE) + 1}-{Math.min(studioPage * ITEMS_PER_PAGE, filteredStudios.length)} of {filteredStudios.length}</p>
@@ -626,14 +623,16 @@ export default function BillingPage() {
                                 <TableCell className="text-muted-foreground text-sm">{format(safeDate(inv.generatedDate), "MMM dd, yyyy")}</TableCell>
                                 <TableCell><Badge className={inv.status === "Paid" ? "bg-green-100 text-green-700 hover:bg-green-100" : "bg-yellow-100 text-yellow-700 hover:bg-yellow-100"}>{inv.status}</Badge></TableCell>
                                 <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
-                                    {inv.status !== "Paid" && <Button size="sm" variant="ghost" onClick={() => markAsPaid(inv)} className="text-green-600 hover:bg-green-50 hover:text-green-700"><CheckCircle2 className="h-4 w-4 mr-1" /> Mark Paid</Button>}
+                                    <div className="flex justify-end gap-1">
+                                        {inv.status !== "Paid" && <Button size="sm" variant="ghost" onClick={() => markAsPaid(inv)} className="text-green-600 hover:bg-green-50 hover:text-green-700"><CheckCircle2 className="h-4 w-4" /></Button>}
+                                        <Button size="sm" variant="ghost" onClick={() => handleDeleteInvoice(inv)} className="text-red-500 hover:bg-red-50 hover:text-red-700"><Trash2 className="h-4 w-4" /></Button>
+                                    </div>
                                 </TableCell>
                             </TableRow>
                         ))}
                     </TableBody>
                 </Table>
                 
-                {/* INVOICE PAGINATION */}
                 {totalInvoicePages > 1 && (
                     <div className="border-t p-4 flex items-center justify-between bg-slate-50/30">
                         <p className="text-xs text-muted-foreground">Showing {((invoicePage - 1) * ITEMS_PER_PAGE) + 1}-{Math.min(invoicePage * ITEMS_PER_PAGE, filteredInvoices.length)} of {filteredInvoices.length}</p>
@@ -739,6 +738,8 @@ export default function BillingPage() {
                                     <TableCell className="text-right">
                                         <div className="flex justify-end gap-1">
                                             {inv.status !== "Paid" && <Button size="icon" variant="ghost" className="h-6 w-6 text-green-600" title="Mark Paid" onClick={() => markAsPaid(inv)}><CheckCircle2 className="h-4 w-4"/></Button>}
+                                            {/* [!code highlight] DELETE INVOICE BUTTON */}
+                                            <Button size="icon" variant="ghost" className="h-6 w-6 text-red-500 hover:bg-red-50 hover:text-red-700" onClick={() => handleDeleteInvoice(inv)}><Trash2 className="h-4 w-4"/></Button>
                                             <Button size="icon" variant="ghost" className="h-6 w-6 text-blue-600" onClick={() => handleViewInvoice(inv)}><FileText className="h-4 w-4"/></Button>
                                         </div>
                                     </TableCell>

@@ -13,7 +13,7 @@ import {
   Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter 
 } from "@/components/ui/dialog"
 import { 
-  CreditCard, Edit, DollarSign, TrendingUp, Plus, Trash2, CheckCircle2, Loader2, Star, RotateCcw, Eye, EyeOff
+  Edit, Plus, Trash2, CheckCircle2, Loader2, Star, RotateCcw, Eye, EyeOff
 } from "lucide-react"
 import Swal from "sweetalert2"
 import { doc, getDoc, updateDoc, setDoc, arrayUnion, arrayRemove, deleteField } from "firebase/firestore"
@@ -30,7 +30,7 @@ interface PackageConfig {
   photos_per_event: number
   featured: boolean
   features: string[]
-  include_price_table: boolean // [!code highlight] New Field
+  include_price_table: boolean
 }
 
 // --- DEFAULT PACKAGES ---
@@ -43,7 +43,7 @@ const DEFAULT_PACKAGES: PackageConfig[] = [
     users_limit: 3,
     photos_per_event: 2,
     featured: false,
-    include_price_table: true, // [!code highlight]
+    include_price_table: true,
     features: ["Customer Confirmation Link", "Payment Tracking", "Inventory Management", "Task Manager", "Event Manager"]
   },
   {
@@ -54,7 +54,7 @@ const DEFAULT_PACKAGES: PackageConfig[] = [
     users_limit: 10,
     photos_per_event: 5,
     featured: true,
-    include_price_table: true, // [!code highlight]
+    include_price_table: true,
     features: ["All Starter Features", "Advanced Analytics", "Priority Support", "Custom Branding"]
   },
   {
@@ -65,7 +65,7 @@ const DEFAULT_PACKAGES: PackageConfig[] = [
     users_limit: 20,
     photos_per_event: 10,
     featured: false,
-    include_price_table: true, // [!code highlight]
+    include_price_table: true,
     features: ["All Pro Features", "Unlimited Storage", "Dedicated Account Manager", "API Access"]
   }
 ]
@@ -76,11 +76,7 @@ const Toast = Swal.mixin({
   position: 'top-end',
   showConfirmButton: false,
   timer: 3000,
-  timerProgressBar: true,
-  didOpen: (toast) => {
-    toast.addEventListener('mouseenter', Swal.stopTimer)
-    toast.addEventListener('mouseleave', Swal.resumeTimer)
-  }
+  timerProgressBar: true
 })
 
 export default function SubscriptionsPage() {
@@ -100,28 +96,24 @@ export default function SubscriptionsPage() {
   const [featureInput, setFeatureInput] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
 
-  // 1. Initial Load & Auto-Seed
+  // 1. Initial Load (Packages Only)
   useEffect(() => {
-    const fetchPackages = async () => {
+    const initData = async () => {
       try {
         const docRef = doc(db, "Platform", "packages")
         const snap = await getDoc(docRef)
+        const loadedPackages: PackageConfig[] = []
 
         if (snap.exists()) {
           const data = snap.data()
           const pkgList: string[] = data.packages_list || []
           
-          const loadedPackages: PackageConfig[] = []
           pkgList.forEach(pkgId => {
             if (data[pkgId]) {
               loadedPackages.push({ id: pkgId, ...data[pkgId] })
             }
           })
-          
           setPackages(loadedPackages.sort((a, b) => a.price - b.price))
-        } else {
-          // If totally empty, offer to restore defaults automatically or just wait for user
-          console.log("No packages found.")
         }
       } catch (e) {
         console.error("Failed to load packages", e)
@@ -130,20 +122,19 @@ export default function SubscriptionsPage() {
         setLoading(false)
       }
     }
-    fetchPackages()
+    initData()
   }, [])
 
   // --- ACTIONS ---
 
-  // [!code highlight] Restore Defaults Action
   const handleRestoreDefaults = async () => {
     Swal.fire({
       title: 'Restore Default Packages?',
-      text: "This will recreate the standard Starter, Pro, and Agency plans. Existing plans with same IDs will be reset.",
+      text: "This will recreate the standard Starter, Pro, and Agency plans.",
       icon: 'warning',
       showCancelButton: true,
       confirmButtonColor: '#1C4D8D',
-      confirmButtonText: 'Yes, Restore Defaults'
+      confirmButtonText: 'Yes, Restore'
     }).then(async (result) => {
       if (result.isConfirmed) {
         setLoading(true)
@@ -152,35 +143,22 @@ export default function SubscriptionsPage() {
           const updatePayload: any = { packages_list: arrayUnion(...DEFAULT_PACKAGES.map(p => p.id)) }
           
           DEFAULT_PACKAGES.forEach(pkg => {
-            updatePayload[pkg.id] = {
-                name: pkg.name,
-                price: pkg.price,
-                events_limit: pkg.events_limit,
-                users_limit: pkg.users_limit,
-                photos_per_event: pkg.photos_per_event,
-                featured: pkg.featured,
-                include_price_table: pkg.include_price_table,
-                features: pkg.features
-            }
+            updatePayload[pkg.id] = { ...pkg }
+            delete updatePayload[pkg.id].id
           })
           
           await setDoc(docRef, updatePayload, { merge: true })
           
-          // Refresh list locally
-          // We merge defaults with current packages to avoid losing custom ones that don't conflict
           setPackages(prev => {
              const newMap = new Map(prev.map(p => [p.id, p]))
              DEFAULT_PACKAGES.forEach(p => newMap.set(p.id, p))
              return Array.from(newMap.values()).sort((a, b) => a.price - b.price)
           })
 
-          if (currentUser) {
-             await logAuditAction("RESTORE_DEFAULTS", "Restored default subscription packages", currentUser, "Subscriptions")
-          }
+          if (currentUser) await logAuditAction("RESTORE_DEFAULTS", "Restored default subscription packages", currentUser, "Subscriptions")
 
-          Toast.fire({ icon: 'success', title: 'Default packages restored' })
+          Toast.fire({ icon: 'success', title: 'Restored successfully' })
         } catch (e) {
-          console.error(e)
           Toast.fire({ icon: 'error', title: 'Restore failed' })
         } finally {
           setLoading(false)
@@ -208,37 +186,32 @@ export default function SubscriptionsPage() {
   }
 
   const handleSavePackage = async () => {
-    if (!formData.name || formData.price < 0) {
-        return Toast.fire({ icon: 'warning', title: 'Invalid package details' })
-    }
+    if (!formData.name || formData.price < 0) return Toast.fire({ icon: 'warning', title: 'Invalid details' })
 
     setIsSubmitting(true)
     const pkgId = editingPkg ? editingPkg.id : `pkg_${Date.now()}`.toLowerCase()
 
     try {
-        const updatePayload: any = {
-            [pkgId]: {
-                name: formData.name,
-                price: Number(formData.price),
-                events_limit: Number(formData.events_limit),
-                users_limit: Number(formData.users_limit),
-                photos_per_event: Number(formData.photos_per_event),
-                featured: formData.featured,
-                include_price_table: formData.include_price_table,
-                features: formData.features
-            }
+        const pkgData = {
+            name: formData.name,
+            price: Number(formData.price),
+            events_limit: Number(formData.events_limit),
+            users_limit: Number(formData.users_limit),
+            photos_per_event: Number(formData.photos_per_event),
+            featured: formData.featured,
+            include_price_table: formData.include_price_table,
+            features: formData.features
         }
 
-        if (!editingPkg) {
-            updatePayload.packages_list = arrayUnion(pkgId)
-        }
+        const updatePayload: any = { [pkgId]: pkgData }
+        if (!editingPkg) updatePayload.packages_list = arrayUnion(pkgId)
 
         await updateDoc(doc(db, "Platform", "packages"), updatePayload)
 
         setPackages(prev => {
             const newList = editingPkg 
-                ? prev.map(p => p.id === pkgId ? { ...formData, id: pkgId } : p)
-                : [...prev, { ...formData, id: pkgId }]
+                ? prev.map(p => p.id === pkgId ? { ...pkgData, id: pkgId } : p)
+                : [...prev, { ...pkgData, id: pkgId }]
             return newList.sort((a, b) => a.price - b.price)
         })
 
@@ -246,17 +219,14 @@ export default function SubscriptionsPage() {
             await logAuditAction(
                 editingPkg ? "UPDATE_PACKAGE" : "CREATE_PACKAGE", 
                 `${editingPkg ? "Updated" : "Created"} package: ${formData.name}`, 
-                currentUser, 
-                "Subscriptions"
+                currentUser, "Subscriptions"
             )
         }
 
-        Toast.fire({ icon: 'success', title: 'Package saved successfully' })
+        Toast.fire({ icon: 'success', title: 'Package saved' })
         setIsDialogOpen(false)
-
     } catch (e) {
-        console.error(e)
-        Toast.fire({ icon: 'error', title: 'Failed to save package' })
+        Toast.fire({ icon: 'error', title: 'Save failed' })
     } finally {
         setIsSubmitting(false)
     }
@@ -277,14 +247,9 @@ export default function SubscriptionsPage() {
                     packages_list: arrayRemove(pkgId),
                     [pkgId]: deleteField()
                 })
-
                 setPackages(prev => prev.filter(p => p.id !== pkgId))
-                
-                if (currentUser) {
-                    await logAuditAction("DELETE_PACKAGE", `Deleted package ID: ${pkgId}`, currentUser, "Subscriptions")
-                }
-                
-                Toast.fire({ icon: 'success', title: 'Package deleted' })
+                if (currentUser) await logAuditAction("DELETE_PACKAGE", `Deleted package ID: ${pkgId}`, currentUser, "Subscriptions")
+                Toast.fire({ icon: 'success', title: 'Deleted' })
             } catch (e) {
                 Toast.fire({ icon: 'error', title: 'Delete failed' })
             }
@@ -292,7 +257,6 @@ export default function SubscriptionsPage() {
     })
   }
 
-  // Feature Helpers
   const addFeature = () => {
     if (featureInput.trim()) {
         setFormData(prev => ({ ...prev, features: [...prev.features, featureInput.trim()] }))
@@ -312,7 +276,6 @@ export default function SubscriptionsPage() {
           <p className="text-muted-foreground mt-1">Manage pricing tiers and billing configuration</p>
         </div>
         <div className="flex gap-2">
-            {/* [!code highlight] Restore Button */}
             <Button variant="outline" onClick={handleRestoreDefaults} className="text-slate-600 border-slate-300 hover:bg-slate-100">
                 <RotateCcw className="h-4 w-4 mr-2" /> Restore Defaults
             </Button>
@@ -320,20 +283,6 @@ export default function SubscriptionsPage() {
                 <Plus className="h-4 w-4 mr-2" /> Add Plan
             </Button>
         </div>
-      </div>
-
-      {/* Revenue Stats (Static for now) */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <Card className="border-none shadow-md bg-gradient-to-br from-green-50 to-green-100">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between mb-2">
-              <div className="p-2 rounded-lg bg-green-200/50"><DollarSign className="h-5 w-5 text-green-700" /></div>
-              <Badge variant="outline" className="bg-white text-green-700 border-green-200">+12%</Badge>
-            </div>
-            <p className="text-sm text-muted-foreground mb-1">Total MRR</p>
-            <p className="text-3xl font-bold text-green-700">LKR 450,000</p>
-          </CardContent>
-        </Card>
       </div>
 
       {/* Plan Manager */}
@@ -366,10 +315,9 @@ export default function SubscriptionsPage() {
                             {plan.featured && <Star className="h-3 w-3 text-yellow-500 fill-yellow-500" />}
                         </div>
                      </TableCell>
-                     <TableCell className="text-foreground font-semibold">LKR {plan.price.toLocaleString()}/mo</TableCell>
+                     <TableCell className="text-foreground font-semibold">{plan.price.toLocaleString()}/mo</TableCell>
                      <TableCell className="text-muted-foreground">{plan.events_limit.toLocaleString()} events / {plan.users_limit} users</TableCell>
                      <TableCell>
-                       {/* [!code highlight] Visibility Badge */}
                        {plan.include_price_table ? 
                          <Badge variant="outline" className="text-blue-600 bg-blue-50 border-blue-200"><Eye className="h-3 w-3 mr-1"/> Public</Badge> : 
                          <Badge variant="outline" className="text-slate-500 bg-slate-100"><EyeOff className="h-3 w-3 mr-1"/> Hidden</Badge>
@@ -396,41 +344,21 @@ export default function SubscriptionsPage() {
 
       {/* EDIT/ADD DIALOG */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        {/* Prevent background dismiss */}
         <DialogContent className="sm:max-w-[600px]" onInteractOutside={(e) => e.preventDefault()}>
             <DialogHeader>
                 <DialogTitle>{editingPkg ? "Edit Package" : "Create New Package"}</DialogTitle>
                 <DialogDescription>Configure subscription limits and pricing.</DialogDescription>
             </DialogHeader>
-            
             <div className="grid gap-4 py-4">
                 <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                        <Label>Package Name</Label>
-                        <Input value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} placeholder="e.g. Enterprise" />
-                    </div>
-                    <div className="space-y-2">
-                        <Label>Monthly Price (LKR)</Label>
-                        <Input type="number" value={formData.price} onChange={e => setFormData({...formData, price: Number(e.target.value)})} />
-                    </div>
+                    <div className="space-y-2"><Label>Package Name</Label><Input value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} placeholder="e.g. Enterprise" /></div>
+                    <div className="space-y-2"><Label>Monthly Price (LKR)</Label><Input type="number" value={formData.price} onChange={e => setFormData({...formData, price: Number(e.target.value)})} /></div>
                 </div>
-
                 <div className="grid grid-cols-3 gap-4">
-                    <div className="space-y-2">
-                        <Label>Max Events</Label>
-                        <Input type="number" value={formData.events_limit} onChange={e => setFormData({...formData, events_limit: Number(e.target.value)})} />
-                    </div>
-                    <div className="space-y-2">
-                        <Label>Max Users</Label>
-                        <Input type="number" value={formData.users_limit} onChange={e => setFormData({...formData, users_limit: Number(e.target.value)})} />
-                    </div>
-                    <div className="space-y-2">
-                        <Label>Photos/Event</Label>
-                        <Input type="number" value={formData.photos_per_event} onChange={e => setFormData({...formData, photos_per_event: Number(e.target.value)})} />
-                    </div>
+                    <div className="space-y-2"><Label>Max Events</Label><Input type="number" value={formData.events_limit} onChange={e => setFormData({...formData, events_limit: Number(e.target.value)})} /></div>
+                    <div className="space-y-2"><Label>Max Users</Label><Input type="number" value={formData.users_limit} onChange={e => setFormData({...formData, users_limit: Number(e.target.value)})} /></div>
+                    <div className="space-y-2"><Label>Photos/Event</Label><Input type="number" value={formData.photos_per_event} onChange={e => setFormData({...formData, photos_per_event: Number(e.target.value)})} /></div>
                 </div>
-
-                {/* [!code highlight] Toggles Section */}
                 <div className="flex gap-4">
                     <div className="flex items-center space-x-2 border p-3 rounded-md bg-slate-50 flex-1">
                         <Switch checked={formData.featured} onCheckedChange={(c) => setFormData({...formData, featured: c})} id="featured-mode" />
@@ -441,34 +369,23 @@ export default function SubscriptionsPage() {
                         <Label htmlFor="public-mode" className="cursor-pointer text-sm">Show in Pricing Table</Label>
                     </div>
                 </div>
-
                 <div className="space-y-3">
                     <Label>Included Features</Label>
                     <div className="flex gap-2">
-                        <Input 
-                            placeholder="Add feature (e.g. API Access)" 
-                            value={featureInput} 
-                            onChange={e => setFeatureInput(e.target.value)} 
-                            onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), addFeature())}
-                        />
+                        <Input placeholder="Add feature" value={featureInput} onChange={e => setFeatureInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), addFeature())} />
                         <Button type="button" onClick={addFeature} variant="outline"><Plus className="h-4 w-4"/></Button>
                     </div>
                     <div className="flex flex-wrap gap-2 mt-2">
                         {formData.features.map((feat, idx) => (
-                            <Badge key={idx} variant="secondary" className="pr-1">
-                                {feat} 
-                                <button onClick={() => removeFeature(idx)} className="ml-2 hover:text-red-500"><Trash2 className="h-3 w-3"/></button>
-                            </Badge>
+                            <Badge key={idx} variant="secondary" className="pr-1">{feat} <button onClick={() => removeFeature(idx)} className="ml-2 hover:text-red-500"><Trash2 className="h-3 w-3"/></button></Badge>
                         ))}
                     </div>
                 </div>
             </div>
-
             <DialogFooter>
                 <Button variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
                 <Button className="bg-[#1C4D8D]" onClick={handleSavePackage} disabled={isSubmitting}>
-                    {isSubmitting ? <Loader2 className="animate-spin h-4 w-4 mr-2"/> : <CheckCircle2 className="h-4 w-4 mr-2"/>}
-                    Save Package
+                    {isSubmitting ? <Loader2 className="animate-spin h-4 w-4 mr-2"/> : <CheckCircle2 className="h-4 w-4 mr-2"/>} Save Package
                 </Button>
             </DialogFooter>
         </DialogContent>
