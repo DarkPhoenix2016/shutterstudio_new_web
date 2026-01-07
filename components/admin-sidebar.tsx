@@ -12,6 +12,7 @@ import {
   LogOut,
   Camera,
   UserCog,
+  ReceiptText,
 } from "lucide-react"
 import { useRouter, usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
@@ -35,11 +36,12 @@ const NAV_ITEMS = {
   overview: [
     { id: "dashboard", icon: LayoutDashboard, label: "Dashboard", path: "/admin" },
     { id: "analytics", icon: BarChart3, label: "Analytics", path: "/admin/analytics" },
+    
   ],
   tenantManagement: [
     { id: "studios", icon: Building2, label: "Studios", path: "/admin/studios" },
     { id: "directory", icon: Users, label: "User Directory", path: "/admin/directory" },
-    { id: "onboarding", icon: UserPlus, label: "Onboarding Requests", path: "/admin/onboarding" },
+    { id: "billing", icon: ReceiptText, label: "Billing", path: "/admin/billing" },
   ],
   platformConfig: [
     { id: "subscriptions", icon: CreditCard, label: "Subscriptions & Plans", path: "/admin/subscriptions" },

@@ -2,7 +2,6 @@
 
 import type React from "react"
 import { useState, useEffect, useCallback } from "react"
-// REMOVED useStore
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -24,56 +23,44 @@ import {
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
-// Firebase Imports
 import { auth, db } from "@/lib/firebase"
 import { doc, getDoc, setDoc, updateDoc, collection, getDocs, query, where } from "firebase/firestore"
 import { onAuthStateChanged } from "firebase/auth"
 import Swal from 'sweetalert2'
-
-// Cropper Import
 import Cropper from "react-easy-crop"
-
-// Custom Modules
 import { getCroppedImg, compressImage } from "@/lib/image-utils"
 import { uploadFileToStorage } from "@/lib/storage-utils"
+import { logAuditAction } from "@/lib/logger"
 
-// --- TYPES ---
 interface SecondaryAdmin {
   id: string
   name: string
   email: string
-  enabled: boolean // Local UI state maps to DB 'disabled'
+  enabled: boolean
   addedAt: string
   lastLogin?: string
 }
 
 export default function RootAdminProfile() {
-  // -- State Management --
   const [currentUser, setCurrentUser] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   
-  // Profile Form State
   const [profileName, setProfileName] = useState("")
   const [profileEmail, setProfileEmail] = useState("")
   const [profilePicPreview, setProfilePicPreview] = useState("")
   const [accountCreated, setAccountCreated] = useState<string>(new Date().toISOString())
 
-  // Secondary Admin Form State
   const [newAdminEmail, setNewAdminEmail] = useState("")
   const [newAdminName, setNewAdminName] = useState("")
   const [newAdminPassword, setNewAdminPassword] = useState("")
 
-  // -- ADMIN LIST STATE (Replaces Store) --
   const [adminsList, setAdminsList] = useState<SecondaryAdmin[]>([])
-  const [adminsLoading, setAdminsLoading] = useState(true)
-
-  // -- TABLE STATE --
+  
   const [activeTab, setActiveTab] = useState<"active" | "disabled">("active")
   const [currentPage, setCurrentPage] = useState(1)
   const itemsPerPage = 10
 
-  // -- CROPPER STATE --
   const [cropModalOpen, setCropModalOpen] = useState(false)
   const [imageSrc, setImageSrc] = useState<string | null>(null)
   const [crop, setCrop] = useState({ x: 0, y: 0 })
@@ -81,24 +68,19 @@ export default function RootAdminProfile() {
   const [croppedAreaPixels, setCroppedAreaPixels] = useState<any>(null)
   const [readyToUploadFile, setReadyToUploadFile] = useState<File | null>(null)
 
-  // 1. Fetch Current User Profile
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
         setCurrentUser(user)
         setProfileEmail(user.email || "")
-
         try {
-          // Fetch from SuperAdmins first since this is the Root Admin Profile
           let userDocRef = doc(db, "SuperAdmins", user.uid)
           let userSnap = await getDoc(userDocRef)
-
           if (userSnap.exists()) {
             const data = userSnap.data()
             setProfileName(data.name || "")
             setProfilePicPreview(data.profileImage || "")
             if (data.createdAt) {
-               // Handle Firestore Timestamp or ISO string
                setAccountCreated(data.createdAt.toDate ? data.createdAt.toDate().toISOString() : data.createdAt)
             }
           }
@@ -108,13 +90,10 @@ export default function RootAdminProfile() {
       }
       setLoading(false)
     })
-
     return () => unsubscribe()
   }, [])
 
-  // 2. Fetch Secondary Admins List
   const fetchAdmins = useCallback(async () => {
-    setAdminsLoading(true)
     try {
       const q = query(collection(db, "SuperAdmins"), where("type", "==", "admin_profile"))
       const querySnapshot = await getDocs(q)
@@ -126,18 +105,14 @@ export default function RootAdminProfile() {
           id: doc.id,
           name: data.name || data.displayName || "Unknown",
           email: data.email || "",
-          // Map DB 'disabled' field to UI 'enabled' state
           enabled: data.disabled !== true, 
           addedAt: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : (data.createdAt || new Date().toISOString()),
           lastLogin: data.lastLogin || null
         })
       })
-      
       setAdminsList(fetchedAdmins)
     } catch (error) {
       console.error("Error fetching admins:", error)
-    } finally {
-      setAdminsLoading(false)
     }
   }, [])
 
@@ -145,8 +120,6 @@ export default function RootAdminProfile() {
     fetchAdmins()
   }, [fetchAdmins])
 
-
-  // 3. Handle Profile Save
   const handleSaveProfile = async () => {
     if (!currentUser) return
     setSaving(true)
@@ -157,13 +130,18 @@ export default function RootAdminProfile() {
         downloadURL = await uploadFileToStorage(storagePath, readyToUploadFile, { contentType: 'image/jpeg' })
       }
       
-      // Update Firestore (SuperAdmins collection)
       const userDocRef = doc(db, "SuperAdmins", currentUser.uid)
       await setDoc(userDocRef, {
         name: profileName,
         profileImage: downloadURL,
-        // Don't update email here as it requires Auth update
       }, { merge: true })
+
+      await logAuditAction(
+        "UPDATE_PROFILE",
+        `Updated root profile name to ${profileName}`,
+        currentUser,
+        "AdminProfile"
+      )
 
       Swal.fire({ icon: 'success', title: 'Profile Updated', text: 'Changes saved successfully.', timer: 2000, showConfirmButton: false })
       setReadyToUploadFile(null)
@@ -174,7 +152,6 @@ export default function RootAdminProfile() {
     }
   }
 
-  // 4. Handle Add Secondary Admin
   const handleAddSecondaryAdmin = async () => {
     if (!newAdminEmail || !newAdminName || !newAdminPassword) {
       Swal.fire({ icon: 'warning', title: 'Missing Fields', text: 'Please fill in Name, Email, and Password.' })
@@ -203,8 +180,7 @@ export default function RootAdminProfile() {
             email: newAdminEmail,
             password: newAdminPassword,
             name: newAdminName,
-            role: "super_admin",
-            type: "admin_profile"
+            role: "admin"
           }
         }),
       })
@@ -220,13 +196,17 @@ export default function RootAdminProfile() {
         throw new Error(errorMessage)
       }
 
-      // Refresh the list after adding
+      await logAuditAction(
+        "CREATE_ADMIN",
+        `Created new secondary admin: ${newAdminEmail} (${newAdminName})`,
+        currentUser,
+        "AdminManagement"
+      )
+
       await fetchAdmins()
-      
       setNewAdminEmail("")
       setNewAdminName("")
       setNewAdminPassword("")
-      
       Swal.fire({ icon: 'success', title: 'Admin Added', text: 'The secondary admin account has been created successfully.' })
 
     } catch (error: any) {
@@ -234,18 +214,13 @@ export default function RootAdminProfile() {
     }
   }
 
-  // 5. Handle Toggle Status
   const handleToggleStatus = async (id: string, currentlyEnabled: boolean) => {
-    // Determine the new DB state for 'disabled'
-    // If currently enabled (true), we want to disable (set DB disabled = true)
     const setDbDisabled = currentlyEnabled; 
     const actionLabel = currentlyEnabled ? "Disable" : "Enable";
 
     Swal.fire({
       title: `${actionLabel} Access?`,
-      text: currentlyEnabled 
-        ? "This admin will no longer be able to log in." 
-        : "This admin will regain access.",
+      text: currentlyEnabled ? "This admin will no longer be able to log in." : "This admin will regain access.",
       icon: 'warning',
       showCancelButton: true,
       confirmButtonColor: currentlyEnabled ? '#d33' : '#10b981',
@@ -258,7 +233,15 @@ export default function RootAdminProfile() {
             disabled: setDbDisabled
           });
 
-          // Optimistic UI Update or Refetch
+          if (currentUser) {
+              await logAuditAction(
+                currentlyEnabled ? "DISABLE_ADMIN" : "ENABLE_ADMIN",
+                `Changed status for admin ID ${id} to ${currentlyEnabled ? "Disabled" : "Active"}`,
+                currentUser,
+                "AdminManagement"
+              )
+          }
+
           setAdminsList(prev => prev.map(admin => 
             admin.id === id ? { ...admin, enabled: !currentlyEnabled } : admin
           ))
@@ -272,7 +255,6 @@ export default function RootAdminProfile() {
     })
   }
 
-  // 6. Cropper Helpers
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
       const file = e.target.files[0]
@@ -305,8 +287,6 @@ export default function RootAdminProfile() {
     }
   }
 
-
-  // --- PAGINATION & FILTER LOGIC ---
   const filteredAdmins = adminsList.filter(admin => 
     activeTab === "active" ? admin.enabled : !admin.enabled
   )
@@ -326,7 +306,6 @@ export default function RootAdminProfile() {
 
   return (
     <div className="flex-1 space-y-8 p-8 max-w-7xl mx-auto">
-      {/* Cropper Dialog */}
       <Dialog open={cropModalOpen} onOpenChange={setCropModalOpen}>
         <DialogContent className="sm:max-w-xl">
             <DialogHeader>
@@ -344,7 +323,6 @@ export default function RootAdminProfile() {
         </DialogContent>
       </Dialog>
 
-      {/* HEADER */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-foreground">Root Admin Profile</h1>
@@ -355,9 +333,7 @@ export default function RootAdminProfile() {
         </Badge>
       </div>
 
-      {/* PROFILE + CREATE FORM */}
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-        {/* Profile Card */}
         <Card className="xl:col-span-1 border-none shadow-lg h-fit">
           <CardHeader className="border-b bg-slate-50/50">
             <CardTitle className="flex items-center gap-2"><User className="h-5 w-5 text-[#1C4D8D]" /> Your Profile</CardTitle>
@@ -385,7 +361,6 @@ export default function RootAdminProfile() {
           </CardContent>
         </Card>
 
-        {/* Create Admin Form */}
         <Card className="xl:col-span-2 border-none shadow-lg h-fit">
           <CardHeader className="border-b bg-slate-50/50">
             <CardTitle className="flex items-center gap-2"><Plus className="h-5 w-5 text-[#1C4D8D]" /> Create New Admin</CardTitle>
@@ -408,7 +383,6 @@ export default function RootAdminProfile() {
         </Card>
       </div>
 
-      {/* ADMIN TABLE */}
       <Card className="border-none shadow-lg">
         <CardHeader className="border-b bg-slate-50/50 pb-0">
           <CardTitle className="flex items-center gap-2 mb-4"><Shield className="h-5 w-5 text-[#1C4D8D]" /> Admin Directory</CardTitle>

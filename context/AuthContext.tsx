@@ -10,14 +10,14 @@ import {
   browserLocalPersistence,
   browserSessionPersistence
 } from "firebase/auth"
-import { doc, getDoc, updateDoc } from "firebase/firestore"
+import { doc, getDoc, updateDoc, onSnapshot, Unsubscribe } from "firebase/firestore" 
 import { createContext, useContext, useEffect, useState, ReactNode } from "react"
+import { logAuditAction } from "@/lib/logger"
 
-// Define the shape of our User Data
 interface UserData {
   uid: string
   email: string
-  role: "super_admin" | "admin" | "studio_manager" | "studio_accountant" | "studio_crew"
+  role: string // Changed to string to support dynamic roles
   disabled?: boolean
   name?: string
   firstName?: string
@@ -37,6 +37,12 @@ interface StudioData {
   [key: string]: any
 }
 
+interface GlobalSettings {
+  maintenanceMode: boolean
+  announcement?: string
+  version?: string
+}
+
 type RolePermissions = Record<string, string[]>
 
 interface AuthContextType {
@@ -44,6 +50,7 @@ interface AuthContextType {
   userData: UserData | null
   studioData: StudioData | null
   rolePermissions: RolePermissions | null
+  globalSettings: GlobalSettings | null
   loading: boolean
   login: (email: string, pass: string, remember: boolean) => Promise<void>
   logout: () => Promise<void>
@@ -54,6 +61,7 @@ const AuthContext = createContext<AuthContextType>({
   userData: null,
   studioData: null,
   rolePermissions: null,
+  globalSettings: null,
   loading: true,
   login: async () => {},
   logout: async () => {},
@@ -66,9 +74,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [userData, setUserData] = useState<UserData | null>(null)
   const [studioData, setStudioData] = useState<StudioData | null>(null)
   const [rolePermissions, setRolePermissions] = useState<RolePermissions | null>(null)
+  const [globalSettings, setGlobalSettings] = useState<GlobalSettings | null>(null)
   const [loading, setLoading] = useState(true)
 
-  // Helper: Fetch Dynamic Permissions from Firestore
   const fetchPermissions = async () => {
     try {
       const docRef = doc(db, "Platform", "ROLE_PERMISSIONS")
@@ -76,7 +84,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       if (docSnap.exists()) {
         setRolePermissions(docSnap.data() as RolePermissions)
       } else {
-        console.warn("Platform/ROLE_PERMISSIONS document missing in Firestore")
+        console.warn("Platform/ROLE_PERMISSIONS missing")
         setRolePermissions({})
       }
     } catch (e) {
@@ -84,10 +92,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   }
 
-  // Helper: Fetch User & Studio
   const fetchCompleteProfile = async (uid: string) => {
     try {
-      // 1. Try 'Users' collection
+      // 1. Try Users collection
       let userDocRef = doc(db, "Users", uid)
       let userDocSnap = await getDoc(userDocRef)
       
@@ -96,7 +103,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       if (userDocSnap.exists()) {
         fetchedUserData = userDocSnap.data() as UserData
       } else {
-        // 2. Try 'SuperAdmins' collection
+        // 2. Try SuperAdmins collection
         userDocRef = doc(db, "SuperAdmins", uid)
         userDocSnap = await getDoc(userDocRef)
         if (userDocSnap.exists()) {
@@ -104,16 +111,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         }
       }
 
-      // If user found
       if (fetchedUserData) {
         setUserData(fetchedUserData)
-
-        // 3. IF user has a studioID, fetch the Studio details
+        // Fetch Studio if applicable
         if (fetchedUserData.studioID) {
           try {
             const studioDocRef = doc(db, "Studios", fetchedUserData.studioID)
             const studioDocSnap = await getDoc(studioDocRef)
-            
             if (studioDocSnap.exists()) {
               setStudioData(studioDocSnap.data() as StudioData)
             } else {
@@ -130,38 +134,53 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         setStudioData(null)
       }
       return fetchedUserData
-
     } catch (error) {
       console.error("Error fetching complete profile:", error)
       return null
     }
   }
 
-  // 1. Listen for auth state changes
   useEffect(() => {
-    // [!code highlight] WE REMOVED THE IMMEDIATE CALL TO fetchPermissions() HERE
+    let settingsUnsub: Unsubscribe | null = null;
 
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+    const authUnsub = onAuthStateChanged(auth, async (user) => {
       if (user) {
-        // [!code highlight] Fetch permissions ONLY after user is confirmed logged in
+        // 1. User is logged in: Now safe to fetch protected data
         await Promise.all([
             fetchCompleteProfile(user.uid),
             fetchPermissions()
         ])
+        
+        // 2. Setup Real-time Listener for Global Settings (ONLY when logged in)
+        settingsUnsub = onSnapshot(doc(db, "Platform", "settings"), (doc) => {
+          if (doc.exists()) {
+            setGlobalSettings(doc.data() as GlobalSettings)
+          } else {
+            setGlobalSettings({ maintenanceMode: false })
+          }
+        }, (error) => {
+            console.error("Settings listener error:", error)
+        })
+
         setCurrentUser(user)
       } else {
+        // User logged out: Clean up
+        if (settingsUnsub) settingsUnsub();
         setCurrentUser(null)
         setUserData(null)
         setStudioData(null)
         setRolePermissions(null)
+        setGlobalSettings(null)
       }
       setLoading(false)
     })
 
-    return unsubscribe
+    return () => {
+      authUnsub()
+      if (settingsUnsub) settingsUnsub();
+    }
   }, [])
 
-  // 2. Login Function
   const login = async (email: string, pass: string, remember: boolean) => {
     try {
       setLoading(true)
@@ -170,7 +189,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       const userCredential = await signInWithEmailAndPassword(auth, email, pass)
       const user = userCredential.user
 
-      // Parallel fetch for speed
       const [data, _] = await Promise.all([
         fetchCompleteProfile(user.uid),
         fetchPermissions()
@@ -183,7 +201,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         throw err
       }
 
-      // Check Disabled Status (Super Admins bypass)
       if (data.disabled === true && data.role !== "super_admin") {
         await signOut(auth)
         const error: any = new Error("Account is disabled")
@@ -191,7 +208,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         throw error
       }
 
-      // Update Last Login
       try {
         const collectionName = (data.role === "super_admin" || data.role === "admin") 
           ? "SuperAdmins" 
@@ -200,6 +216,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         await updateDoc(doc(db, collectionName, user.uid), {
           lastLogin: new Date().toISOString()
         });
+        
+        await logAuditAction(
+            "LOGIN", 
+            "User signed in successfully", 
+            { uid: user.uid, email: user.email, displayName: data.displayName || data.name }, 
+            "Auth"
+        );
+
       } catch (logError) {
         console.error("Failed to update last login:", logError);
       }
@@ -215,6 +239,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }
 
   const logout = async () => {
+    if (currentUser) {
+        await logAuditAction(
+            "LOGOUT", 
+            "User signed out", 
+            { uid: currentUser.uid, email: currentUser.email }, 
+            "Auth"
+        );
+    }
     setUserData(null)
     setStudioData(null)
     setRolePermissions(null)
@@ -227,6 +259,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     userData,
     studioData,
     rolePermissions,
+    globalSettings,
     loading,
     login,
     logout,

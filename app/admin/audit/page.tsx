@@ -1,118 +1,144 @@
 "use client"
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { useState, useEffect } from "react"
+import { collection, query, orderBy, limit, getDocs } from "firebase/firestore"
+import { db } from "@/lib/firebase"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { ScrollText, Shield, Clock } from "lucide-react"
+import { ScrollText, Loader2, Search, Filter } from "lucide-react"
+import { Input } from "@/components/ui/input"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 
-const auditLogs = [
-  {
-    id: 1,
-    action: "Suspended Studio",
-    target: "Flash & Focus",
-    admin: "Root Admin",
-    timestamp: "Dec 12, 2024 at 3:45 PM",
-    severity: "high",
-  },
-  {
-    id: 2,
-    action: "Enabled Payment Module",
-    target: "Demo Studio",
-    admin: "Root Admin",
-    timestamp: "Dec 10, 2024 at 10:22 AM",
-    severity: "medium",
-  },
-  {
-    id: 3,
-    action: "Updated SMTP Config",
-    target: "Global Settings",
-    admin: "Root Admin",
-    timestamp: "Dec 8, 2024 at 2:15 PM",
-    severity: "medium",
-  },
-  {
-    id: 4,
-    action: "Approved Studio Application",
-    target: "Pixel Perfect Studios",
-    admin: "Root Admin",
-    timestamp: "Dec 5, 2024 at 9:30 AM",
-    severity: "low",
-  },
-  {
-    id: 5,
-    action: "Changed Plan Pricing",
-    target: "Pro Plan",
-    admin: "Root Admin",
-    timestamp: "Dec 1, 2024 at 4:00 PM",
-    severity: "high",
-  },
-]
+interface LogEntry {
+  id: string
+  action: string
+  details: string
+  executor: string
+  executorId: string
+  timestamp: string
+  module: string
+}
 
-export default function AuditPage() {
+export default function AuditLogsPage() {
+  const [logs, setLogs] = useState<LogEntry[]>([])
+  const [loading, setLoading] = useState(true)
+  const [searchTerm, setSearchTerm] = useState("")
+  const [moduleFilter, setModuleFilter] = useState("ALL")
+
+  useEffect(() => {
+    const fetchLogs = async () => {
+        try {
+            const logsRef = collection(db, "AuditLogs")
+            const q = query(logsRef, orderBy("timestamp", "desc"), limit(200)) // Fetch last 200 logs
+            const querySnapshot = await getDocs(q)
+            
+            const fetchedLogs: LogEntry[] = []
+            querySnapshot.forEach((doc) => {
+                fetchedLogs.push({ id: doc.id, ...doc.data() } as LogEntry)
+            })
+            setLogs(fetchedLogs)
+        } catch (error) {
+            console.error("Error fetching logs:", error)
+        } finally {
+            setLoading(false)
+        }
+    }
+
+    fetchLogs()
+  }, [])
+
+  const filteredLogs = logs.filter(log => {
+    const matchesSearch = 
+        log.action.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        log.details.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        log.executor.toLowerCase().includes(searchTerm.toLowerCase())
+    
+    const matchesModule = moduleFilter === "ALL" || log.module === moduleFilter
+
+    return matchesSearch && matchesModule
+  })
+
+  const formatDate = (isoString: string) => {
+    return new Date(isoString).toLocaleString('en-US', {
+        month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit'
+    })
+  }
+
+  const getActionColor = (action: string) => {
+    if (action.includes("LOGIN")) return "bg-green-100 text-green-700 border-green-200"
+    if (action.includes("LOGOUT")) return "bg-slate-100 text-slate-700 border-slate-200"
+    if (action.includes("DISABLE")) return "bg-red-100 text-red-700 border-red-200"
+    if (action.includes("CREATE")) return "bg-blue-100 text-blue-700 border-blue-200"
+    return "bg-slate-50 text-slate-600 border-slate-200"
+  }
+
+  if (loading) {
+    return <div className="flex h-96 items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-[#1C4D8D]" /></div>
+  }
+
   return (
-    <div className="flex-1 space-y-6 p-6">
-      <div className="flex items-center gap-3">
-        <div className="p-2 rounded-lg bg-[#1C4D8D]/10">
-          <Shield className="h-6 w-6 text-[#1C4D8D]" />
-        </div>
+    <div className="flex-1 p-8 mx-auto space-y-6">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-foreground">Audit Logs</h1>
-          <p className="text-muted-foreground">Immutable record of all administrative actions</p>
+            <h1 className="text-3xl font-bold text-foreground flex items-center gap-2">
+                <ScrollText className="h-8 w-8 text-[#1C4D8D]" />
+                Audit Trail
+            </h1>
+            <p className="text-muted-foreground mt-1">Immutable record of all administrative actions (Last 200).</p>
+        </div>
+        <div className="flex items-center gap-3 w-full md:w-auto">
+            <div className="relative w-full md:w-64">
+                <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input placeholder="Search logs..." className="pl-9" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+            </div>
+            <Select value={moduleFilter} onValueChange={setModuleFilter}>
+                <SelectTrigger className="w-[180px]"><Filter className="h-4 w-4 mr-2" /><SelectValue placeholder="Module" /></SelectTrigger>
+                <SelectContent>
+                    <SelectItem value="ALL">All Modules</SelectItem>
+                    <SelectItem value="Auth">Authentication</SelectItem>
+                    <SelectItem value="AdminManagement">Admin Mgmt</SelectItem>
+                    <SelectItem value="AdminProfile">Profile</SelectItem>
+                </SelectContent>
+            </Select>
         </div>
       </div>
 
-      <Card className="border-none shadow-md">
-        <CardHeader className="border-b bg-slate-50/50">
-          <CardTitle className="flex items-center gap-2">
-            <ScrollText className="h-5 w-5 text-[#1C4D8D]" />
-            Activity Timeline
-          </CardTitle>
-          <CardDescription>Read-only log of every action taken by administrators</CardDescription>
-        </CardHeader>
+      <Card className="border-none shadow-lg">
         <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-slate-50/50 hover:bg-slate-50/50">
-                <TableHead className="font-bold">Action</TableHead>
-                <TableHead className="font-bold">Target</TableHead>
-                <TableHead className="font-bold">Admin</TableHead>
-                <TableHead className="font-bold">Timestamp</TableHead>
-                <TableHead className="font-bold">Severity</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {auditLogs.map((log) => (
-                <TableRow key={log.id} className="hover:bg-slate-50/50">
-                  <TableCell className="font-medium text-foreground">{log.action}</TableCell>
-                  <TableCell className="text-muted-foreground">{log.target}</TableCell>
-                  <TableCell className="text-foreground">{log.admin}</TableCell>
-                  <TableCell className="text-muted-foreground">
-                    <div className="flex items-center gap-2">
-                      <Clock className="h-4 w-4" />
-                      {log.timestamp}
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    {log.severity === "high" && (
-                      <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">
-                        High
-                      </Badge>
-                    )}
-                    {log.severity === "medium" && (
-                      <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-200">
-                        Medium
-                      </Badge>
-                    )}
-                    {log.severity === "low" && (
-                      <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
-                        Low
-                      </Badge>
-                    )}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+            <div className="overflow-x-auto">
+                <table className="w-full text-sm text-left">
+                    <thead className="bg-slate-50 text-slate-500 font-medium border-b">
+                        <tr>
+                            <th className="px-6 py-4">Timestamp</th>
+                            <th className="px-6 py-4">Action</th>
+                            <th className="px-6 py-4">Executor</th>
+                            <th className="px-6 py-4">Details</th>
+                            <th className="px-6 py-4">Module</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                        {filteredLogs.length === 0 ? (
+                            <tr><td colSpan={5} className="px-6 py-12 text-center text-muted-foreground">No logs found matching your criteria.</td></tr>
+                        ) : (
+                            filteredLogs.map((log) => (
+                                <tr key={log.id} className="hover:bg-slate-50/50 transition-colors">
+                                    <td className="px-6 py-4 font-mono text-xs text-slate-500 whitespace-nowrap">{formatDate(log.timestamp)}</td>
+                                    <td className="px-6 py-4"><Badge variant="outline" className={getActionColor(log.action)}>{log.action}</Badge></td>
+                                    <td className="px-6 py-4 font-medium">{log.executor}</td>
+                                    <td className="px-6 py-4 text-slate-600 max-w-md truncate" title={log.details}>{log.details}</td>
+                                    <td className="px-6 py-4 text-slate-500">{log.module}</td>
+                                </tr>
+                            ))
+                        )}
+                    </tbody>
+                </table>
+            </div>
         </CardContent>
       </Card>
     </div>
