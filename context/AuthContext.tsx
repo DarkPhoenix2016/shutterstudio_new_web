@@ -24,6 +24,9 @@ interface UserData {
   lastName?: string
   displayName?: string
   photoURL?: string
+  coverURL?: string
+  phoneNumber?: string
+  designation?: string
   studioID?: string
   profileImage?: string
   createdAt?: any
