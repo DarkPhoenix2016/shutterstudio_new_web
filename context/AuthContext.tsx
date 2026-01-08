@@ -17,18 +17,15 @@ import { logAuditAction } from "@/lib/logger"
 interface UserData {
   uid: string
   email: string
-  role: string // Changed to string to support dynamic roles
+  role: string 
   disabled?: boolean
   name?: string
-  firstName?: string
-  lastName?: string
   displayName?: string
   photoURL?: string
   coverURL?: string
   phoneNumber?: string
-  designation?: string
   studioID?: string
-  profileImage?: string
+  designation?: string // Added
   createdAt?: any
 }
 
@@ -36,7 +33,10 @@ interface StudioData {
   name: string
   logo_url?: string
   cover_url?: string
-  owner_uid?: string
+  designations?: string[]
+  invoice_text?: string
+  invoice_number?: string
+  invoice_current?: string
   [key: string]: any
 }
 
@@ -57,6 +57,7 @@ interface AuthContextType {
   loading: boolean
   login: (email: string, pass: string, remember: boolean) => Promise<void>
   logout: () => Promise<void>
+  refreshUserData: () => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -68,6 +69,7 @@ const AuthContext = createContext<AuthContextType>({
   loading: true,
   login: async () => {},
   logout: async () => {},
+  refreshUserData: async () => {},
 })
 
 export const useAuth = () => useContext(AuthContext)
@@ -87,7 +89,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       if (docSnap.exists()) {
         setRolePermissions(docSnap.data() as RolePermissions)
       } else {
-        console.warn("Platform/ROLE_PERMISSIONS missing")
         setRolePermissions({})
       }
     } catch (e) {
@@ -97,7 +98,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const fetchCompleteProfile = async (uid: string) => {
     try {
-      // 1. Try Users collection
       let userDocRef = doc(db, "Users", uid)
       let userDocSnap = await getDoc(userDocRef)
       
@@ -106,7 +106,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       if (userDocSnap.exists()) {
         fetchedUserData = userDocSnap.data() as UserData
       } else {
-        // 2. Try SuperAdmins collection
         userDocRef = doc(db, "SuperAdmins", uid)
         userDocSnap = await getDoc(userDocRef)
         if (userDocSnap.exists()) {
@@ -116,7 +115,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
       if (fetchedUserData) {
         setUserData(fetchedUserData)
-        // Fetch Studio if applicable
         if (fetchedUserData.studioID) {
           try {
             const studioDocRef = doc(db, "Studios", fetchedUserData.studioID)
@@ -148,13 +146,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     const authUnsub = onAuthStateChanged(auth, async (user) => {
       if (user) {
-        // 1. User is logged in: Now safe to fetch protected data
         await Promise.all([
             fetchCompleteProfile(user.uid),
             fetchPermissions()
         ])
         
-        // 2. Setup Real-time Listener for Global Settings (ONLY when logged in)
         settingsUnsub = onSnapshot(doc(db, "Platform", "settings"), (doc) => {
           if (doc.exists()) {
             setGlobalSettings(doc.data() as GlobalSettings)
@@ -167,7 +163,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
         setCurrentUser(user)
       } else {
-        // User logged out: Clean up
         if (settingsUnsub) settingsUnsub();
         setCurrentUser(null)
         setUserData(null)
@@ -250,11 +245,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             "Auth"
         );
     }
+    await signOut(auth)
     setUserData(null)
     setStudioData(null)
     setRolePermissions(null)
     setCurrentUser(null)
-    await signOut(auth)
+  }
+
+  const refreshUserData = async () => {
+    if (currentUser) {
+      await fetchCompleteProfile(currentUser.uid)
+    }
   }
 
   const value = {
@@ -266,6 +267,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     loading,
     login,
     logout,
+    refreshUserData,
   }
 
   return <AuthContext.Provider value={value}>{!loading && children}</AuthContext.Provider>

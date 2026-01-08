@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, Fragment } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
@@ -9,27 +9,34 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
 import { 
-  AlertCircle, Save, Shield, Loader2, Check, Server, Plus, Trash2, 
-  List as ListIcon, Settings as SettingsIcon, Database, Upload, X, Pencil, 
-  Type, Link as LinkIcon, Calendar, Image as ImageIcon, Hash, ToggleLeft, Braces
-} from "lucide-react"
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow 
+} from "@/components/ui/table"
+import { 
+  Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter 
+} from "@/components/ui/dialog"
 import Swal from "sweetalert2"
 import { doc, getDoc, updateDoc, setDoc, arrayUnion, arrayRemove, deleteField } from "firebase/firestore"
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage"
 import { db, storage } from "@/lib/firebase"
 import { useAuth } from "@/context/AuthContext"
 import { logAuditAction } from "@/lib/logger"
+
+// --- ICONS ---
+// 1. Dynamic Icon Helper (from your component)
+import { ICON_OPTIONS, getIcon } from "@/components/icons"
+
+// 2. UI Icons (Static imports for the Settings Page interface)
 import { 
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow 
-} from "@/components/ui/table"
-import { 
-  Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter, DialogTrigger 
-} from "@/components/ui/dialog"
+  AlertCircle, Save, Shield, Loader2, Plus, Trash2, 
+  List as ListIcon, Settings as SettingsIcon, Database, X, Pencil, 
+  Type, Link as LinkIcon, Image as ImageIcon, Hash, ToggleLeft, Braces, 
+  FolderPlus, Folder, ArrowUp, ArrowDown, Layout, FileQuestion, Menu
+} from "lucide-react"
 
 // --- CONFIGURATION ---
 const DEFAULT_ROLES = ["studio_manager", "studio_crew"]
-const DEFAULT_FEATURES = ["dashboard", "calendar", "settings"]
 
 // --- TOAST CONFIGURATION ---
 const Toast = Swal.mixin({
@@ -46,29 +53,55 @@ const Toast = Swal.mixin({
 
 // --- TYPES ---
 type DataType = 'text' | 'number' | 'url' | 'date' | 'boolean' | 'image' | 'list' | 'map'
+type FeatureMap = Record<string, string[]>
+
+interface NavItem {
+    label: string
+    path: string
+    icon: string
+    feature: string
+}
+
+interface NavGroup {
+    id: string
+    label: string
+    items: NavItem[]
+}
 
 export default function SettingsPage() {
   const { currentUser, globalSettings } = useAuth()
   const [loading, setLoading] = useState(false)
   
-  // Settings Data
+  // --- STATE: GLOBAL SETTINGS ---
   const [maintenanceMode, setMaintenanceMode] = useState(false)
+  
+  // --- STATE: ROLES & PERMISSIONS ---
   const [systemRoles, setSystemRoles] = useState<string[]>([])
-  const [systemFeatures, setSystemFeatures] = useState<string[]>([])
   const [permissions, setPermissions] = useState<Record<string, string[]>>({})
-  
-  // Defaults Data
-  const [defaultsData, setDefaultsData] = useState<Record<string, any>>({})
-  
-  // Creation States
-  const [newFeature, setNewFeature] = useState("")
   const [newRole, setNewRole] = useState("")
-  
-  // Default Value Dialog State
+
+  // --- STATE: FEATURES (Map) ---
+  const [systemFeatures, setSystemFeatures] = useState<FeatureMap>({})
+  const [newCategory, setNewCategory] = useState("") 
+  const [newFeatureInputs, setNewFeatureInputs] = useState<Record<string, string>>({}) 
+
+  // --- STATE: NAVIGATION ---
+  const [navigationData, setNavigationData] = useState<NavGroup[]>([])
+  // Group Dialog
+  const [isGroupDialogOpen, setIsGroupDialogOpen] = useState(false)
+  const [editingGroupIndex, setEditingGroupIndex] = useState<number | null>(null)
+  const [groupLabelInput, setGroupLabelInput] = useState("")
+  // Item Dialog
+  const [isItemDialogOpen, setIsItemDialogOpen] = useState(false)
+  const [activeGroupIndex, setActiveGroupIndex] = useState<number | null>(null)
+  const [editingItemIndex, setEditingItemIndex] = useState<number | null>(null)
+  const [itemInput, setItemInput] = useState<NavItem>({ label: "", path: "", icon: "", feature: "" })
+  const [selectedFeatureCategory, setSelectedFeatureCategory] = useState("") // For 2-level dropdown
+
+  // --- STATE: DEFAULTS ---
+  const [defaultsData, setDefaultsData] = useState<Record<string, any>>({})
   const [isDefDialogOpen, setIsDefDialogOpen] = useState(false)
   const [isEditingDef, setIsEditingDef] = useState(false)
-  
-  // Default Value Form State
   const [defKey, setDefKey] = useState("")
   const [defType, setDefType] = useState<DataType>('text')
   const [defValue, setDefValue] = useState<any>("")
@@ -91,28 +124,44 @@ export default function SettingsPage() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        // A. Settings & Lists
+        // A. Settings Doc (Roles, Features, Navigation)
         const settingsRef = doc(db, "Platform", "settings")
         const settingsSnap = await getDoc(settingsRef)
         
         if (settingsSnap.exists()) {
           const data = settingsSnap.data()
-          setSystemRoles(data.roles || DEFAULT_ROLES)
-          setSystemFeatures(data.features || DEFAULT_FEATURES)
+          
+          setSystemRoles(Array.isArray(data.roles) ? data.roles : DEFAULT_ROLES)
+          
+          // Handle Features (Map vs Legacy Array)
+          const fetchedFeatures = data.features || {}
+          if (Array.isArray(fetchedFeatures)) {
+             setSystemFeatures({ "General": fetchedFeatures })
+          } else {
+             setSystemFeatures(fetchedFeatures)
+          }
+
+          // Handle Navigation
+          if (data.navigation && Array.isArray(data.navigation)) {
+              setNavigationData(data.navigation)
+          }
+
         } else {
-          await setDoc(settingsRef, { roles: DEFAULT_ROLES, features: DEFAULT_FEATURES }, { merge: true })
+          // Initialize Doc if missing
+          const initialFeatures = { "Dashboard": ["home", "analytics"] }
+          await setDoc(settingsRef, { roles: DEFAULT_ROLES, features: initialFeatures }, { merge: true })
           setSystemRoles(DEFAULT_ROLES)
-          setSystemFeatures(DEFAULT_FEATURES)
+          setSystemFeatures(initialFeatures)
         }
 
-        // B. Permissions
+        // B. Permissions Doc
         const permRef = doc(db, "Platform", "ROLE_PERMISSIONS")
         const permSnap = await getDoc(permRef)
         if (permSnap.exists()) {
           setPermissions(permSnap.data() as Record<string, string[]>)
         }
 
-        // C. Defaults
+        // C. Defaults Doc
         const defaultsRef = doc(db, "Platform", "defaults")
         const defaultsSnap = await getDoc(defaultsRef)
         if (defaultsSnap.exists()) {
@@ -129,30 +178,18 @@ export default function SettingsPage() {
     fetchData()
   }, [])
 
-  // --- ACTIONS: GENERAL ---
+  // ========================== ACTIONS: GENERAL ==========================
   const handleMaintenanceToggle = async (checked: boolean) => {
-    Swal.fire({
-      title: `${checked ? "Enable" : "Disable"} Maintenance?`,
-      text: checked ? "Regular users will be blocked immediately." : "Users will regain access.",
-      icon: 'warning',
-      showCancelButton: true,
-      confirmButtonColor: checked ? '#d33' : '#10b981',
-      confirmButtonText: 'Yes, update'
-    }).then(async (result) => {
-      if (result.isConfirmed) {
-        try {
-          await setDoc(doc(db, "Platform", "settings"), { maintenanceMode: checked }, { merge: true })
-          setMaintenanceMode(checked)
-          if (currentUser) await logAuditAction("SYSTEM_SETTINGS", `Maintenance set to ${checked}`, currentUser, "Settings")
-          Toast.fire({ icon: 'success', title: `System is now ${checked ? 'Offline' : 'Online'}` })
-        } catch (e) {
-          Toast.fire({ icon: 'error', title: 'Failed to update settings' })
-        }
-      }
-    })
+    try {
+        await setDoc(doc(db, "Platform", "settings"), { maintenanceMode: checked }, { merge: true })
+        setMaintenanceMode(checked)
+        Toast.fire({ icon: 'success', title: `System is now ${checked ? 'Offline' : 'Online'}` })
+    } catch (e) {
+        Toast.fire({ icon: 'error', title: 'Failed to update settings' })
+    }
   }
 
-  // --- ACTIONS: PERMISSIONS ---
+  // ========================== ACTIONS: PERMISSIONS ==========================
   const togglePermission = (role: string, feature: string) => {
     if (role === 'super_admin') return;
     setPermissions(prev => {
@@ -176,128 +213,248 @@ export default function SettingsPage() {
     }
   }
 
-  // --- ACTIONS: ROLES/FEATURES ---
-  const handleAddItem = async (type: "roles" | "features", value: string, setValue: (s: string) => void, setList: React.Dispatch<React.SetStateAction<string[]>>) => {
-    if (!value.trim()) return
-    const formatted = value.toLowerCase().trim().replace(/\s+/g, '_')
-    const currentList = type === "roles" ? systemRoles : systemFeatures
-    if (currentList.includes(formatted)) return Toast.fire({ icon: 'warning', title: 'Item already exists' })
+  // ========================== ACTIONS: ROLES ==========================
+  const handleAddRole = async () => {
+    if (!newRole.trim()) return
+    const formatted = newRole.toLowerCase().trim().replace(/\s+/g, '_')
+    if (systemRoles.includes(formatted)) return Toast.fire({ icon: 'warning', title: 'Role already exists' })
 
     try {
-      await updateDoc(doc(db, "Platform", "settings"), { [type]: arrayUnion(formatted) })
-      if (type === "roles") {
-         await setDoc(doc(db, "Platform", "ROLE_PERMISSIONS"), { [formatted]: [] }, { merge: true })
-         setPermissions(prev => ({ ...prev, [formatted]: [] }))
-      }
-      setList(prev => [...prev, formatted])
-      setValue("")
-      if (currentUser) await logAuditAction("SETTINGS_UPDATE", `Added ${type}: ${formatted}`, currentUser, "Settings")
-      Toast.fire({ icon: 'success', title: 'Item added' })
+      await updateDoc(doc(db, "Platform", "settings"), { roles: arrayUnion(formatted) })
+      await setDoc(doc(db, "Platform", "ROLE_PERMISSIONS"), { [formatted]: [] }, { merge: true })
+      setPermissions(prev => ({ ...prev, [formatted]: [] }))
+      setSystemRoles(prev => [...prev, formatted])
+      setNewRole("")
+      Toast.fire({ icon: 'success', title: 'Role added' })
     } catch (e) {
-      Toast.fire({ icon: 'error', title: 'Failed to add item' })
+      Toast.fire({ icon: 'error', title: 'Failed to add role' })
     }
   }
 
-  const handleDeleteItem = async (type: "roles" | "features", value: string, setList: React.Dispatch<React.SetStateAction<string[]>>) => {
-    if (value === "super_admin") return Toast.fire({ icon: 'error', title: 'Cannot delete Super Admin' })
-
-    Swal.fire({
-        title: `Delete ${value}?`,
-        icon: 'warning',
-        showCancelButton: true,
-        confirmButtonColor: '#d33',
-        confirmButtonText: 'Yes, delete'
-    }).then(async (res) => {
-        if (res.isConfirmed) {
-            try {
-                await updateDoc(doc(db, "Platform", "settings"), { [type]: arrayRemove(value) })
-                setList(prev => prev.filter(item => item !== value))
-                if (currentUser) await logAuditAction("SETTINGS_UPDATE", `Deleted ${type}: ${value}`, currentUser, "Settings")
-                Toast.fire({ icon: 'success', title: 'Item removed' })
-            } catch (e) {
-                Toast.fire({ icon: 'error', title: 'Failed to delete' })
-            }
-        }
-    })
-  }
-
-  // --- ACTIONS: DEFAULTS ---
-
-  const openAddDialog = () => {
-    setDefKey("")
-    setDefValue("")
-    setDefType("text")
-    setTempList([])
-    setTempMap({})
-    setIsEditingDef(false)
-    setIsDefDialogOpen(true)
-  }
-
-  const openEditDialog = (key: string, value: any) => {
-    setDefKey(key)
-    setIsEditingDef(true)
-    
-    // Auto-detect type
-    if (Array.isArray(value)) {
-        setDefType('list')
-        setTempList(value)
-        setDefValue("")
-    } else if (typeof value === 'object' && value !== null) {
-        setDefType('map')
-        setTempMap(value)
-        setDefValue("")
-    } else if (typeof value === 'boolean') {
-        setDefType('boolean')
-        setDefValue(value ? 'true' : 'false')
-    } else if (typeof value === 'number') {
-        setDefType('number')
-        setDefValue(value)
-    } else {
-        const strVal = String(value)
-        if (strVal.startsWith('http') && (strVal.includes('firebasestorage') || strVal.match(/\.(jpeg|jpg|gif|png)/))) {
-            setDefType('image')
-        } else if (strVal.startsWith('http')) {
-            setDefType('url')
-        } else {
-            setDefType('text')
-        }
-        setDefValue(strVal)
-    }
-    setIsDefDialogOpen(true)
-  }
-
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-    setUploadingImg(true)
+  const handleDeleteRole = async (role: string) => {
+    if (role === "super_admin") return
     try {
-        const storageRef = ref(storage, `Defaults/${file.name}_${Date.now()}`)
-        await uploadBytes(storageRef, file)
-        const url = await getDownloadURL(storageRef)
-        setDefValue(url)
-        Toast.fire({ icon: 'success', title: 'Image uploaded' })
-    } catch (error) {
-        Toast.fire({ icon: 'error', title: 'Upload failed' })
-    } finally {
-        setUploadingImg(false)
+        await updateDoc(doc(db, "Platform", "settings"), { roles: arrayRemove(role) })
+        setSystemRoles(prev => prev.filter(r => r !== role))
+        Toast.fire({ icon: 'success', title: 'Role removed' })
+    } catch (e) {
+        Toast.fire({ icon: 'error', title: 'Failed to delete role' })
     }
   }
 
-  const handleSaveDefault = async () => {
+  // ========================== ACTIONS: FEATURES ==========================
+  const handleAddCategory = async () => {
+      if (!newCategory.trim()) return;
+      const catName = newCategory.trim();
+      if (systemFeatures[catName]) return Toast.fire({ icon: 'warning', title: 'Category exists' });
+      try {
+          await updateDoc(doc(db, "Platform", "settings"), { [`features.${catName}`]: [] });
+          setSystemFeatures(prev => ({ ...prev, [catName]: [] }));
+          setNewCategory("");
+          Toast.fire({ icon: 'success', title: 'Category created' });
+      } catch (e) {
+          Toast.fire({ icon: 'error', title: 'Failed to create category' });
+      }
+  }
+
+  const handleDeleteCategory = async (category: string) => {
+      Swal.fire({
+          title: `Delete ${category}?`,
+          text: "This will remove the category and all its features.",
+          icon: 'warning',
+          showCancelButton: true,
+          confirmButtonColor: '#d33',
+          confirmButtonText: 'Yes, delete'
+      }).then(async (res) => {
+          if (res.isConfirmed) {
+              try {
+                  await updateDoc(doc(db, "Platform", "settings"), { [`features.${category}`]: deleteField() });
+                  const newFeatures = { ...systemFeatures };
+                  delete newFeatures[category];
+                  setSystemFeatures(newFeatures);
+                  Toast.fire({ icon: 'success', title: 'Category deleted' });
+              } catch (e) {
+                  Toast.fire({ icon: 'error', title: 'Failed to delete' });
+              }
+          }
+      });
+  }
+
+  const handleAddFeature = async (category: string) => {
+      const val = newFeatureInputs[category];
+      if (!val || !val.trim()) return;
+      const featureKey = val.toLowerCase().trim().replace(/\s+/g, '_');
+      const currentList = systemFeatures[category] || [];
+      if (currentList.includes(featureKey)) return Toast.fire({ icon: 'warning', title: 'Feature exists' });
+      try {
+          await updateDoc(doc(db, "Platform", "settings"), { [`features.${category}`]: arrayUnion(featureKey) });
+          setSystemFeatures(prev => ({ ...prev, [category]: [...(prev[category] || []), featureKey] }));
+          setNewFeatureInputs(prev => ({ ...prev, [category]: "" }));
+          Toast.fire({ icon: 'success', title: 'Feature added' });
+      } catch (e) {
+          Toast.fire({ icon: 'error', title: 'Failed to add feature' });
+      }
+  }
+
+  const handleDeleteFeature = async (category: string, feature: string) => {
+      try {
+          await updateDoc(doc(db, "Platform", "settings"), { [`features.${category}`]: arrayRemove(feature) });
+          setSystemFeatures(prev => ({ ...prev, [category]: prev[category].filter(f => f !== feature) }));
+          Toast.fire({ icon: 'success', title: 'Feature removed' });
+      } catch (e) {
+          Toast.fire({ icon: 'error', title: 'Failed to remove feature' });
+      }
+  }
+
+  // ========================== ACTIONS: NAVIGATION ==========================
+  const saveNavigationToDB = async (newData: NavGroup[]) => {
+      try {
+          await updateDoc(doc(db, "Platform", "settings"), { navigation: newData });
+          setNavigationData(newData);
+          Toast.fire({ icon: 'success', title: 'Navigation saved' });
+      } catch (e) {
+          console.error(e);
+          Toast.fire({ icon: 'error', title: 'Failed to save navigation' });
+      }
+  }
+
+  // --- Groups ---
+  const handleOpenGroupDialog = (index?: number) => {
+      if (index !== undefined) {
+          setEditingGroupIndex(index);
+          setGroupLabelInput(navigationData[index].label);
+      } else {
+          setEditingGroupIndex(null);
+          setGroupLabelInput("");
+      }
+      setIsGroupDialogOpen(true);
+  }
+
+  const handleSaveGroup = () => {
+      if (!groupLabelInput.trim()) return;
+      const newNav = [...navigationData];
+      if (editingGroupIndex !== null) {
+          newNav[editingGroupIndex].label = groupLabelInput;
+      } else {
+          newNav.push({
+              id: `group_${Date.now()}`,
+              label: groupLabelInput,
+              items: []
+          });
+      }
+      saveNavigationToDB(newNav);
+      setIsGroupDialogOpen(false);
+  }
+
+  const handleDeleteGroup = (index: number) => {
+      Swal.fire({
+          title: "Delete Group?",
+          text: "All items inside will be removed.",
+          icon: "warning",
+          showCancelButton: true,
+          confirmButtonColor: "#d33",
+          confirmButtonText: "Delete"
+      }).then((res) => {
+          if (res.isConfirmed) {
+              const newNav = navigationData.filter((_, i) => i !== index);
+              saveNavigationToDB(newNav);
+          }
+      });
+  }
+
+  const handleMoveGroup = (index: number, direction: -1 | 1) => {
+      const newNav = [...navigationData];
+      const targetIndex = index + direction;
+      if (targetIndex < 0 || targetIndex >= newNav.length) return;
+      [newNav[index], newNav[targetIndex]] = [newNav[targetIndex], newNav[index]]; 
+      saveNavigationToDB(newNav);
+  }
+
+  // --- Items ---
+  const handleOpenItemDialog = (groupIndex: number, itemIndex?: number) => {
+      setActiveGroupIndex(groupIndex);
+      if (itemIndex !== undefined) {
+          setEditingItemIndex(itemIndex);
+          const item = navigationData[groupIndex].items[itemIndex];
+          setItemInput({ ...item });
+          
+          // Auto-detect category for dropdown
+          let categoryFound = "";
+          for (const [cat, feats] of Object.entries(systemFeatures)) {
+              if (feats.includes(item.feature)) {
+                  categoryFound = cat;
+                  break;
+              }
+          }
+          setSelectedFeatureCategory(categoryFound || Object.keys(systemFeatures)[0] || "");
+      } else {
+          setEditingItemIndex(null);
+          setItemInput({ label: "", path: "", icon: "", feature: "" });
+          setSelectedFeatureCategory(Object.keys(systemFeatures)[0] || "");
+      }
+      setIsItemDialogOpen(true);
+  }
+
+  const handleSaveItem = () => {
+      if (activeGroupIndex === null || !itemInput.label || !itemInput.path) return;
+      const newNav = [...navigationData];
+      const items = newNav[activeGroupIndex].items;
+
+      if (editingItemIndex !== null) {
+          items[editingItemIndex] = itemInput;
+      } else {
+          items.push(itemInput);
+      }
+      saveNavigationToDB(newNav);
+      setIsItemDialogOpen(false);
+  }
+
+  const handleDeleteItem = (groupIndex: number, itemIndex: number) => {
+      const newNav = [...navigationData];
+      newNav[groupIndex].items = newNav[groupIndex].items.filter((_, i) => i !== itemIndex);
+      saveNavigationToDB(newNav);
+  }
+
+  const handleMoveItem = (groupIndex: number, itemIndex: number, direction: -1 | 1) => {
+      const newNav = [...navigationData];
+      const items = newNav[groupIndex].items;
+      const targetIndex = itemIndex + direction;
+      if (targetIndex < 0 || targetIndex >= items.length) return;
+      [items[itemIndex], items[targetIndex]] = [items[targetIndex], items[itemIndex]]; 
+      saveNavigationToDB(newNav);
+  }
+
+  // ========================== ACTIONS: DEFAULTS ==========================
+  const openAddDialog = () => {
+    setDefKey(""); setDefValue(""); setDefType("text"); setTempList([]); setTempMap({}); setIsEditingDef(false); setIsDefDialogOpen(true);
+  }
+  const openEditDialog = (key: string, value: any) => {
+    setDefKey(key); setIsEditingDef(true);
+    if (Array.isArray(value)) { setDefType('list'); setTempList(value); setDefValue(""); }
+    else if (typeof value === 'object' && value !== null) { setDefType('map'); setTempMap(value); setDefValue(""); }
+    else if (typeof value === 'boolean') { setDefType('boolean'); setDefValue(value ? 'true' : 'false'); }
+    else if (typeof value === 'number') { setDefType('number'); setDefValue(value); }
+    else {
+        const strVal = String(value);
+        if (strVal.startsWith('http') && (strVal.includes('firebasestorage') || strVal.match(/\.(jpeg|jpg|gif|png)/))) { setDefType('image'); }
+        else if (strVal.startsWith('http')) { setDefType('url'); }
+        else { setDefType('text'); }
+        setDefValue(strVal);
+    }
+    setIsDefDialogOpen(true);
+  }
+  
+  const handleSaveDefault = async () => { 
     if (!defKey.trim()) return Toast.fire({ icon: 'warning', title: 'Key name is required' })
-    
     let finalValue = defValue
     if (defType === 'list') finalValue = tempList
     if (defType === 'map') finalValue = tempMap
     if (defType === 'number') finalValue = Number(defValue)
     if (defType === 'boolean') finalValue = defValue === 'true'
-
     try {
         await setDoc(doc(db, "Platform", "defaults"), { [defKey]: finalValue }, { merge: true })
         setDefaultsData(prev => ({ ...prev, [defKey]: finalValue }))
-        
         if (currentUser) await logAuditAction("UPDATE_DEFAULTS", `${isEditingDef ? "Edited" : "Added"} default: ${defKey}`, currentUser, "Settings")
-        
         Toast.fire({ icon: 'success', title: 'Saved successfully' })
         setIsDefDialogOpen(false)
     } catch (e) {
@@ -305,10 +462,9 @@ export default function SettingsPage() {
     }
   }
 
-  const handleDeleteDefault = async (key: string) => {
+  const handleDeleteDefault = async (key: string) => { 
     Swal.fire({
         title: `Delete ${key}?`,
-        text: "This field will be permanently removed.",
         icon: 'warning',
         showCancelButton: true,
         confirmButtonColor: '#d33',
@@ -328,7 +484,23 @@ export default function SettingsPage() {
     })
   }
 
-  // --- RENDER HELPERS ---
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploadingImg(true)
+    try {
+        const storageRef = ref(storage, `Defaults/${file.name}_${Date.now()}`)
+        await uploadBytes(storageRef, file)
+        const url = await getDownloadURL(storageRef)
+        setDefValue(url)
+        Toast.fire({ icon: 'success', title: 'Image uploaded' })
+    } catch (error) {
+        Toast.fire({ icon: 'error', title: 'Upload failed' })
+    } finally {
+        setUploadingImg(false)
+    }
+  }
+
   const getTypeIcon = (value: any) => {
     if (Array.isArray(value)) return <ListIcon className="h-4 w-4 text-blue-500"/>
     if (typeof value === 'boolean') return <ToggleLeft className="h-4 w-4 text-purple-500"/>
@@ -342,6 +514,9 @@ export default function SettingsPage() {
     return <Type className="h-4 w-4 text-slate-400"/>
   }
 
+  // Preview Icon for Navigation Dialog
+  const PreviewIcon = itemInput.icon ? getIcon(itemInput.icon) : FileQuestion;
+
   return (
     <div className="flex-1 space-y-8 p-6 max-w-full overflow-x-hidden">
       <div>
@@ -349,10 +524,11 @@ export default function SettingsPage() {
         <p className="text-muted-foreground mt-1">Platform-wide configuration and access control</p>
       </div>
 
-      <Tabs defaultValue="defaults" className="w-full">
-        <TabsList className="grid w-full grid-cols-5 lg:w-[750px] mb-6">
+      <Tabs defaultValue="navigation" className="w-full">
+        <TabsList className="grid w-full grid-cols-6 lg:w-[900px] mb-6">
           <TabsTrigger value="general">General</TabsTrigger>
           <TabsTrigger value="defaults">Defaults</TabsTrigger>
+          <TabsTrigger value="navigation">Navigation</TabsTrigger>
           <TabsTrigger value="permissions">Permissions</TabsTrigger>
           <TabsTrigger value="roles">Roles</TabsTrigger>
           <TabsTrigger value="features">Features</TabsTrigger>
@@ -362,7 +538,7 @@ export default function SettingsPage() {
         <TabsContent value="general">
           <Card className="border-none shadow-md">
             <CardHeader className="border-b bg-slate-50/50">
-              <CardTitle className="flex items-center gap-2"><Server className="h-5 w-5 text-[#1C4D8D]" /> System Maintenance</CardTitle>
+              <CardTitle className="flex items-center gap-2"><Loader2 className="h-5 w-5 text-[#1C4D8D]" /> System Maintenance</CardTitle>
               <CardDescription>Control platform availability</CardDescription>
             </CardHeader>
             <CardContent className="p-6">
@@ -380,7 +556,7 @@ export default function SettingsPage() {
           </Card>
         </TabsContent>
 
-        {/* --- TAB 2: DEFAULTS MANAGER --- */}
+        {/* --- TAB 2: DEFAULTS --- */}
         <TabsContent value="defaults">
             <Card className="border-none shadow-md">
                 <CardHeader className="border-b bg-slate-50/50 flex flex-row items-center justify-between">
@@ -433,99 +609,162 @@ export default function SettingsPage() {
                     </Table>
                 </CardContent>
             </Card>
+        </TabsContent>
 
-            {/* DEFAULT VALUE DIALOG */}
-            <Dialog open={isDefDialogOpen} onOpenChange={setIsDefDialogOpen}>
-                {/* Prevent background dismiss for data safety */}
-                <DialogContent className="sm:max-w-[500px]" onInteractOutside={(e) => e.preventDefault()}>
-                    <DialogHeader>
-                        <DialogTitle>{isEditingDef ? "Edit Default" : "Add New Default"}</DialogTitle>
-                        <DialogDescription>Configure key, type and value for this setting.</DialogDescription>
-                    </DialogHeader>
-                    
+        {/* --- TAB 3: NAVIGATION --- */}
+        <TabsContent value="navigation">
+            <Card className="border-none shadow-md">
+                <CardHeader className="border-b bg-slate-50/50 flex flex-row items-center justify-between">
+                    <div>
+                        <CardTitle className="flex items-center gap-2"><Layout className="h-5 w-5 text-[#1C4D8D]"/> Navigation Menu</CardTitle>
+                        <CardDescription>Customize the sidebar structure and ordering.</CardDescription>
+                    </div>
+                    <Button onClick={() => handleOpenGroupDialog()} className="bg-[#1C4D8D] hover:bg-[#1C4D8D]/90">
+                        <Plus className="h-4 w-4 mr-2"/> Add Group
+                    </Button>
+                </CardHeader>
+                <CardContent className="p-6 space-y-4">
+                    <Accordion type="multiple" className="w-full space-y-4">
+                        {navigationData.map((group, groupIdx) => (
+                            <AccordionItem key={group.id} value={group.id} className="border rounded-lg bg-white overflow-hidden shadow-sm">
+                                <div className="flex items-center bg-slate-50 px-4 py-2">
+                                    <div className="flex gap-1 mr-2">
+                                        <Button variant="ghost" size="icon" className="h-6 w-6" disabled={groupIdx === 0} onClick={() => handleMoveGroup(groupIdx, -1)}><ArrowUp className="h-3 w-3"/></Button>
+                                        <Button variant="ghost" size="icon" className="h-6 w-6" disabled={groupIdx === navigationData.length - 1} onClick={() => handleMoveGroup(groupIdx, 1)}><ArrowDown className="h-3 w-3"/></Button>
+                                    </div>
+                                    <AccordionTrigger className="flex-1 py-2 hover:no-underline">
+                                        <span className="font-bold text-sm uppercase tracking-wider text-slate-700">{group.label}</span>
+                                        <Badge variant="secondary" className="ml-2">{group.items.length} items</Badge>
+                                    </AccordionTrigger>
+                                    <div className="flex gap-2 ml-4">
+                                        <Button variant="outline" size="sm" onClick={() => handleOpenGroupDialog(groupIdx)}><Pencil className="h-3 w-3"/></Button>
+                                        <Button variant="outline" size="sm" className="text-red-500 hover:text-red-600" onClick={() => handleDeleteGroup(groupIdx)}><Trash2 className="h-3 w-3"/></Button>
+                                    </div>
+                                </div>
+                                <AccordionContent className="p-0 border-t">
+                                    <div className="divide-y">
+                                        {group.items.length === 0 && (
+                                            <div className="p-4 text-center text-sm text-slate-400">No items in this group.</div>
+                                        )}
+                                        {group.items.map((item, itemIdx) => {
+                                            const ItemIcon = getIcon(item.icon);
+                                            return (
+                                                <div key={itemIdx} className="flex items-center justify-between p-3 pl-8 hover:bg-slate-50">
+                                                    <div className="flex items-center gap-4">
+                                                        <div className="flex flex-col gap-0.5">
+                                                            <Button variant="ghost" size="icon" className="h-4 w-4" disabled={itemIdx === 0} onClick={() => handleMoveItem(groupIdx, itemIdx, -1)}><ArrowUp className="h-2 w-2 text-slate-400"/></Button>
+                                                            <Button variant="ghost" size="icon" className="h-4 w-4" disabled={itemIdx === group.items.length - 1} onClick={() => handleMoveItem(groupIdx, itemIdx, 1)}><ArrowDown className="h-2 w-2 text-slate-400"/></Button>
+                                                        </div>
+                                                        <div className="flex items-center gap-3">
+                                                            <div className="p-2 bg-slate-100 rounded-md text-slate-600">
+                                                                <ItemIcon className="h-4 w-4" />
+                                                            </div>
+                                                            <div>
+                                                                <div className="font-medium text-sm text-slate-800">{item.label}</div>
+                                                                <div className="text-xs text-slate-500 font-mono">{item.path}</div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex items-center gap-4">
+                                                        <Badge variant="outline" className="text-xs">{item.feature}</Badge>
+                                                        <div className="flex gap-1">
+                                                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleOpenItemDialog(groupIdx, itemIdx)}><Pencil className="h-3.5 w-3.5 text-blue-600"/></Button>
+                                                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleDeleteItem(groupIdx, itemIdx)}><X className="h-3.5 w-3.5 text-red-500"/></Button>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            )
+                                        })}
+                                        <div className="p-2 bg-slate-50/50">
+                                            <Button variant="ghost" size="sm" className="w-full text-slate-500 hover:text-[#1C4D8D]" onClick={() => handleOpenItemDialog(groupIdx)}>
+                                                <Plus className="h-3 w-3 mr-2" /> Add Item to {group.label}
+                                            </Button>
+                                        </div>
+                                    </div>
+                                </AccordionContent>
+                            </AccordionItem>
+                        ))}
+                    </Accordion>
+                </CardContent>
+            </Card>
+
+            {/* GROUP DIALOG */}
+            <Dialog open={isGroupDialogOpen} onOpenChange={setIsGroupDialogOpen}>
+                <DialogContent>
+                    <DialogHeader><DialogTitle>{editingGroupIndex !== null ? "Edit Group" : "New Group"}</DialogTitle></DialogHeader>
+                    <div className="py-4">
+                        <Label>Group Label (Header)</Label>
+                        <Input placeholder="e.g. OVERVIEW" value={groupLabelInput} onChange={e => setGroupLabelInput(e.target.value.toUpperCase())} className="mt-2" />
+                    </div>
+                    <DialogFooter><Button onClick={handleSaveGroup}>Save Group</Button></DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* ITEM DIALOG */}
+            <Dialog open={isItemDialogOpen} onOpenChange={setIsItemDialogOpen}>
+                <DialogContent className="sm:max-w-[500px]">
+                    <DialogHeader><DialogTitle>{editingItemIndex !== null ? "Edit Item" : "New Item"}</DialogTitle></DialogHeader>
                     <div className="grid gap-4 py-4">
+                        {/* 1. 2-Level Feature Selection */}
                         <div className="space-y-2">
-                            <Label>Key Name</Label>
-                            <Input placeholder="e.g. user_avatar" value={defKey} onChange={e => setDefKey(e.target.value)} disabled={isEditingDef} />
-                        </div>
-                        <div className="space-y-2">
-                            <Label>Data Type</Label>
-                            <Select value={defType} onValueChange={(v: DataType) => { setDefType(v); if(!isEditingDef) setDefValue(""); }}>
-                                <SelectTrigger><SelectValue /></SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="text">Text / String</SelectItem>
-                                    <SelectItem value="url">URL Link</SelectItem>
-                                    <SelectItem value="number">Number</SelectItem>
-                                    <SelectItem value="boolean">Boolean</SelectItem>
-                                    <SelectItem value="image">Image (Upload)</SelectItem>
-                                    <SelectItem value="list">List (Array)</SelectItem>
-                                    <SelectItem value="map">Map (Object)</SelectItem>
-                                </SelectContent>
-                            </Select>
+                            <Label>Required Feature Permission</Label>
+                            <div className="grid grid-cols-2 gap-2">
+                                {/* Feature Category Dropdown */}
+                                <Select value={selectedFeatureCategory} onValueChange={(val) => { setSelectedFeatureCategory(val); setItemInput({...itemInput, feature: ""}) }}>
+                                    <SelectTrigger><SelectValue placeholder="Category" /></SelectTrigger>
+                                    <SelectContent>
+                                        {Object.keys(systemFeatures).map(cat => <SelectItem key={cat} value={cat}>{cat}</SelectItem>)}
+                                    </SelectContent>
+                                </Select>
+                                
+                                {/* Feature Dropdown (Filtered) */}
+                                <Select value={itemInput.feature} onValueChange={(val) => setItemInput({...itemInput, feature: val})} disabled={!selectedFeatureCategory}>
+                                    <SelectTrigger><SelectValue placeholder="Feature" /></SelectTrigger>
+                                    <SelectContent>
+                                        {(systemFeatures[selectedFeatureCategory] || []).map(f => (
+                                            <SelectItem key={f} value={f} className="capitalize">{f.replace(/_/g, " ")}</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
                         </div>
 
-                        {/* Dynamic Input Area */}
-                        <div className="p-4 bg-slate-50 rounded-md border min-h-[100px] flex flex-col justify-center">
-                            {defType === 'text' && <Input placeholder="Value..." value={defValue} onChange={e => setDefValue(e.target.value)} />}
-                            {defType === 'url' && <Input placeholder="https://..." value={defValue} onChange={e => setDefValue(e.target.value)} />}
-                            {defType === 'number' && <Input type="number" placeholder="0" value={defValue} onChange={e => setDefValue(e.target.value)} />}
-                            {defType === 'boolean' && (
-                                <Select value={defValue} onValueChange={setDefValue}>
-                                    <SelectTrigger><SelectValue placeholder="Select..." /></SelectTrigger>
-                                    <SelectContent><SelectItem value="true">True</SelectItem><SelectItem value="false">False</SelectItem></SelectContent>
+                        {/* 2. Icon Picker (using ICON_OPTIONS) */}
+                        <div className="space-y-2">
+                            <Label>Icon</Label>
+                            <div className="flex gap-2">
+                                <div className="p-2 border rounded-md bg-slate-50 flex items-center justify-center w-12 shrink-0">
+                                    <PreviewIcon className="h-6 w-6 text-[#1C4D8D]" />
+                                </div>
+                                <Select value={itemInput.icon} onValueChange={(val) => setItemInput({...itemInput, icon: val})}>
+                                    <SelectTrigger><SelectValue placeholder="Select Icon" /></SelectTrigger>
+                                    <SelectContent className="max-h-[300px]">
+                                        {ICON_OPTIONS.map(iconName => (
+                                            <SelectItem key={iconName} value={iconName}>{iconName}</SelectItem>
+                                        ))}
+                                    </SelectContent>
                                 </Select>
-                            )}
-                            {defType === 'image' && (
-                                <div className="space-y-2">
-                                    <Input type="file" accept="image/*" onChange={handleImageUpload} disabled={uploadingImg} />
-                                    {uploadingImg && <span className="text-xs text-blue-500 flex gap-1"><Loader2 className="animate-spin h-3 w-3"/> Uploading...</span>}
-                                    {defValue && <div className="mt-2"><img src={defValue} alt="Preview" className="h-32 w-auto object-cover rounded border" /></div>}
-                                </div>
-                            )}
-                            {defType === 'list' && (
-                                <div className="space-y-2">
-                                    <div className="flex gap-2">
-                                        <Input placeholder="Add item..." value={defValue} onChange={e => setDefValue(e.target.value)} />
-                                        <Button size="sm" onClick={() => { if(defValue) { setTempList([...tempList, defValue]); setDefValue(""); } }}><Plus className="h-4 w-4"/></Button>
-                                    </div>
-                                    <div className="flex flex-wrap gap-1">
-                                        {tempList.map((item, i) => (
-                                            <Badge key={i} variant="secondary" className="cursor-pointer" onClick={() => setTempList(tempList.filter((_, idx) => idx !== i))}>{item} <X className="h-3 w-3 ml-1"/></Badge>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-                            {defType === 'map' && (
-                                <div className="space-y-2">
-                                    <div className="grid grid-cols-2 gap-2">
-                                        <Input placeholder="Key" value={mapInputKey} onChange={e => setMapInputKey(e.target.value)} />
-                                        <Input placeholder="Value" value={mapInputValue} onChange={e => setMapInputValue(e.target.value)} />
-                                    </div>
-                                    <Button size="sm" className="w-full" onClick={() => { if(mapInputKey && mapInputValue) { setTempMap({...tempMap, [mapInputKey]: mapInputValue}); setMapInputKey(""); setMapInputValue(""); } }}>Add Pair</Button>
-                                    <div className="text-xs space-y-1 max-h-[150px] overflow-y-auto">
-                                        {Object.entries(tempMap).map(([k, v]) => (
-                                            <div key={k} className="flex justify-between bg-white p-2 rounded border items-center">
-                                                <span className="truncate max-w-[80%]"><b>{k}:</b> {String(v)}</span>
-                                                <X className="h-3 w-3 cursor-pointer text-red-500" onClick={() => { const n = {...tempMap}; delete n[k]; setTempMap(n); }}/>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
+                            </div>
+                        </div>
+
+                        {/* 3. Label & Path */}
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                                <Label>Label</Label>
+                                <Input placeholder="e.g. Dashboard" value={itemInput.label} onChange={e => setItemInput({...itemInput, label: e.target.value})} />
+                            </div>
+                            <div className="space-y-2">
+                                <Label>Path</Label>
+                                <Input placeholder="e.g. /dashboard" value={itemInput.path} onChange={e => setItemInput({...itemInput, path: e.target.value})} />
+                            </div>
                         </div>
                     </div>
-
-                    <DialogFooter>
-                        <Button variant="outline" onClick={() => setIsDefDialogOpen(false)}>Cancel</Button>
-                        <Button className="bg-[#1C4D8D]" onClick={handleSaveDefault} disabled={uploadingImg}>
-                            {uploadingImg ? <Loader2 className="animate-spin h-4 w-4" /> : "Save Changes"}
-                        </Button>
-                    </DialogFooter>
+                    <DialogFooter><Button onClick={handleSaveItem}>Save Item</Button></DialogFooter>
                 </DialogContent>
             </Dialog>
         </TabsContent>
 
-        {/* --- TAB 3: PERMISSIONS --- */}
+        {/* --- TAB 4: PERMISSIONS --- */}
         <TabsContent value="permissions">
           <Card className="border-none shadow-md">
             <CardHeader className="border-b bg-slate-50/50 flex flex-row items-center justify-between">
@@ -545,30 +784,42 @@ export default function SettingsPage() {
                         <table className="w-full text-sm text-left border-collapse">
                             <thead className="bg-slate-50 text-slate-700 font-bold border-b">
                                 <tr>
-                                    <th className="px-6 py-4 border-r bg-slate-100 w-[200px]">Feature \ Role</th>
+                                    <th className="px-6 py-4 border-r bg-slate-100 w-[250px]">Category / Feature</th>
                                     {systemRoles.map(role => (
                                         <th key={role} className="px-4 py-4 text-center min-w-[120px] capitalize">{role.replace(/_/g, " ")}</th>
                                     ))}
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-100">
-                                {systemFeatures.map(feature => (
-                                    <tr key={feature} className="hover:bg-slate-50/50 transition-colors">
-                                        <td className="px-6 py-3 font-medium capitalize border-r bg-slate-50/30">{feature.replace(/_/g, " ")}</td>
-                                        {systemRoles.map(role => {
-                                            const isEnabled = (permissions[role] || []).includes(feature)
-                                            const isSuper = role === 'super_admin'
-                                            return (
-                                                <td key={`${role}-${feature}`} className="px-4 py-3 text-center">
-                                                    <div className="flex justify-center">
-                                                        <input type="checkbox" disabled={isSuper} checked={isSuper ? true : isEnabled} onChange={() => togglePermission(role, feature)}
-                                                            className={`w-5 h-5 rounded border-slate-300 text-[#1C4D8D] focus:ring-[#1C4D8D] ${isSuper ? "opacity-50 cursor-not-allowed bg-slate-200" : "cursor-pointer"}`}
-                                                        />
-                                                    </div>
+                                {Object.entries(systemFeatures).map(([category, features]) => (
+                                    <Fragment key={category}>
+                                        <tr className="bg-slate-100/50">
+                                            <td colSpan={systemRoles.length + 1} className="px-6 py-2 font-bold text-slate-800 text-xs uppercase tracking-wider border-y">
+                                                <Folder className="inline-block w-3 h-3 mr-2 mb-0.5" />
+                                                {category}
+                                            </td>
+                                        </tr>
+                                        {features.map(feature => (
+                                            <tr key={`${category}-${feature}`} className="hover:bg-slate-50/50 transition-colors">
+                                                <td className="px-6 py-3 font-medium capitalize border-r bg-slate-50/30 pl-10 text-slate-600">
+                                                    {feature.replace(/_/g, " ")}
                                                 </td>
-                                            )
-                                        })}
-                                    </tr>
+                                                {systemRoles.map(role => {
+                                                    const isEnabled = (permissions[role] || []).includes(feature)
+                                                    const isSuper = role === 'super_admin'
+                                                    return (
+                                                        <td key={`${role}-${feature}`} className="px-4 py-3 text-center">
+                                                            <div className="flex justify-center">
+                                                                <input type="checkbox" disabled={isSuper} checked={isSuper ? true : isEnabled} onChange={() => togglePermission(role, feature)}
+                                                                    className={`w-5 h-5 rounded border-slate-300 text-[#1C4D8D] focus:ring-[#1C4D8D] ${isSuper ? "opacity-50 cursor-not-allowed bg-slate-200" : "cursor-pointer"}`}
+                                                                />
+                                                            </div>
+                                                        </td>
+                                                    )
+                                                })}
+                                            </tr>
+                                        ))}
+                                    </Fragment>
                                 ))}
                             </tbody>
                         </table>
@@ -578,14 +829,14 @@ export default function SettingsPage() {
           </Card>
         </TabsContent>
 
-        {/* --- TAB 4: ROLES --- */}
+        {/* --- TAB 5: ROLES --- */}
         <TabsContent value="roles">
           <Card className="border-none shadow-md">
             <CardHeader className="border-b bg-slate-50/50"><CardTitle className="flex items-center gap-2"><SettingsIcon className="h-5 w-5 text-[#1C4D8D]"/> Manage Roles</CardTitle></CardHeader>
             <CardContent className="p-6 space-y-6">
                <div className="flex gap-4 items-end">
                   <div className="flex-1 space-y-2"><Label>New Role Name</Label><Input placeholder="e.g. Studio Editor" value={newRole} onChange={e => setNewRole(e.target.value)} /></div>
-                  <Button onClick={() => handleAddItem("roles", newRole, setNewRole, setSystemRoles)} className="bg-[#1C4D8D] text-white"><Plus className="h-4 w-4 mr-2" /> Add Role</Button>
+                  <Button onClick={handleAddRole} className="bg-[#1C4D8D] text-white"><Plus className="h-4 w-4 mr-2" /> Add Role</Button>
                </div>
                <div className="border rounded-lg overflow-hidden">
                   <div className="bg-slate-100 px-4 py-3 font-semibold border-b text-sm">Active Roles ({systemRoles.length})</div>
@@ -598,7 +849,7 @@ export default function SettingsPage() {
                                   {role === "super_admin" && <Badge variant="secondary" className="text-[10px]">System</Badge>}
                               </div>
                               {role !== "super_admin" && (
-                                  <Button variant="ghost" size="sm" className="text-red-500 hover:text-red-700 hover:bg-red-50" onClick={() => handleDeleteItem("roles", role, setSystemRoles)}><Trash2 className="h-4 w-4" /></Button>
+                                  <Button variant="ghost" size="sm" className="text-red-500 hover:text-red-700 hover:bg-red-50" onClick={() => handleDeleteRole(role)}><Trash2 className="h-4 w-4" /></Button>
                               )}
                           </div>
                       ))}
@@ -608,22 +859,75 @@ export default function SettingsPage() {
           </Card>
         </TabsContent>
 
-        {/* --- TAB 5: FEATURES --- */}
+        {/* --- TAB 6: FEATURES --- */}
         <TabsContent value="features">
           <Card className="border-none shadow-md">
-            <CardHeader className="border-b bg-slate-50/50"><CardTitle className="flex items-center gap-2"><ListIcon className="h-5 w-5 text-[#1C4D8D]"/> Manage Features</CardTitle></CardHeader>
-            <CardContent className="p-6 space-y-6">
-               <div className="flex gap-4 items-end">
-                  <div className="flex-1 space-y-2"><Label>New Feature Key</Label><Input placeholder="e.g. Analytics View" value={newFeature} onChange={e => setNewFeature(e.target.value)} /></div>
-                  <Button onClick={() => handleAddItem("features", newFeature, setNewFeature, setSystemFeatures)} className="bg-[#1C4D8D] text-white"><Plus className="h-4 w-4 mr-2" /> Add Feature</Button>
+            <CardHeader className="border-b bg-slate-50/50">
+                <CardTitle className="flex items-center gap-2"><ListIcon className="h-5 w-5 text-[#1C4D8D]"/> Feature Management</CardTitle>
+                <CardDescription>Organize features into categories for easier permission management.</CardDescription>
+            </CardHeader>
+            <CardContent className="p-6 space-y-8">
+               
+               <div className="flex gap-4 items-end bg-slate-50 p-4 rounded-lg border border-slate-200">
+                  <div className="flex-1 space-y-2">
+                      <Label>New Category</Label>
+                      <Input placeholder="e.g. Billing, Crew" value={newCategory} onChange={e => setNewCategory(e.target.value)} />
+                  </div>
+                  <Button onClick={handleAddCategory} className="bg-[#1C4D8D] text-white hover:bg-[#1C4D8D]/90">
+                      <FolderPlus className="h-4 w-4 mr-2" /> Create Category
+                  </Button>
                </div>
-               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {systemFeatures.map(feature => (
-                      <div key={feature} className="flex items-center justify-between p-3 border rounded-lg bg-white shadow-sm group hover:border-[#1C4D8D]/50 transition-colors">
-                          <span className="font-medium capitalize text-sm">{feature.replace(/_/g, " ")}</span>
-                          <Button variant="ghost" size="icon" className="h-6 w-6 text-slate-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity" onClick={() => handleDeleteItem("features", feature, setSystemFeatures)}>
-                              <Trash2 className="h-3 w-3" />
-                          </Button>
+
+               <div className="space-y-6">
+                  {Object.entries(systemFeatures).map(([category, features]) => (
+                      <div key={category} className="border rounded-xl overflow-hidden shadow-sm bg-white">
+                          <div className="bg-slate-100 px-4 py-3 flex items-center justify-between border-b">
+                              <div className="flex items-center gap-2">
+                                  <Folder className="h-4 w-4 text-slate-500" />
+                                  <h3 className="font-semibold text-slate-800">{category}</h3>
+                                  <Badge variant="secondary" className="text-xs bg-white">{features.length} items</Badge>
+                              </div>
+                              <Button variant="ghost" size="sm" onClick={() => handleDeleteCategory(category)} className="text-red-500 hover:bg-red-50 h-8">
+                                  <Trash2 className="h-4 w-4" />
+                              </Button>
+                          </div>
+
+                          <div className="p-4 bg-slate-50/50 border-b flex gap-2">
+                              <Input 
+                                  placeholder={`Add feature to ${category}...`} 
+                                  className="h-9 bg-white"
+                                  value={newFeatureInputs[category] || ""}
+                                  onChange={e => setNewFeatureInputs(prev => ({ ...prev, [category]: e.target.value }))}
+                                  onKeyDown={(e) => { if(e.key === 'Enter') handleAddFeature(category) }}
+                              />
+                              <Button size="sm" variant="secondary" onClick={() => handleAddFeature(category)} className="h-9">
+                                  <Plus className="h-4 w-4" />
+                              </Button>
+                          </div>
+
+                          <div className="divide-y divide-slate-100">
+                              {features.length === 0 ? (
+                                  <div className="p-4 text-center text-sm text-slate-400 italic">No features in this category yet.</div>
+                              ) : (
+                                  features.map(feature => (
+                                      <div key={feature} className="flex items-center justify-between px-4 py-2 hover:bg-slate-50 group transition-colors">
+                                          <div className="flex items-center gap-2">
+                                              <div className="w-1.5 h-1.5 rounded-full bg-slate-300"></div>
+                                              <span className="text-sm font-medium text-slate-700 capitalize">{feature.replace(/_/g, " ")}</span>
+                                              <span className="text-xs text-slate-400 font-mono">({feature})</span>
+                                          </div>
+                                          <Button 
+                                              variant="ghost" 
+                                              size="icon" 
+                                              className="h-7 w-7 text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                                              onClick={() => handleDeleteFeature(category, feature)}
+                                          >
+                                              <X className="h-4 w-4" />
+                                          </Button>
+                                      </div>
+                                  ))
+                              )}
+                          </div>
                       </div>
                   ))}
                </div>
@@ -632,6 +936,91 @@ export default function SettingsPage() {
         </TabsContent>
 
       </Tabs>
+
+      {/* Defaults Dialog */}
+      <Dialog open={isDefDialogOpen} onOpenChange={setIsDefDialogOpen}>
+        <DialogContent className="sm:max-w-[500px]" onInteractOutside={(e) => e.preventDefault()}>
+            <DialogHeader>
+                <DialogTitle>{isEditingDef ? "Edit Default" : "Add New Default"}</DialogTitle>
+                <DialogDescription>Configure key, type and value for this setting.</DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+                <div className="space-y-2">
+                    <Label>Key Name</Label>
+                    <Input placeholder="e.g. user_avatar" value={defKey} onChange={e => setDefKey(e.target.value)} disabled={isEditingDef} />
+                </div>
+                <div className="space-y-2">
+                    <Label>Data Type</Label>
+                    <Select value={defType} onValueChange={(v: DataType) => { setDefType(v); if(!isEditingDef) setDefValue(""); }}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="text">Text / String</SelectItem>
+                            <SelectItem value="url">URL Link</SelectItem>
+                            <SelectItem value="number">Number</SelectItem>
+                            <SelectItem value="boolean">Boolean</SelectItem>
+                            <SelectItem value="image">Image (Upload)</SelectItem>
+                            <SelectItem value="list">List (Array)</SelectItem>
+                            <SelectItem value="map">Map (Object)</SelectItem>
+                        </SelectContent>
+                    </Select>
+                </div>
+                <div className="p-4 bg-slate-50 rounded-md border min-h-[100px] flex flex-col justify-center">
+                    {defType === 'text' && <Input placeholder="Value..." value={defValue} onChange={e => setDefValue(e.target.value)} />}
+                    {defType === 'url' && <Input placeholder="https://..." value={defValue} onChange={e => setDefValue(e.target.value)} />}
+                    {defType === 'number' && <Input type="number" placeholder="0" value={defValue} onChange={e => setDefValue(e.target.value)} />}
+                    {defType === 'boolean' && (
+                        <Select value={defValue} onValueChange={setDefValue}>
+                            <SelectTrigger><SelectValue placeholder="Select..." /></SelectTrigger>
+                            <SelectContent><SelectItem value="true">True</SelectItem><SelectItem value="false">False</SelectItem></SelectContent>
+                        </Select>
+                    )}
+                    {defType === 'image' && (
+                        <div className="space-y-2">
+                            <Input type="file" accept="image/*" onChange={handleImageUpload} disabled={uploadingImg} />
+                            {uploadingImg && <span className="text-xs text-blue-500 flex gap-1"><Loader2 className="animate-spin h-3 w-3"/> Uploading...</span>}
+                            {defValue && <div className="mt-2"><img src={defValue} alt="Preview" className="h-32 w-auto object-cover rounded border" /></div>}
+                        </div>
+                    )}
+                    {defType === 'list' && (
+                        <div className="space-y-2">
+                            <div className="flex gap-2">
+                                <Input placeholder="Add item..." value={defValue} onChange={e => setDefValue(e.target.value)} />
+                                <Button size="sm" onClick={() => { if(defValue) { setTempList([...tempList, defValue]); setDefValue(""); } }}><Plus className="h-4 w-4"/></Button>
+                            </div>
+                            <div className="flex flex-wrap gap-1">
+                                {tempList.map((item, i) => (
+                                    <Badge key={i} variant="secondary" className="cursor-pointer" onClick={() => setTempList(tempList.filter((_, idx) => idx !== i))}>{item} <X className="h-3 w-3 ml-1"/></Badge>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                    {defType === 'map' && (
+                        <div className="space-y-2">
+                            <div className="grid grid-cols-2 gap-2">
+                                <Input placeholder="Key" value={mapInputKey} onChange={e => setMapInputKey(e.target.value)} />
+                                <Input placeholder="Value" value={mapInputValue} onChange={e => setMapInputValue(e.target.value)} />
+                            </div>
+                            <Button size="sm" className="w-full" onClick={() => { if(mapInputKey && mapInputValue) { setTempMap({...tempMap, [mapInputKey]: mapInputValue}); setMapInputKey(""); setMapInputValue(""); } }}>Add Pair</Button>
+                            <div className="text-xs space-y-1 max-h-[150px] overflow-y-auto">
+                                {Object.entries(tempMap).map(([k, v]) => (
+                                    <div key={k} className="flex justify-between bg-white p-2 rounded border items-center">
+                                        <span className="truncate max-w-[80%]"><b>{k}:</b> {String(v)}</span>
+                                        <X className="h-3 w-3 cursor-pointer text-red-500" onClick={() => { const n = {...tempMap}; delete n[k]; setTempMap(n); }}/>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                </div>
+            </div>
+            <DialogFooter>
+                <Button variant="outline" onClick={() => setIsDefDialogOpen(false)}>Cancel</Button>
+                <Button className="bg-[#1C4D8D]" onClick={handleSaveDefault} disabled={uploadingImg}>
+                    {uploadingImg ? <Loader2 className="animate-spin h-4 w-4" /> : "Save Changes"}
+                </Button>
+            </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

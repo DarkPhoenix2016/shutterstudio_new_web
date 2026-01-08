@@ -183,10 +183,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     <DropdownMenuTrigger asChild>
                         <Button variant="ghost" className="relative h-8 w-8 rounded-full">
                             <Avatar className="h-8 w-8 border border-slate-200">
-                                <AvatarImage 
-                                  src={userData?.photoURL || undefined} 
-                                  alt={userData?.displayName || "User"} 
-                                />
+                                <AvatarImage src={userData?.photoURL || ""} alt={userData?.displayName || ""} />
                                 <AvatarFallback className="bg-[#1C4D8D] text-white">
                                     {(userData?.displayName || "U").charAt(0).toUpperCase()}
                                 </AvatarFallback>
