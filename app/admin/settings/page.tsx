@@ -16,6 +16,10 @@ import {
 import { 
   Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter 
 } from "@/components/ui/dialog"
+// [!code highlight] Popover Imports
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { cn } from "@/lib/utils"
+
 import Swal from "sweetalert2"
 import { doc, getDoc, updateDoc, setDoc, arrayUnion, arrayRemove, deleteField } from "firebase/firestore"
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage"
@@ -24,15 +28,15 @@ import { useAuth } from "@/context/AuthContext"
 import { logAuditAction } from "@/lib/logger"
 
 // --- ICONS ---
-// 1. Dynamic Icon Helper (from your component)
-import { ICON_OPTIONS, getIcon } from "@/components/icons"
+import { ICON_OPTIONS, getIcon } from "@/components/icons" // Ensure this path is correct
 
-// 2. UI Icons (Static imports for the Settings Page interface)
+// UI Icons
 import { 
   AlertCircle, Save, Shield, Loader2, Plus, Trash2, 
   List as ListIcon, Settings as SettingsIcon, Database, X, Pencil, 
   Type, Link as LinkIcon, Image as ImageIcon, Hash, ToggleLeft, Braces, 
-  FolderPlus, Folder, ArrowUp, ArrowDown, Layout, FileQuestion, Menu
+  FolderPlus, Folder, ArrowUp, ArrowDown, Layout, FileQuestion, 
+  ChevronsUpDown, Check // Added ChevronsUpDown & Check
 } from "lucide-react"
 
 // --- CONFIGURATION ---
@@ -96,7 +100,11 @@ export default function SettingsPage() {
   const [activeGroupIndex, setActiveGroupIndex] = useState<number | null>(null)
   const [editingItemIndex, setEditingItemIndex] = useState<number | null>(null)
   const [itemInput, setItemInput] = useState<NavItem>({ label: "", path: "", icon: "", feature: "" })
-  const [selectedFeatureCategory, setSelectedFeatureCategory] = useState("") // For 2-level dropdown
+  const [selectedFeatureCategory, setSelectedFeatureCategory] = useState("") 
+  
+  // [!code highlight] Icon Picker State
+  const [iconSearch, setIconSearch] = useState("")
+  const [isIconPopoverOpen, setIsIconPopoverOpen] = useState(false)
 
   // --- STATE: DEFAULTS ---
   const [defaultsData, setDefaultsData] = useState<Record<string, any>>({})
@@ -113,6 +121,11 @@ export default function SettingsPage() {
 
   const [dataLoading, setDataLoading] = useState(true)
 
+  // Filter Icons based on search
+  const filteredIcons = ICON_OPTIONS.filter(icon => 
+      icon.toLowerCase().includes(iconSearch.toLowerCase())
+  )
+
   // 1. Initialize Maintenance Mode
   useEffect(() => {
     if (globalSettings) {
@@ -124,7 +137,7 @@ export default function SettingsPage() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        // A. Settings Doc (Roles, Features, Navigation)
+        // A. Settings Doc
         const settingsRef = doc(db, "Platform", "settings")
         const settingsSnap = await getDoc(settingsRef)
         
@@ -133,7 +146,6 @@ export default function SettingsPage() {
           
           setSystemRoles(Array.isArray(data.roles) ? data.roles : DEFAULT_ROLES)
           
-          // Handle Features (Map vs Legacy Array)
           const fetchedFeatures = data.features || {}
           if (Array.isArray(fetchedFeatures)) {
              setSystemFeatures({ "General": fetchedFeatures })
@@ -141,27 +153,25 @@ export default function SettingsPage() {
              setSystemFeatures(fetchedFeatures)
           }
 
-          // Handle Navigation
           if (data.navigation && Array.isArray(data.navigation)) {
               setNavigationData(data.navigation)
           }
 
         } else {
-          // Initialize Doc if missing
           const initialFeatures = { "Dashboard": ["home", "analytics"] }
           await setDoc(settingsRef, { roles: DEFAULT_ROLES, features: initialFeatures }, { merge: true })
           setSystemRoles(DEFAULT_ROLES)
           setSystemFeatures(initialFeatures)
         }
 
-        // B. Permissions Doc
+        // B. Permissions
         const permRef = doc(db, "Platform", "ROLE_PERMISSIONS")
         const permSnap = await getDoc(permRef)
         if (permSnap.exists()) {
           setPermissions(permSnap.data() as Record<string, string[]>)
         }
 
-        // C. Defaults Doc
+        // C. Defaults
         const defaultsRef = doc(db, "Platform", "defaults")
         const defaultsSnap = await getDoc(defaultsRef)
         if (defaultsSnap.exists()) {
@@ -178,7 +188,9 @@ export default function SettingsPage() {
     fetchData()
   }, [])
 
-  // ========================== ACTIONS: GENERAL ==========================
+  // ========================== ACTIONS ==========================
+  
+  // General
   const handleMaintenanceToggle = async (checked: boolean) => {
     try {
         await setDoc(doc(db, "Platform", "settings"), { maintenanceMode: checked }, { merge: true })
@@ -189,7 +201,7 @@ export default function SettingsPage() {
     }
   }
 
-  // ========================== ACTIONS: PERMISSIONS ==========================
+  // Permissions
   const togglePermission = (role: string, feature: string) => {
     if (role === 'super_admin') return;
     setPermissions(prev => {
@@ -213,7 +225,7 @@ export default function SettingsPage() {
     }
   }
 
-  // ========================== ACTIONS: ROLES ==========================
+  // Roles
   const handleAddRole = async () => {
     if (!newRole.trim()) return
     const formatted = newRole.toLowerCase().trim().replace(/\s+/g, '_')
@@ -242,7 +254,7 @@ export default function SettingsPage() {
     }
   }
 
-  // ========================== ACTIONS: FEATURES ==========================
+  // Features
   const handleAddCategory = async () => {
       if (!newCategory.trim()) return;
       const catName = newCategory.trim();
@@ -306,7 +318,7 @@ export default function SettingsPage() {
       }
   }
 
-  // ========================== ACTIONS: NAVIGATION ==========================
+  // Navigation
   const saveNavigationToDB = async (newData: NavGroup[]) => {
       try {
           await updateDoc(doc(db, "Platform", "settings"), { navigation: newData });
@@ -318,7 +330,6 @@ export default function SettingsPage() {
       }
   }
 
-  // --- Groups ---
   const handleOpenGroupDialog = (index?: number) => {
       if (index !== undefined) {
           setEditingGroupIndex(index);
@@ -370,15 +381,15 @@ export default function SettingsPage() {
       saveNavigationToDB(newNav);
   }
 
-  // --- Items ---
   const handleOpenItemDialog = (groupIndex: number, itemIndex?: number) => {
       setActiveGroupIndex(groupIndex);
+      // Reset Search
+      setIconSearch("");
       if (itemIndex !== undefined) {
           setEditingItemIndex(itemIndex);
           const item = navigationData[groupIndex].items[itemIndex];
           setItemInput({ ...item });
           
-          // Auto-detect category for dropdown
           let categoryFound = "";
           for (const [cat, feats] of Object.entries(systemFeatures)) {
               if (feats.includes(item.feature)) {
@@ -424,7 +435,7 @@ export default function SettingsPage() {
       saveNavigationToDB(newNav);
   }
 
-  // ========================== ACTIONS: DEFAULTS ==========================
+  // Defaults
   const openAddDialog = () => {
     setDefKey(""); setDefValue(""); setDefType("text"); setTempList([]); setTempMap({}); setIsEditingDef(false); setIsDefDialogOpen(true);
   }
@@ -729,22 +740,72 @@ export default function SettingsPage() {
                             </div>
                         </div>
 
-                        {/* 2. Icon Picker (using ICON_OPTIONS) */}
+                        {/* [!code highlight] 2. Icon Picker (Popover) */}
                         <div className="space-y-2">
                             <Label>Icon</Label>
-                            <div className="flex gap-2">
-                                <div className="p-2 border rounded-md bg-slate-50 flex items-center justify-center w-12 shrink-0">
-                                    <PreviewIcon className="h-6 w-6 text-[#1C4D8D]" />
-                                </div>
-                                <Select value={itemInput.icon} onValueChange={(val) => setItemInput({...itemInput, icon: val})}>
-                                    <SelectTrigger><SelectValue placeholder="Select Icon" /></SelectTrigger>
-                                    <SelectContent className="max-h-[300px]">
-                                        {ICON_OPTIONS.map(iconName => (
-                                            <SelectItem key={iconName} value={iconName}>{iconName}</SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            </div>
+                            <Popover open={isIconPopoverOpen} onOpenChange={setIsIconPopoverOpen}>
+                                <PopoverTrigger asChild>
+                                    <Button
+                                        variant="outline"
+                                        role="combobox"
+                                        aria-expanded={isIconPopoverOpen}
+                                        className="w-full justify-between h-11 px-3"
+                                    >
+                                        <div className="flex items-center gap-3">
+                                            <div className="p-1 bg-[#1C4D8D]/10 rounded flex items-center justify-center shrink-0">
+                                                <PreviewIcon className="h-5 w-5 text-[#1C4D8D]" />
+                                            </div>
+                                            <span className="font-normal text-slate-700">
+                                                {itemInput.icon || "Select an icon..."}
+                                            </span>
+                                        </div>
+                                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                    </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-[450px] p-0" align="start">
+                                    {/* Search Bar */}
+                                    <div className="p-3 border-b bg-slate-50/50 sticky top-0 z-10">
+                                        <Input 
+                                            placeholder="Search icons (e.g. user, calendar)..." 
+                                            value={iconSearch}
+                                            onChange={(e) => setIconSearch(e.target.value)}
+                                            className="h-9 bg-white"
+                                            autoFocus
+                                        />
+                                    </div>
+                                    
+                                    {/* Icon Grid */}
+                                    <div className="grid grid-cols-6 gap-2 p-3 max-h-[300px] overflow-y-auto scrollbar-thin">
+                                        {filteredIcons.map((iconName) => {
+                                            const IconComp = getIcon(iconName)
+                                            const isSelected = itemInput.icon === iconName
+                                            return (
+                                                <div
+                                                    key={iconName}
+                                                    className={cn(
+                                                        "flex flex-col items-center justify-center aspect-square rounded-md cursor-pointer transition-all border",
+                                                        isSelected 
+                                                            ? "bg-[#1C4D8D]/10 border-[#1C4D8D] text-[#1C4D8D]" 
+                                                            : "bg-white border-transparent hover:bg-slate-100 hover:border-slate-200 text-slate-600"
+                                                    )}
+                                                    onClick={() => {
+                                                        setItemInput({ ...itemInput, icon: iconName })
+                                                        setIsIconPopoverOpen(false)
+                                                    }}
+                                                    title={iconName}
+                                                >
+                                                    <IconComp className="h-6 w-6 mb-1" />
+                                                </div>
+                                            )
+                                        })}
+                                        {filteredIcons.length === 0 && (
+                                            <div className="col-span-6 text-center py-8 text-sm text-muted-foreground">
+                                                No icons found for "{iconSearch}"
+                                            </div>
+                                        )}
+                                    </div>
+                                </PopoverContent>
+                            </Popover>
                         </div>
 
                         {/* 3. Label & Path */}
