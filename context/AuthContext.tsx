@@ -14,6 +14,7 @@ import { doc, getDoc, updateDoc, onSnapshot, Unsubscribe } from "firebase/firest
 import { createContext, useContext, useEffect, useState, ReactNode } from "react"
 import { logAuditAction } from "@/lib/logger"
 
+// --- Types ---
 interface UserData {
   uid: string
   email: string
@@ -22,10 +23,12 @@ interface UserData {
   name?: string
   displayName?: string
   photoURL?: string
+  profileImage?: string
+  lastLogin?: string
   coverURL?: string
   phoneNumber?: string
   studioID?: string
-  designation?: string // Added
+  designation?: string
   createdAt?: any
 }
 
@@ -37,13 +40,31 @@ interface StudioData {
   invoice_text?: string
   invoice_number?: string
   invoice_current?: string
+  address?: string
+  phone?: string
+  website?: string
   [key: string]: any
+}
+
+// [!code highlight] Added Navigation Types to Global Settings
+interface NavItem {
+  label: string
+  path: string
+  icon: string
+  feature: string
+}
+
+interface NavGroup {
+  id: string
+  label: string
+  items: NavItem[]
 }
 
 interface GlobalSettings {
   maintenanceMode: boolean
   announcement?: string
   version?: string
+  navigation?: NavGroup[] // [!code highlight] Added navigation structure
 }
 
 type RolePermissions = Record<string, string[]>
@@ -84,6 +105,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const fetchPermissions = async () => {
     try {
+      // Fetch Role Permissions from Firestore
       const docRef = doc(db, "Platform", "ROLE_PERMISSIONS")
       const docSnap = await getDoc(docRef)
       if (docSnap.exists()) {
@@ -151,11 +173,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             fetchPermissions()
         ])
         
+        // Real-time listener for Settings (including Navigation)
         settingsUnsub = onSnapshot(doc(db, "Platform", "settings"), (doc) => {
           if (doc.exists()) {
             setGlobalSettings(doc.data() as GlobalSettings)
           } else {
-            setGlobalSettings({ maintenanceMode: false })
+            setGlobalSettings({ maintenanceMode: false, navigation: [] })
           }
         }, (error) => {
             console.error("Settings listener error:", error)
@@ -194,34 +217,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
       if (!data) {
         await signOut(auth)
-        const err: any = new Error("User data not found")
-        err.code = "auth/user-not-found"
-        throw err
+        throw { code: "auth/user-not-found", message: "User data not found" }
       }
 
       if (data.disabled === true && data.role !== "super_admin") {
         await signOut(auth)
-        const error: any = new Error("Account is disabled")
-        error.code = "ACCOUNT_DISABLED"
-        throw error
+        throw { code: "ACCOUNT_DISABLED", message: "Account is disabled" }
       }
 
+      // Update Last Login
       try {
-        const collectionName = (data.role === "super_admin" || data.role === "admin") 
-          ? "SuperAdmins" 
-          : "Users";
-          
-        await updateDoc(doc(db, collectionName, user.uid), {
-          lastLogin: new Date().toISOString()
-        });
-        
-        await logAuditAction(
-            "LOGIN", 
-            "User signed in successfully", 
-            { uid: user.uid, email: user.email, displayName: data.displayName || data.name }, 
-            "Auth"
-        );
-
+        const collectionName = (data.role === "super_admin" || data.role === "admin") ? "SuperAdmins" : "Users";
+        await updateDoc(doc(db, collectionName, user.uid), { lastLogin: new Date().toISOString() });
+        await logAuditAction("LOGIN", "User signed in successfully", { uid: user.uid, email: user.email }, "Auth");
       } catch (logError) {
         console.error("Failed to update last login:", logError);
       }
@@ -238,12 +246,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const logout = async () => {
     if (currentUser) {
-        await logAuditAction(
-            "LOGOUT", 
-            "User signed out", 
-            { uid: currentUser.uid, email: currentUser.email }, 
-            "Auth"
-        );
+        await logAuditAction("LOGOUT", "User signed out", { uid: currentUser.uid, email: currentUser.email }, "Auth");
     }
     await signOut(auth)
     setUserData(null)

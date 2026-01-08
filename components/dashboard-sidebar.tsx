@@ -1,20 +1,7 @@
 "use client"
 
-import {
-  LayoutDashboard,
-  CalendarDays,
-  CheckSquare,
-  MessageSquare,
-  Grid,
-  Banknote,
-  Camera,
-  Users,
-  Settings,
-  LogOut,
-  ChevronRight,
-  UserCog,
-} from "lucide-react"
-import { useAuth } from "@/context/AuthContext" // [!code highlight] Switch to AuthContext
+import { useMemo } from "react"
+import { useAuth } from "@/context/AuthContext"
 import { useRouter, usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
 import {
@@ -33,58 +20,37 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 
-// Define simpler type for navigation structure
-type NavGroup = {
-  label: string
-  items: { icon: any; label: string; path: string }[]
+// [!code highlight] Import Icons for Mapping
+import {
+  LayoutDashboard, CalendarDays, CheckSquare, MessageSquare, Grid, Banknote,
+  Camera, Users, Settings, LogOut, ChevronRight, UserCog, PieChart, Layers, 
+  User, FileText, ShoppingCart, CreditCard, Box
+} from "lucide-react"
+
+// [!code highlight] Icon Map: String -> Component
+const ICON_MAP: Record<string, any> = {
+  LayoutDashboard, CalendarDays, CheckSquare, MessageSquare, Grid, Banknote,
+  Camera, Users, Settings, UserCog, PieChart, Layers, User, FileText, 
+  ShoppingCart, CreditCard, Box,
+  // Add fallbacks or extra icons here as needed
 }
 
-const NAV_GROUPS: NavGroup[] = [
-  {
-    label: "WORKSPACE",
-    items: [
-      { icon: LayoutDashboard, label: "Dashboard", path: "/dashboard" },
-      { icon: CalendarDays, label: "Calendar", path: "/dashboard/calendar" },
-      { icon: CheckSquare, label: "Tasks / My Work", path: "/dashboard/tasks" },
-    ],
-  },
-  {
-    label: "CLIENT & SALES",
-    items: [
-      { icon: MessageSquare, label: "Consultation", path: "/dashboard/consultation" },
-      { icon: Grid, label: "Catalog", path: "/dashboard/catalog" },
-      { icon: Banknote, label: "Payments", path: "/dashboard/payments" },
-    ],
-  },
-  {
-    label: "OPERATIONS",
-    items: [
-      { icon: Camera, label: "Inventory", path: "/dashboard/inventory" },
-      { icon: Users, label: "Crew", path: "/dashboard/crew" },
-    ],
-  },
-  {
-    label: "CONFIGURATION",
-    items: [{ icon: Settings, label: "Settings", path: "/dashboard/settings" }],
-  },
-]
-
 export function DashboardSidebar() {
-  // [!code highlight] Access data directly from Context
-  const { currentUser, userData, studioData, logout } = useAuth()
+  // Access Settings & Permissions from Context
+  const { currentUser, userData, studioData, logout, globalSettings, rolePermissions } = useAuth()
   const router = useRouter()
   const pathname = usePathname()
 
   const handleLogout = async () => {
     try {
       await logout()
-      router.push("/dashboard/login")
+      router.push("/app/login")
     } catch (error) {
       console.error("Logout failed", error)
     }
   }
 
-  // Helper to format role (e.g., "studio_manager" -> "Studio Manager")
+  // Helper to format role
   const formatRole = (role?: string) => {
     if (!role) return "Staff"
     return role
@@ -93,23 +59,41 @@ export function DashboardSidebar() {
       .join(" ")
   }
 
-  // Helper for initials
   const getInitials = (name: string) => {
-    return name
-      ?.split(" ")
-      .map((n) => n[0])
-      .join("")
-      .toUpperCase()
-      .substring(0, 2) || "SS"
+    return name?.split(" ").map((n) => n[0]).join("").toUpperCase().substring(0, 2) || "SS"
   }
 
+  // Filtering Logic
+  const navStructure = useMemo(() => {
+    if (!userData || !rolePermissions || !globalSettings?.navigation) return []
+
+    const userRole = userData.role
+    const allowedFeatures = rolePermissions[userRole] || []
+
+    // If Super Admin, show everything, otherwise check permissions
+    const isSuperAdmin = userRole === "super_admin"
+
+    return globalSettings.navigation.map(group => {
+      // Filter items inside the group
+      const validItems = group.items.filter(item => {
+        // If no feature is defined on the item, assume public/allowed
+        if (!item.feature) return true
+        
+        // Check if user has the specific feature permission
+        return isSuperAdmin || allowedFeatures.includes(item.feature)
+      })
+
+      return { ...group, items: validItems }
+    }).filter(group => group.items.length > 0) // Remove empty groups
+
+  }, [userData, rolePermissions, globalSettings])
+
   // Display Variables
-  const studioName = studioData?.name || "Lumina Photography"
+  const studioName = studioData?.name || "ShutterStudio"
   const studioLogo = studioData?.logo_url
-  
   const userName = userData?.displayName || userData?.name || currentUser?.email?.split("@")[0] || "User"
   const userRole = userData?.role || "crew"
-  const userPhoto = userData?.photoURL || userData?.profileImage
+  const userPhoto = userData?.photoURL || userData?.profileImage || userData?.photoURL
 
   return (
     <Sidebar className="border-r-0 bg-[#0F2854] text-white">
@@ -118,7 +102,6 @@ export function DashboardSidebar() {
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-3 overflow-hidden">
             <div className="h-8 w-8 rounded bg-white/10 flex items-center justify-center shrink-0 overflow-hidden">
-               {/* Show Studio Logo if available, else fallback icon */}
                {studioLogo ? (
                   <img src={studioLogo} alt="Studio Logo" className="h-full w-full object-cover" />
                ) : (
@@ -126,7 +109,6 @@ export function DashboardSidebar() {
                )}
             </div>
             <div className="flex flex-col overflow-hidden">
-              {/* Show Studio Name */}
               <span className="font-bold truncate leading-tight text-white">
                  {studioName}
               </span>
@@ -144,18 +126,20 @@ export function DashboardSidebar() {
         </div>
       </SidebarHeader>
 
-      {/* --- CONTENT: Navigation --- */}
+      {/* --- CONTENT: Dynamic Navigation --- */}
       <SidebarContent className="px-3">
-        {NAV_GROUPS.map((group, groupIdx) => {
-          return (
-            <SidebarGroup key={group.label} className={cn(groupIdx !== 0 && "mt-4")}>
-              <SidebarGroupLabel className="text-[#4988C4] text-[10px] font-bold tracking-widest px-3 mb-2">
+        {navStructure.map((group, groupIdx) => (
+            <SidebarGroup key={group.id || group.label} className={cn(groupIdx !== 0 && "mt-4")}>
+              <SidebarGroupLabel className="text-[#4988C4] text-[10px] font-bold tracking-widest px-3 mb-2 uppercase">
                 {group.label}
               </SidebarGroupLabel>
               <SidebarGroupContent>
                 <SidebarMenu>
                   {group.items.map((item) => {
-                    const isActive = pathname === item.path
+                    const isActive = pathname === item.path || pathname.startsWith(`${item.path}/`)
+                    // Resolve Icon Component
+                    const IconComponent = ICON_MAP[item.icon] || Camera 
+
                     return (
                       <SidebarMenuItem key={item.path}>
                         <SidebarMenuButton
@@ -170,7 +154,7 @@ export function DashboardSidebar() {
                         >
                           <button onClick={() => router.push(item.path)} className="w-full flex items-center gap-3">
                             {isActive && <div className="absolute left-0 top-0 bottom-0 w-1 bg-[#BDE8F5]" />}
-                            <item.icon
+                            <IconComponent
                               className={cn("h-4 w-4 shrink-0", isActive ? "text-[#BDE8F5]" : "text-white/40")}
                             />
                             <span className="truncate">{item.label}</span>
@@ -183,21 +167,18 @@ export function DashboardSidebar() {
                 </SidebarMenu>
               </SidebarGroupContent>
             </SidebarGroup>
-          )
-        })}
+        ))}
       </SidebarContent>
 
       {/* --- FOOTER: User Profile --- */}
       <SidebarFooter className="p-4 mt-auto">
         <SidebarSeparator className="bg-white/10 mb-4" />
         
-        {/* Profile Card */}
         <div 
-          onClick={() => router.push('/dashboard/settings')} // Optional: Link to user settings
+          onClick={() => router.push('/app/profile/user')} 
           className="flex items-center gap-3 px-2 mb-2 group/profile cursor-pointer hover:bg-white/5 p-2 rounded-md transition-colors"
         >
           <Avatar className="h-9 w-9 border border-white/10">
-            {/* [!code highlight] Safe check for userPhoto */}
             <AvatarImage src={userPhoto || undefined} alt={userName} />
             <AvatarFallback className="bg-[#1C4D8D] text-white text-xs">
               {getInitials(userName)}
@@ -217,7 +198,6 @@ export function DashboardSidebar() {
           <UserCog className="w-4 h-4 text-white/20 group-hover/profile:text-white/80 transition-colors" />
         </div>
 
-        {/* Logout Button */}
         <button
           onClick={handleLogout}
           className="flex items-center gap-2 w-full px-2 py-2 text-xs text-white/50 hover:text-white hover:bg-red-500/10 rounded transition-colors group"
