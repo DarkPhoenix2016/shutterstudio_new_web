@@ -13,6 +13,11 @@ export interface CustomItem {
   price: number;
 }
 
+export interface PackageFeature {
+  label: string;
+  value: string | number | boolean;
+}
+
 export interface EventDayConfig {
   date: Date;
   type: 'package' | 'custom';
@@ -45,10 +50,9 @@ export interface EventData {
   createdAt?: any;
 }
 
-// [!code highlight] Interface for Studio Package Parameters
 export interface PackageParameter {
   name: string;
-  unit?: string; // e.g. "Hours", "Pages"
+  unit?: string;
   defaultPrice?: number;
 }
 
@@ -81,13 +85,16 @@ export const fetchPackagesList = async (studioId: string) => {
 
     const packages = await Promise.all(idList.map(async (pkgId) => {
         const pkgSnap = await getDoc(doc(db, "Studios", studioId, "Packages", pkgId));
-        // [!code highlight] Return extra fields (features, description) if they exist
-        return pkgSnap.exists() ? { 
+        if (!pkgSnap.exists()) return null;
+        const data = pkgSnap.data();
+        
+        return { 
             id: pkgSnap.id, 
-            ...pkgSnap.data(),
-            features: pkgSnap.data().features || [], // Ensure array
-            description: pkgSnap.data().description || ""
-        } : null;
+            ...data,
+            // Ensure features is a usable array
+            features: Array.isArray(data.features) ? data.features : [], 
+            description: data.description || ""
+        };
     }));
     
     return packages.filter(p => p !== null);
@@ -97,11 +104,12 @@ export const fetchPackagesList = async (studioId: string) => {
   }
 };
 
-// [!code highlight] 2.1 Fetch Package Configuration Parameters (For Custom Plans)
+// 2.1 Fetch Package Configuration Parameters
 export const fetchPackageConfig = async (studioId: string) => {
     try {
         const ref = doc(db, "Studios", studioId, "Packages", "CONFIG");
         const snap = await getDoc(ref);
+        // Supports both "parameters" (array of maps) or simple fields
         if (snap.exists() && Array.isArray(snap.data().parameters)) {
             return snap.data().parameters as PackageParameter[];
         }
@@ -185,9 +193,6 @@ export const fetchEvents = async (studioId: string) => {
             id: d.id, 
             ...data, 
             inquiryDate: data.inquiryDate instanceof Timestamp ? data.inquiryDate.toDate() : data.inquiryDate,
-            dates: Array.isArray(data.dates) 
-              ? data.dates.map((day: any) => ({ ...day, date: day.date instanceof Timestamp ? day.date.toDate() : day.date })) 
-              : [],
             days: Array.isArray(data.days)
               ? data.days.map((day: any) => ({ ...day, date: day.date instanceof Timestamp ? day.date.toDate() : day.date }))
               : []
@@ -205,9 +210,6 @@ export const fetchEventById = async (studioId: string, eventId: string) => {
         id: snap.id,
         ...data,
         inquiryDate: data.inquiryDate instanceof Timestamp ? data.inquiryDate.toDate() : data.inquiryDate,
-        dates: Array.isArray(data.dates) 
-          ? data.dates.map((day: any) => ({ ...day, date: day.date instanceof Timestamp ? day.date.toDate() : day.date })) 
-          : [],
         days: Array.isArray(data.days)
           ? data.days.map((day: any) => ({ ...day, date: day.date instanceof Timestamp ? day.date.toDate() : day.date }))
           : []

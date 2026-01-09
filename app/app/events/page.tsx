@@ -28,7 +28,7 @@ import { Separator } from "@/components/ui/separator"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 
 // Icons
-import { Plus, Calendar as CalendarIcon, MapPin, Search, Loader2, AlertCircle, Trash, MoreVertical, Edit, Check } from "lucide-react"
+import { Plus, Calendar as CalendarIcon, Search, Loader2, AlertCircle, Trash, MoreVertical, Edit, Check, Trash2 } from "lucide-react"
 import { format } from "date-fns"
 import { cn } from "@/lib/utils"
 import Swal from "sweetalert2"
@@ -43,7 +43,6 @@ export default function EventsPage() {
   const [events, setEvents] = useState<EventData[]>([])
   const [searchTerm, setSearchTerm] = useState("")
   
-  // Form State
   const [isFormOpen, setIsFormOpen] = useState(false)
   const [editingEvent, setEditingEvent] = useState<EventData | null>(null) 
   const isDesktop = useMediaQuery("(min-width: 768px)")
@@ -243,13 +242,11 @@ function EventForm({ initialData, onSuccess, onCancel }: { initialData?: EventDa
     const [submitting, setSubmitting] = useState(false)
     const [loaded, setLoaded] = useState(false)
 
-    // Dynamic Lists
     const [typeList, setTypeList] = useState<string[]>(DEFAULT_TYPES)
     const [statusList, setStatusList] = useState<string[]>(DEFAULT_STATUSES)
     const [packages, setPackages] = useState<any[]>([])
     const [configParams, setConfigParams] = useState<PackageParameter[]>([])
 
-    // Form Data
     const [formData, setFormData] = useState<Partial<EventData>>({
         customerName: "", customerMobile: "", customerEmail: "",
         eventName: "", eventType: "", status: "Inquiry",
@@ -260,7 +257,6 @@ function EventForm({ initialData, onSuccess, onCancel }: { initialData?: EventDa
         notes: ""
     })
 
-    // Load Initial Data
     useEffect(() => {
         if (initialData) {
             setFormData({
@@ -270,7 +266,6 @@ function EventForm({ initialData, onSuccess, onCancel }: { initialData?: EventDa
         }
     }, [initialData])
 
-    // Load Studio Configs
     useEffect(() => {
         const init = async () => {
             if(!userData?.studioID) return;
@@ -292,7 +287,6 @@ function EventForm({ initialData, onSuccess, onCancel }: { initialData?: EventDa
         init()
     }, [userData])
 
-    // Financial Calculation
     const financials = useMemo(() => {
         const total = (formData.days || []).reduce((acc: number, day: EventDayConfig) => acc + (day.cost || 0), 0);
         let discountAmount = 0;
@@ -307,7 +301,6 @@ function EventForm({ initialData, onSuccess, onCancel }: { initialData?: EventDa
         return { total, discountAmount, subTotal };
     }, [formData.days, formData.discount, formData.discountType])
 
-    // Handlers
     const handleDayCountChange = (count: number) => {
         const newCount = Math.max(1, count);
         const currentDays = [...(formData.days || [])];
@@ -337,7 +330,6 @@ function EventForm({ initialData, onSuccess, onCancel }: { initialData?: EventDa
         setFormData({ ...formData, days: newDays });
     }
 
-    // Custom Items Handlers
     const addCustomItem = (dayIndex: number, param?: PackageParameter) => {
         const day = formData.days![dayIndex];
         const newItem: CustomItem = param 
@@ -411,43 +403,30 @@ function EventForm({ initialData, onSuccess, onCancel }: { initialData?: EventDa
                 {/* 1. CUSTOMER & META */}
                 <div className="space-y-4">
                     <div className="space-y-3">
-                        <div className="space-y-1">
-                            <Label className="text-xs text-slate-500 uppercase tracking-wide">Event Name *</Label>
-                            <Input value={formData.eventName} onChange={e => setFormData({...formData, eventName: e.target.value})} className="bg-slate-50 font-medium" />
-                        </div>
+                        <Input placeholder="Event Name *" value={formData.eventName} onChange={e => setFormData({...formData, eventName: e.target.value})} className="bg-slate-50 font-medium" />
                         
-                        {/* [!code highlight] Updated: Full width dropdowns (50% split) */}
+                        {/* [!code highlight] Updated: Full width grid for dropdowns matching text inputs */}
                         <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-1">
+                            <div className="space-y-1.5">
                                 <Label className="text-xs text-slate-500 uppercase tracking-wide">Event Type</Label>
                                 <Select value={formData.eventType} onValueChange={v => setFormData({...formData, eventType: v})}>
-                                    <SelectTrigger className="bg-slate-50 w-full"><SelectValue placeholder="Select..."/></SelectTrigger>
+                                    <SelectTrigger className="w-full bg-slate-50"><SelectValue placeholder="Select..."/></SelectTrigger>
                                     <SelectContent>{typeList.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
                                 </Select>
                             </div>
-                            <div className="space-y-1">
+                            <div className="space-y-1.5">
                                 <Label className="text-xs text-slate-500 uppercase tracking-wide">Status</Label>
                                 <Select value={formData.status} onValueChange={(v:any) => setFormData({...formData, status: v})}>
-                                    <SelectTrigger className="bg-slate-50 w-full"><SelectValue/></SelectTrigger>
+                                    <SelectTrigger className="w-full bg-slate-50"><SelectValue/></SelectTrigger>
                                     <SelectContent>{statusList.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
                                 </Select>
                             </div>
                         </div>
 
-                        <div className="space-y-1">
-                            <Label className="text-xs text-slate-500 uppercase tracking-wide">Customer Name *</Label>
-                            <Input value={formData.customerName} onChange={e => setFormData({...formData, customerName: e.target.value})} className="bg-slate-50" />
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-1">
-                                <Label className="text-xs text-slate-500 uppercase tracking-wide">Mobile</Label>
-                                <Input value={formData.customerMobile} onChange={e => setFormData({...formData, customerMobile: e.target.value})} className="bg-slate-50" />
-                            </div>
-                            <div className="space-y-1">
-                                <Label className="text-xs text-slate-500 uppercase tracking-wide">Email</Label>
-                                <Input value={formData.customerEmail} onChange={e => setFormData({...formData, customerEmail: e.target.value})} className="bg-slate-50" />
-                            </div>
+                        <Input placeholder="Customer Name *" value={formData.customerName} onChange={e => setFormData({...formData, customerName: e.target.value})} className="bg-slate-50" />
+                        <div className="grid grid-cols-2 gap-3">
+                            <Input placeholder="Mobile" value={formData.customerMobile} onChange={e => setFormData({...formData, customerMobile: e.target.value})} className="bg-slate-50" />
+                            <Input placeholder="Email" value={formData.customerEmail} onChange={e => setFormData({...formData, customerEmail: e.target.value})} className="bg-slate-50" />
                         </div>
                     </div>
                 </div>
@@ -516,53 +495,38 @@ function EventForm({ initialData, onSuccess, onCancel }: { initialData?: EventDa
                                             </SelectContent>
                                         </Select>
                                         
-                                        {/* [!code highlight] DETAILED PACKAGE FEATURE VIEW */}
+                                        {/* [!code highlight] Package Features Display */}
                                         {day.packageId && (() => {
                                             const pkg = packages.find(p => p.id === day.packageId);
                                             if (!pkg) return null;
                                             return (
-                                                <div className="mt-4 border rounded-lg overflow-hidden border-slate-200">
-                                                    <div className="bg-slate-50 px-4 py-2 border-b flex justify-between items-center">
-                                                        <span className="text-xs font-semibold text-slate-700 uppercase tracking-wide">Included Features</span>
-                                                        <span className="text-sm font-bold text-[#1C4D8D]">LKR {Number(pkg.price).toLocaleString()}</span>
+                                                <div className="border rounded-md p-3 bg-white space-y-2 text-sm shadow-sm">
+                                                    <div className="flex justify-between font-bold text-slate-800 pb-2 border-b mb-2">
+                                                        <span>Price</span>
+                                                        <span>LKR {Number(pkg.price).toLocaleString()}</span>
                                                     </div>
-                                                    <div className="p-4 bg-white">
-                                                        <div className="grid gap-2 text-sm">
-                                                            {/* Render Features Grid */}
-                                                            {pkg.features ? (
-                                                                Array.isArray(pkg.features) ? (
-                                                                    // Case 1: Simple Array ["Item 1", "Item 2"]
-                                                                    pkg.features.map((f: any, idx: number) => (
-                                                                        <div key={idx} className="flex items-center justify-between py-1 border-b border-slate-50 last:border-0">
-                                                                            <span className="text-slate-600">{typeof f === 'string' ? f : JSON.stringify(f)}</span>
+                                                    
+                                                    {pkg.features && pkg.features.length > 0 ? (
+                                                        <div className="space-y-1.5">
+                                                            {pkg.features.map((f: any, idx: number) => {
+                                                                const label = typeof f === 'object' ? f.label : f;
+                                                                const value = typeof f === 'object' ? f.value : true;
+                                                                
+                                                                return (
+                                                                    <div key={idx} className="flex justify-between items-center text-slate-600">
+                                                                        <span>{label}</span>
+                                                                        {value === true ? (
                                                                             <Check className="h-4 w-4 text-green-500" />
-                                                                        </div>
-                                                                    ))
-                                                                ) : (
-                                                                    // Case 2: Object/Map { "Photography": true, "Cards": 100 }
-                                                                    Object.entries(pkg.features).map(([key, value], idx) => (
-                                                                        <div key={idx} className="flex items-center justify-between py-1 border-b border-slate-50 last:border-0">
-                                                                            <span className="text-slate-600">{key}</span>
-                                                                            <div className="flex items-center">
-                                                                                {value === true ? (
-                                                                                    <Check className="h-4 w-4 text-green-500" />
-                                                                                ) : (
-                                                                                    <span className="font-medium text-slate-800">{String(value)}</span>
-                                                                                )}
-                                                                            </div>
-                                                                        </div>
-                                                                    ))
+                                                                        ) : (
+                                                                            <span className="font-medium text-slate-800">{value}</span>
+                                                                        )}
+                                                                    </div>
                                                                 )
-                                                            ) : (
-                                                                <p className="text-xs text-slate-400 italic">No features listed.</p>
-                                                            )}
+                                                            })}
                                                         </div>
-                                                        {pkg.description && (
-                                                            <div className="mt-4 pt-3 border-t">
-                                                                <p className="text-xs text-slate-500 italic">{pkg.description}</p>
-                                                            </div>
-                                                        )}
-                                                    </div>
+                                                    ) : (
+                                                        <p className="text-xs text-slate-400 italic">No features listed.</p>
+                                                    )}
                                                 </div>
                                             )
                                         })()}
@@ -595,12 +559,13 @@ function EventForm({ initialData, onSuccess, onCancel }: { initialData?: EventDa
                                                     </div>
                                                     <div className="col-span-1 flex justify-center">
                                                         <Button variant="ghost" size="icon" className="h-7 w-7 text-red-400 hover:text-red-600" onClick={() => removeCustomItem(i, itemIdx)}>
-                                                            <Trash className="h-3 w-3" />
+                                                            <Trash2 className="h-3 w-3" />
                                                         </Button>
                                                     </div>
                                                 </div>
                                             ))}
                                             
+                                            {/* [!code highlight] Add Parameter Dropdown */}
                                             <div className="flex gap-2">
                                                 <Select onValueChange={(val) => {
                                                     if (val === 'custom_new') {
@@ -610,8 +575,8 @@ function EventForm({ initialData, onSuccess, onCancel }: { initialData?: EventDa
                                                         addCustomItem(i, param);
                                                     }
                                                 }}>
-                                                    <SelectTrigger className="h-8 text-xs bg-slate-50 border-dashed">
-                                                        <SelectValue placeholder="+ Add Parameter" />
+                                                    <SelectTrigger className="h-8 text-xs bg-slate-50 border-dashed w-full text-left justify-start px-3 text-slate-500 hover:text-slate-800">
+                                                        <span className="flex items-center"><Plus className="h-3 w-3 mr-2"/> Add Parameter</span>
                                                     </SelectTrigger>
                                                     <SelectContent>
                                                         {configParams.map((p, idx) => (
