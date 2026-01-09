@@ -1,6 +1,5 @@
 "use client"
 
-import React from 'react';
 import { useState, useEffect, useMemo, useRef } from "react"
 import { useAuth } from "@/context/AuthContext"
 import { useParams, useRouter } from "next/navigation"
@@ -26,11 +25,10 @@ import { Textarea } from "@/components/ui/textarea"
 import { Separator } from "@/components/ui/separator"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-
+import { Calendar } from "@/components/ui/calendar"
 import { 
     Loader2, ArrowLeft, Save, Upload, MapPin, Phone, Mail, 
-    Plus, Trash2, DollarSign, Users, Camera, Lock, CheckCircle,
-    MessageSquare, User, FileText, Clock
+    Plus, Trash2, DollarSign, Users, Camera, Lock, CheckCircle 
 } from "lucide-react"
 import { format } from "date-fns"
 import Swal from "sweetalert2"
@@ -280,288 +278,106 @@ export default function EventDetailPage() {
 
             {/* --- 1. OVERVIEW TAB --- */}
             <TabsContent value="overview" className="space-y-6">
-            <div className="bg-gray-50 min-h-screen p-6 font-sans text-slate-800">
-      
-      {/* --- HEADER SECTION --- */}
-      <div className="max-w-5xl mx-auto bg-white rounded-xl shadow-sm overflow-hidden">
-        
-        {/* Top Hero: Image & Title */}
-        <div className="flex p-6 gap-6 border-b border-gray-100">
-          <div className="w-32 h-32 rounded-lg overflow-hidden flex-shrink-0">
-            {/* Placeholder for the couple image */}
-            <img 
-              src="/api/placeholder/150/150" 
-              alt="Rajitha & Randini" 
-              className="w-full h-full object-cover"
-            />
-          </div>
-          <div className="flex-1 flex flex-col justify-center">
-            <span className="text-blue-600 text-xs font-bold uppercase tracking-wider mb-1">
-              Event Type: Wedding
-            </span>
-            <h1 className="text-3xl font-bold text-slate-900">Rajitha & Randini Wedding</h1>
-            <p className="text-slate-500">Wedding</p>
-          </div>
-        </div>
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    {/* Main Details */}
+                    <div className="lg:col-span-2 space-y-6">
+                        {/* Cover Photo */}
+                        <div className="relative h-64 bg-slate-100 rounded-xl overflow-hidden group border-2 border-dashed border-slate-300 flex items-center justify-center">
+                            {event.couplePhotoUrl ? (
+                                <img src={event.couplePhotoUrl} className="w-full h-full object-cover" alt="Cover" />
+                            ) : (
+                                <div className="text-center text-slate-400">
+                                    <Camera className="w-12 h-12 mx-auto mb-2 opacity-50"/>
+                                    <p className="text-sm">No Cover Photo</p>
+                                </div>
+                            )}
+                            <label className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
+                                <span className="text-white font-medium flex items-center gap-2"><Upload className="w-4 h-4"/> Change Cover</span>
+                                <input type="file" className="hidden" accept="image/*" onChange={(e) => e.target.files?.[0] && handleUploadImage(e.target.files[0], true)} />
+                            </label>
+                        </div>
 
-        {/* Invoice Banner */}
-        <div className="bg-green-50 px-6 py-3 border-y border-green-100 flex items-center gap-2 text-green-700 text-sm font-medium">
-          <FileText size={16} />
-          <span>Invoice Number: DMG10055</span>
-        </div>
+                        {/* Customer Info */}
+                        <Card>
+                            <CardHeader><CardTitle className="text-base">Primary Contact</CardTitle></CardHeader>
+                            <CardContent className="grid grid-cols-2 gap-4">
+                                <div className="space-y-1">
+                                    <Label className="text-xs text-slate-500">Name</Label>
+                                    <Input value={event.customerName} disabled={isLocked} onChange={e => setEvent({...event!, customerName: e.target.value})} />
+                                </div>
+                                <div className="space-y-1">
+                                    <Label className="text-xs text-slate-500">Mobile</Label>
+                                    <Input value={event.customerMobile} disabled={isLocked} onChange={e => setEvent({...event!, customerMobile: e.target.value})} />
+                                </div>
+                                <div className="space-y-1 col-span-2">
+                                    <Label className="text-xs text-slate-500">Email</Label>
+                                    <Input value={event.customerEmail} disabled={isLocked} onChange={e => setEvent({...event!, customerEmail: e.target.value})} />
+                                </div>
+                            </CardContent>
+                        </Card>
 
-        {/* --- EVENT ACTIONS & APPROVAL STATE (Top Tab Area) --- */}
-        <div className="p-6 border-b border-gray-100 space-y-6">
-          
-          {/* Action Buttons Row */}
-          <div className="flex justify-between items-center">
-            <h2 className="text-lg font-semibold">Event Actions</h2>
-            <div className="flex gap-2">
-               {/* Quick Actions */}
-               <div className="flex gap-2 mr-4">
-                  <button className="p-2 text-slate-400 hover:text-blue-600 bg-slate-50 rounded-full"><User size={18} /></button>
-                  <button className="p-2 text-slate-400 hover:text-blue-600 bg-slate-50 rounded-full"><Calendar size={18} /></button>
-               </div>
-               {/* Communication Buttons */}
-               <button className="flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-600 rounded-lg text-sm font-medium hover:bg-blue-100">
-                 <Phone size={16} /> Call
-               </button>
-               <button className="flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-600 rounded-lg text-sm font-medium hover:bg-blue-100">
-                 <MessageSquare size={16} /> SMS
-               </button>
-               <button className="flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-600 rounded-lg text-sm font-medium hover:bg-blue-100">
-                 <Mail size={16} /> Email
-               </button>
-            </div>
-          </div>
-
-          {/* APPROVAL DATA (Explicitly Requested) */}
-          <div className="bg-slate-50 p-4 rounded-lg border border-slate-100">
-            <div className="flex justify-between items-center mb-2">
-                <span className="text-sm font-semibold text-slate-700">State of Customer Approval</span>
-                <span className="px-2 py-1 bg-yellow-100 text-yellow-700 text-xs rounded-full font-medium">Pending Review</span>
-            </div>
-            {/* Visual Indicator for Approval */}
-            <div className="w-full bg-gray-200 rounded-full h-2">
-                <div className="bg-blue-600 h-2 rounded-full" style={{ width: '60%' }}></div>
-            </div>
-            <p className="text-xs text-slate-500 mt-2">Waiting for customer to sign off on the Quotation.</p>
-          </div>
-
-          {/* Progress Bar: Current Step */}
-          <div>
-            <div className="flex justify-between text-xs font-medium text-slate-500 mb-2">
-              <span>Current Step: Selection</span>
-              <span>Step 2</span>
-            </div>
-            <div className="w-full bg-gray-100 h-1.5 rounded-full overflow-hidden">
-              <div className="bg-blue-600 h-full w-1/4"></div>
-            </div>
-          </div>
-
-          {/* State Pills */}
-          <div className="flex flex-wrap gap-2">
-             {["Quotation", "Scheduled", "In Progress", "Post Production", "Review", "Completed", "Handed Over"].map((status, idx) => (
-               <span 
-                key={idx}
-                className={`px-4 py-1.5 rounded-full text-xs font-medium border ${status === "Scheduled" ? "bg-blue-100 text-blue-700 border-blue-200" : "bg-white text-slate-500 border-slate-200"}`}
-               >
-                 {status}
-               </span>
-             ))}
-          </div>
-        </div>
-
-        {/* --- MAIN CONTENT GRID --- */}
-        <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-10">
-          
-          {/* Left Column: Customer & Event Details */}
-          <div className="space-y-8">
-            <section>
-              <h3 className="text-lg font-bold mb-4">Customer Details</h3>
-              <div className="grid grid-cols-2 gap-4 text-sm">
-                 <div>
-                   <p className="text-slate-500 text-xs">Customer Name</p>
-                   <p className="font-medium">Mr. Rajitha Jayasekara</p>
-                 </div>
-                 <div>
-                   <p className="text-slate-500 text-xs">Customer Mobile</p>
-                   <p className="font-medium">0772301920</p>
-                 </div>
-                 <div className="col-span-2">
-                   <p className="text-slate-500 text-xs">Customer Email</p>
-                   <p className="font-medium text-blue-600">rajitha114@gmail.com</p>
-                 </div>
-              </div>
-            </section>
-
-            <section>
-              <h3 className="text-lg font-bold mb-4">Event Details</h3>
-              <div className="grid grid-cols-2 gap-4 text-sm">
-                 <div>
-                   <p className="text-slate-500 text-xs">Inquiry Date</p>
-                   <p className="font-medium">5/5/2025</p>
-                 </div>
-                 <div>
-                   <p className="text-slate-500 text-xs">Event Date & Time</p>
-                   <p className="font-medium">12/6/2025, 2:00 PM</p>
-                 </div>
-              </div>
-            </section>
-
-             <section>
-              <h3 className="text-lg font-bold mb-4">Package Details</h3>
-              <div className="bg-slate-50 p-4 rounded-lg text-sm space-y-4">
-                 <div>
-                    <p className="font-bold text-slate-800">Day 01 - The Grand DMG Package</p>
-                    <ul className="list-disc list-inside text-slate-600 mt-1 space-y-1 pl-1">
-                        <li>4k High Definition</li>
-                        <li>4-5 minute Highlight Video</li>
-                        <li>Full wedding video (60-90 min)</li>
-                        <li>Flash drive with customized wood box</li>
-                        <li>4 Cameras</li>
-                        <li>Full Mavic 3 drone coverage LKR 250,000.00</li>
-                    </ul>
-                 </div>
-                 <div>
-                    <p className="font-bold text-slate-800">Day 02 - Engagement Package</p>
-                    <ul className="list-disc list-inside text-slate-600 mt-1 space-y-1 pl-1">
-                        <li>4k High Definition</li>
-                        <li>1-2 minute highlight video</li>
-                    </ul>
-                 </div>
-                 <div className="pt-2 border-t border-slate-200 flex justify-between text-slate-600">
-                    <span>Extra Camera</span>
-                    <span>30,000</span>
-                 </div>
-                 <div className="flex justify-between text-slate-600">
-                    <span>Transport Cost & Accommodation</span>
-                    <span>30,000</span>
-                 </div>
-                 <div className="flex justify-between text-red-500">
-                    <span>Discount</span>
-                    <span>- LKR 10,000</span>
-                 </div>
-              </div>
-            </section>
-          </div>
-
-          {/* Right Column: Financials & Equipments */}
-          <div className="space-y-8">
-             
-             {/* Financial Split */}
-             <div className="grid grid-cols-2 gap-8">
-                <section>
-                   <h3 className="text-lg font-bold mb-4">Payment Plan Summary</h3>
-                   <div className="space-y-2 text-sm">
-                      <div className="flex justify-between"><span className="text-slate-500">Initial Budget</span><span>LKR 384,000.00</span></div>
-                      <div className="flex justify-between"><span className="text-slate-500">Additional Expenses</span><span>LKR 0.00</span></div>
-                      <div className="flex justify-between font-bold pt-2 border-t"><span className="text-slate-800">Final Budget</span><span>LKR 384,000.00</span></div>
-                      <div className="flex justify-between pt-4"><span className="text-slate-500">Total Paid</span><span>LKR 115,200.00</span></div>
-                      <div className="flex justify-between font-bold text-red-600"><span className="">Due Amount</span><span>LKR 268,800.00</span></div>
-                   </div>
-                </section>
-
-                <section>
-                   <h3 className="text-lg font-bold mb-4">Expense Summary</h3>
-                   <div className="space-y-2 text-sm">
-                      <div className="flex justify-between"><span className="text-slate-500">Total Budget</span><span>LKR 384,000.00</span></div>
-                      <div className="flex justify-between"><span className="text-slate-500">Total Expenses</span><span>LKR 0.00</span></div>
-                      <div className="flex justify-between font-bold text-green-600 pt-2 border-t"><span className="">Profit</span><span>LKR 384,000.00</span></div>
-                   </div>
-                </section>
-             </div>
-
-             <section>
-                <h3 className="text-lg font-bold mb-4">Other Details</h3>
-                <div className="text-sm text-slate-600 space-y-1">
-                   <p>No of Participants - 110</p>
-                   <p>Makeup Artist - Manjula</p>
-                   <p>Bridal Wear - Saree</p>
-                   <p>Groom's Wear - National Kit</p>
-                   <p>Bridesmaids count - None</p>
-                </div>
-             </section>
-
-             <section>
-                <h3 className="text-lg font-bold mb-4">Equipments</h3>
-                <div className="text-sm text-slate-600 bg-slate-50 p-3 rounded">
-                   <p>A7s3 x 1</p>
-                   <p>A74 x 3</p>
-                   <p>Ronin Rs4 x 2</p>
-                   <p>Lenses: 24-70mm, 16-35mm, 85mm, 70-200mm</p>
-                   <p>Mavic 3 Drone</p>
-                </div>
-             </section>
-
-             <section>
-                <h3 className="text-lg font-bold mb-4">Crew</h3>
-                <div className="flex flex-wrap gap-2">
-                   {["Dilshan Jayawarna", "Supindu Jayasinghe", "Tharindu Madushan", "Vimukthi Rathnayaka"].map(name => (
-                      <span key={name} className="px-3 py-1 bg-gray-100 rounded-full text-xs text-slate-600">{name}</span>
-                   ))}
-                </div>
-             </section>
-          </div>
-        </div>
-
-        {/* --- BOTTOM LISTS --- */}
-        <div className="p-6 border-t border-gray-100 bg-slate-50/50 space-y-6">
-           
-           {/* Reusable List Item Component */}
-           {["Contracts", "Social Media Links", "Locations", "Media Backup", "Additions", "Payments"].map((title) => (
-              <div key={title} className="flex items-center justify-between py-3 border-b border-gray-200 last:border-0">
-                 <div className="w-full">
-                    <div className="flex justify-between items-center mb-2">
-                       <h4 className="font-bold text-slate-800">{title}</h4>
-                       <button className="flex items-center gap-1 bg-blue-600 text-white px-3 py-1 rounded text-xs font-medium hover:bg-blue-700">
-                          <Plus size={14} /> Add
-                       </button>
+                        {/* Gallery Upload (Only if Completed) */}
+                        {event.status === 'Completed' && (
+                            <Card>
+                                <CardHeader className="flex flex-row items-center justify-between">
+                                    <CardTitle className="text-base">Event Gallery</CardTitle>
+                                    <label className="cursor-pointer bg-slate-900 text-white px-3 py-1.5 rounded text-xs flex items-center gap-2 hover:bg-slate-800">
+                                        <Plus className="w-3 h-3"/> Add Photo
+                                        <input type="file" className="hidden" accept="image/*" onChange={(e) => e.target.files?.[0] && handleUploadImage(e.target.files[0], false)} />
+                                    </label>
+                                </CardHeader>
+                                <CardContent>
+                                    <div className="grid grid-cols-4 gap-2">
+                                        {event.galleryUrls?.map((url, idx) => (
+                                            <div key={idx} className="aspect-square rounded-md overflow-hidden bg-slate-100">
+                                                <img src={url} className="w-full h-full object-cover" alt={`Gallery ${idx}`} />
+                                            </div>
+                                        ))}
+                                        {(!event.galleryUrls || event.galleryUrls.length === 0) && <p className="text-sm text-slate-400 col-span-4 italic">No gallery images yet.</p>}
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        )}
                     </div>
-                    
-                    {/* Render Content Specific to 'Locations' based on image */}
-                    {title === "Locations" && (
-                       <div className="grid grid-cols-3 text-xs text-slate-500 py-2">
-                          <div>
-                             <p className="uppercase tracking-wider font-semibold mb-1">Location</p>
-                             <p className="text-slate-800 font-medium">Jetwing Saman Villas</p>
-                          </div>
-                          <div>
-                             <p className="uppercase tracking-wider font-semibold mb-1">Date</p>
-                             <p className="text-slate-800">12/6/2025, 1:00 PM</p>
-                          </div>
-                          <div>
-                             <p className="uppercase tracking-wider font-semibold mb-1">Note</p>
-                             <p className="text-slate-800">Shooting Location & Reception</p>
-                          </div>
-                       </div>
-                    )}
-                    
-                    {/* Render Content Specific to 'Payments' based on image */}
-                    {title === "Payments" && (
-                       <div className="grid grid-cols-3 text-xs text-slate-500 py-2">
-                          <div>
-                             <p className="uppercase tracking-wider font-semibold mb-1">Date</p>
-                             <p className="text-slate-800">5/5/2025</p>
-                          </div>
-                          <div>
-                             <p className="uppercase tracking-wider font-semibold mb-1">Payment Amount</p>
-                             <p className="text-slate-800">LKR 115,200.00</p>
-                          </div>
-                          <div>
-                             <p className="uppercase tracking-wider font-semibold mb-1">Remarks</p>
-                             <p className="text-slate-800">Advance Payment</p>
-                          </div>
-                       </div>
-                    )}
 
-                 </div>
-              </div>
-           ))}
-        </div>
-
-      </div>
-    </div>
+                    {/* Financial Summary Widget */}
+                    <div className="space-y-6">
+                        <Card className="bg-slate-50 border-slate-200">
+                            <CardHeader><CardTitle className="text-base">Financial Overview</CardTitle></CardHeader>
+                            <CardContent className="space-y-4">
+                                <div className="flex justify-between text-sm">
+                                    <span className="text-slate-600">Base Package</span>
+                                    <span>LKR {financials.baseCost.toLocaleString()}</span>
+                                </div>
+                                <div className="flex justify-between text-sm">
+                                    <span className="text-slate-600">Additional Services</span>
+                                    <span>+ LKR {financials.servicesCost.toLocaleString()}</span>
+                                </div>
+                                {financials.discountAmount > 0 && (
+                                    <div className="flex justify-between text-sm text-green-600">
+                                        <span>Discount</span>
+                                        <span>- LKR {financials.discountAmount.toLocaleString()}</span>
+                                    </div>
+                                )}
+                                <Separator className="bg-slate-200"/>
+                                <div className="flex justify-between font-bold text-lg text-[#0F2854]">
+                                    <span>Total</span>
+                                    <span>LKR {financials.finalBudget.toLocaleString()}</span>
+                                </div>
+                                <div className="p-3 bg-white rounded border border-slate-200 space-y-2">
+                                    <div className="flex justify-between text-xs">
+                                        <span className="text-slate-500">Paid</span>
+                                        <span className="font-medium text-green-600">LKR {financials.paid.toLocaleString()}</span>
+                                    </div>
+                                    <div className="flex justify-between text-xs">
+                                        <span className="text-slate-500">Due</span>
+                                        <span className="font-bold text-red-600">LKR {financials.due.toLocaleString()}</span>
+                                    </div>
+                                </div>
+                            </CardContent>
+                        </Card>
+                    </div>
+                </div>
             </TabsContent>
 
             {/* --- 2. CONTACTS TAB --- */}
