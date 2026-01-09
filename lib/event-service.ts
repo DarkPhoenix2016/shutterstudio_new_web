@@ -38,6 +38,8 @@ export interface EventData {
   
   // Financials
   totalBudget: number;
+  // [!code highlight] Added discountType
+  discountType: 'fixed' | 'percentage';
   discount: number;
   finalBudget: number;
   advancePaid: number;
@@ -108,18 +110,15 @@ export const fetchEvents = async (studioId: string) => {
     const ref = collection(db, "Studios", studioId, "Events");
     const q = query(ref, orderBy("inquiryDate", "desc"));
     const snap = await getDocs(q);
-    
     return snap.docs.map(d => {
         const data = d.data();
-        
-        // [!code highlight] Fixed: Cast to unknown first to bypass strict property checks
         return { 
             id: d.id, 
             ...data, 
             inquiryDate: data.inquiryDate instanceof Timestamp ? data.inquiryDate.toDate() : data.inquiryDate,
             dates: Array.isArray(data.dates) 
               ? data.dates.map((day: any) => ({ ...day, date: day.date instanceof Timestamp ? day.date.toDate() : day.date })) 
-              : []
+              : [] 
         } as unknown as EventData;
     });
 };
@@ -130,8 +129,6 @@ export const fetchEventById = async (studioId: string, eventId: string) => {
     const snap = await getDoc(ref);
     if (snap.exists()) {
       const data = snap.data();
-      
-      // [!code highlight] Fixed: Cast to unknown first
       return {
         id: snap.id,
         ...data,

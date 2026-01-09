@@ -25,7 +25,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Separator } from "@/components/ui/separator"
 
 // Icons
-import { Plus, Calendar as CalendarIcon, MapPin, Users, Search, Loader2, Package, AlertCircle, Trash2, GripVertical } from "lucide-react"
+import { Plus, Calendar as CalendarIcon, MapPin, Users, Search, Loader2, Package, AlertCircle, Trash2 } from "lucide-react"
 import { format } from "date-fns"
 import { cn } from "@/lib/utils"
 import Swal from "sweetalert2"
@@ -145,7 +145,8 @@ export default function EventsPage() {
       {/* CREATE EVENT FORM (Responsive Wrapper) */}
       {isDesktop ? (
         <Sheet open={isFormOpen} onOpenChange={setIsFormOpen}>
-            <SheetContent className="w-[600px] sm:w-[600px] p-0 flex flex-col h-full border-l shadow-2xl">
+            {/* [!code highlight] Increased width to 800px */}
+            <SheetContent className="w-full sm:max-w-[800px] p-0 flex flex-col h-full border-l shadow-2xl">
                 <SheetHeader className="px-6 py-4 border-b bg-white shrink-0">
                     <SheetTitle>New Event</SheetTitle>
                     <SheetDescription>Create a new inquiry or schedule an event.</SheetDescription>
@@ -184,8 +185,9 @@ function EventForm({ onSuccess, onCancel }: { onSuccess: () => void, onCancel: (
         customerName: "", customerMobile: "", customerEmail: "",
         eventName: "", eventType: "", status: "Inquiry",
         dayCount: 1,
-        // [!code highlight] Initialize customItems
         days: [{ date: new Date(), type: 'package', cost: 0, customItems: [] }],
+        // [!code highlight] Discount defaults
+        discountType: 'fixed',
         discount: 0,
         notes: ""
     })
@@ -209,12 +211,20 @@ function EventForm({ onSuccess, onCancel }: { onSuccess: () => void, onCancel: (
         init()
     }, [userData])
 
-    // Calculation Logic
+    // [!code highlight] Updated Financial Logic
     const financials = useMemo(() => {
         const total = (formData.days || []).reduce((acc, day) => acc + (day.cost || 0), 0);
-        const discount = Number(formData.discount || 0);
-        return { total, subTotal: total - discount };
-    }, [formData.days, formData.discount])
+        let discountAmount = 0;
+        
+        if (formData.discountType === 'percentage') {
+            discountAmount = total * ((formData.discount || 0) / 100);
+        } else {
+            discountAmount = Number(formData.discount || 0);
+        }
+
+        const subTotal = Math.max(0, total - discountAmount);
+        return { total, discountAmount, subTotal };
+    }, [formData.days, formData.discount, formData.discountType])
 
     // --- DAY HANDLERS ---
     const handleDayCountChange = (count: number) => {
@@ -237,13 +247,11 @@ function EventForm({ onSuccess, onCancel }: { onSuccess: () => void, onCancel: (
         const newDays = [...(formData.days || [])];
         const updatedDay = { ...newDays[index], ...updates };
         
-        // Auto-update cost if package selected
         if (updates.packageId && updatedDay.type === 'package') {
             const pkg = packages.find(p => p.id === updates.packageId);
             if (pkg) updatedDay.cost = Number(pkg.price || 0);
         }
         
-        // Auto-update cost if custom items changed
         if (updates.customItems && updatedDay.type === 'custom') {
             updatedDay.cost = updates.customItems.reduce((sum, item) => sum + (item.price || 0), 0);
         }
@@ -305,7 +313,7 @@ function EventForm({ onSuccess, onCancel }: { onSuccess: () => void, onCancel: (
             {/* SCROLLABLE CONTENT */}
             <div className="flex-1 overflow-y-auto px-6 py-6 space-y-8 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
                 
-                {/* 1. CUSTOMER & META (Same as before) */}
+                {/* 1. CUSTOMER & META */}
                 <div className="space-y-4">
                     <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Details</h3>
                     <div className="space-y-3">
@@ -380,7 +388,6 @@ function EventForm({ onSuccess, onCancel }: { onSuccess: () => void, onCancel: (
                                         <TabsTrigger value="custom" className="text-xs">Custom Plan</TabsTrigger>
                                     </TabsList>
                                     
-                                    {/* PACKAGE SELECTION */}
                                     <TabsContent value="package" className="pt-2 space-y-3">
                                         <Select value={day.packageId} onValueChange={(v) => updateDayConfig(i, { packageId: v })}>
                                             <SelectTrigger><SelectValue placeholder="Select a package..." /></SelectTrigger>
@@ -398,16 +405,13 @@ function EventForm({ onSuccess, onCancel }: { onSuccess: () => void, onCancel: (
                                         </div>
                                     </TabsContent>
 
-                                    {/* CUSTOM PLAN BUILDER */}
                                     <TabsContent value="custom" className="pt-2 space-y-3">
                                         <div className="space-y-2">
-                                            {/* Item List */}
                                             {day.customItems?.map((item, itemIdx) => (
                                                 <div key={itemIdx} className="grid grid-cols-10 gap-2 items-start">
                                                     <div className="col-span-4">
                                                         <Input 
-                                                            placeholder="Item" 
-                                                            className="h-8 text-xs" 
+                                                            placeholder="Item" className="h-8 text-xs" 
                                                             value={item.name}
                                                             onChange={(e) => updateCustomItem(i, itemIdx, 'name', e.target.value)}
                                                         />
@@ -433,7 +437,6 @@ function EventForm({ onSuccess, onCancel }: { onSuccess: () => void, onCancel: (
                                                     </div>
                                                 </div>
                                             ))}
-                                            
                                             <Button variant="outline" size="sm" className="w-full text-xs border-dashed text-slate-500" onClick={() => addCustomItem(i)}>
                                                 <Plus className="h-3 w-3 mr-1" /> Add Item
                                             </Button>
@@ -448,7 +451,7 @@ function EventForm({ onSuccess, onCancel }: { onSuccess: () => void, onCancel: (
                         ))}
                     </Tabs>
 
-                    {/* FINANCIAL SUMMARY */}
+                    {/* [!code highlight] Updated Financial Summary with Discount Toggle */}
                     <div className="bg-slate-50 p-4 rounded-lg space-y-3 border">
                         <div className="flex justify-between text-sm">
                             <span className="text-slate-600">Total Budget</span>
@@ -456,15 +459,31 @@ function EventForm({ onSuccess, onCancel }: { onSuccess: () => void, onCancel: (
                         </div>
                         <div className="flex justify-between items-center text-sm">
                             <span className="text-slate-600">Discount</span>
-                            <div className="w-24">
+                            <div className="flex items-center gap-2">
+                                <Select 
+                                    value={formData.discountType} 
+                                    onValueChange={(v:any) => setFormData({...formData, discountType: v})}
+                                >
+                                    <SelectTrigger className="h-8 w-[70px] text-xs bg-white">
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="fixed">LKR</SelectItem>
+                                        <SelectItem value="percentage">%</SelectItem>
+                                    </SelectContent>
+                                </Select>
                                 <Input 
                                     type="number" 
-                                    className="h-7 text-right bg-white" 
+                                    className="h-8 w-24 text-right bg-white text-sm" 
                                     placeholder="0" 
                                     value={formData.discount || ""} 
                                     onChange={e => setFormData({...formData, discount: Number(e.target.value)})} 
                                 />
                             </div>
+                        </div>
+                        <div className="flex justify-between text-xs text-slate-400 px-1">
+                            <span></span>
+                            <span>- LKR {financials.discountAmount.toLocaleString()}</span>
                         </div>
                         <Separator className="bg-slate-300"/>
                         <div className="flex justify-between text-base font-bold text-[#1C4D8D]">
