@@ -13,19 +13,16 @@ export interface CustomItem {
   price: number;
 }
 
-// [!code highlight] Updated Interface to match your Firestore Data
+// [!code highlight] Updated PackageData to match your Firestore Map structure
 export interface PackageData {
   id: string;
   name: string;
   price: number;
   disabled: boolean;
-  discounted: boolean;
-  discountType: 'fixed' | 'percentage';
-  discountValue: number;
   description?: string;
-  // parameters is a map in Firestore (e.g., { "Drone Cameras": 1, "Preshoot": true })
+  // parameters is a map in Firestore (e.g., { "Drone Cameras": 1 })
   parameters?: Record<string, string | number | boolean>; 
-  // We will generate this array for the UI
+  // We generate this list for the UI
   featuresList?: string[]; 
 }
 
@@ -61,7 +58,6 @@ export interface EventData {
   createdAt?: any;
 }
 
-// Interface for the Global Config (Studio/Settings/Packages/CONFIG)
 export interface PackageConfigParameter {
   name: string;
   unit?: string;
@@ -85,7 +81,7 @@ export const fetchStudioSettingsList = async (studioId: string, settingType: 'EV
   }
 };
 
-// 2. Fetch Packages List
+// 2. Fetch Packages List (with Map to Array conversion)
 export const fetchPackagesList = async (studioId: string) => {
   try {
     const listRef = doc(db, "Studios", studioId, "Packages", "package_list");
@@ -101,7 +97,7 @@ export const fetchPackagesList = async (studioId: string) => {
         
         const data = pkgSnap.data();
         
-        // [!code highlight] Logic to transform 'parameters' map into a readable string array
+        // [!code highlight] Transform 'parameters' map (Firestore) -> 'featuresList' array (UI)
         const paramsMap = data.parameters || {};
         const featuresList: string[] = Object.entries(paramsMap).map(([key, value]) => {
             if (value === true) return key; // e.g. "Preshoot"
@@ -113,7 +109,7 @@ export const fetchPackagesList = async (studioId: string) => {
             id: pkgSnap.id, 
             ...data,
             parameters: paramsMap,
-            featuresList: featuresList, // Use this property in your UI to display tags
+            featuresList: featuresList, // UI uses this
             description: data.description || ""
         } as PackageData;
     }));
@@ -125,14 +121,11 @@ export const fetchPackagesList = async (studioId: string) => {
   }
 };
 
-// 2.1 Fetch Package Configuration Parameters (For Custom Plans)
-// This fetches from /Studios/{id}/Packages/CONFIG (if that's where you store available params)
+// 2.1 Fetch Package Config Parameters (for Custom Plans)
 export const fetchPackageConfig = async (studioId: string) => {
     try {
         const ref = doc(db, "Studios", studioId, "Packages", "CONFIG");
         const snap = await getDoc(ref);
-        
-        // Assuming the CONFIG doc has a 'parameters' array defining what CAN be added
         if (snap.exists() && Array.isArray(snap.data().parameters)) {
             return snap.data().parameters as PackageConfigParameter[];
         }
@@ -143,7 +136,7 @@ export const fetchPackageConfig = async (studioId: string) => {
     }
 };
 
-// 3. Create Event with Custom ID Transaction
+// 3. Create Event
 export const createEvent = async (studioId: string, event: EventData) => {
   try {
     await runTransaction(db, async (transaction) => {
@@ -157,6 +150,7 @@ export const createEvent = async (studioId: string, event: EventData) => {
       const nextStr = data.invoice_next || "00001";
       const currentInt = data.invoice_current || 0;
 
+      // Generate ID: OMG00002
       const customId = `${invoiceText}${nextStr}`; 
       const nextInt = parseInt(nextStr, 10);
       const newNextStr = String(nextInt + 1).padStart(5, '0');

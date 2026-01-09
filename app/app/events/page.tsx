@@ -7,11 +7,11 @@ import {
     fetchEvents, createEvent, updateEvent, deleteEvent, 
     fetchStudioSettingsList, fetchPackagesList, fetchPackageConfig,
     EventData, EventDayConfig, CustomItem, PackageData, PackageConfigParameter 
-} from "@/lib/event-service"
+} from "@/services/event-service"
 import { validateSubscriptionAction } from "@/services/subscription-service"
 import { useMediaQuery } from "@/hooks/use-media-query"
 
-// UI
+// UI Components
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -43,7 +43,6 @@ export default function EventsPage() {
   const [events, setEvents] = useState<EventData[]>([])
   const [searchTerm, setSearchTerm] = useState("")
   
-  // Form State
   const [isFormOpen, setIsFormOpen] = useState(false)
   const [editingEvent, setEditingEvent] = useState<EventData | null>(null) 
   const isDesktop = useMediaQuery("(min-width: 768px)")
@@ -156,7 +155,6 @@ export default function EventsPage() {
                         <Badge className={cn("absolute top-2 right-2", getStatusColor(event.status))}>
                             {event.status}
                         </Badge>
-                        
                         <div className="absolute top-2 left-2">
                             <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
@@ -204,13 +202,13 @@ export default function EventsPage() {
         })}
       </div>
 
-      {/* CREATE/EDIT EVENT FORM */}
+      {/* CREATE/EDIT FORM */}
       {isDesktop ? (
         <Sheet open={isFormOpen} onOpenChange={setIsFormOpen}>
             <SheetContent className="w-full sm:max-w-[800px] p-0 flex flex-col h-full border-l shadow-2xl">
                 <SheetHeader className="px-6 py-4 border-b bg-white shrink-0">
                     <SheetTitle>{editingEvent ? "Edit Event" : "New Event"}</SheetTitle>
-                    <SheetDescription>{editingEvent ? "Update event details and budget." : "Create a new inquiry or schedule an event."}</SheetDescription>
+                    <SheetDescription>{editingEvent ? "Update details." : "Create a new inquiry."}</SheetDescription>
                 </SheetHeader>
                 <EventForm 
                     initialData={editingEvent}
@@ -224,7 +222,7 @@ export default function EventsPage() {
             <DrawerContent className="h-[95vh] flex flex-col p-0 rounded-t-xl">
                 <DrawerHeader className="px-6 py-4 border-b bg-white text-left shrink-0">
                     <DrawerTitle>{editingEvent ? "Edit Event" : "New Event"}</DrawerTitle>
-                    <DrawerDescription>{editingEvent ? "Update event details and budget." : "Create a new inquiry or schedule an event."}</DrawerDescription>
+                    <DrawerDescription>{editingEvent ? "Update details." : "Create a new inquiry."}</DrawerDescription>
                 </DrawerHeader>
                 <EventForm 
                     initialData={editingEvent}
@@ -238,6 +236,7 @@ export default function EventsPage() {
   )
 }
 
+// --- SUB-COMPONENT: EVENT FORM ---
 function EventForm({ initialData, onSuccess, onCancel }: { initialData?: EventData | null, onSuccess: () => void, onCancel: () => void }) {
     const { userData } = useAuth()
     const [submitting, setSubmitting] = useState(false)
@@ -246,9 +245,7 @@ function EventForm({ initialData, onSuccess, onCancel }: { initialData?: EventDa
     // Lists
     const [typeList, setTypeList] = useState<string[]>(DEFAULT_TYPES)
     const [statusList, setStatusList] = useState<string[]>(DEFAULT_STATUSES)
-    // [!code highlight] Updated Type: PackageData[]
     const [packages, setPackages] = useState<PackageData[]>([])
-    // [!code highlight] Updated Type: PackageConfigParameter[]
     const [configParams, setConfigParams] = useState<PackageConfigParameter[]>([])
 
     // Form Data
@@ -292,7 +289,6 @@ function EventForm({ initialData, onSuccess, onCancel }: { initialData?: EventDa
         init()
     }, [userData])
 
-    // Financial Calculation
     const financials = useMemo(() => {
         const total = (formData.days || []).reduce((acc: number, day: EventDayConfig) => acc + (day.cost || 0), 0);
         let discountAmount = 0;
@@ -411,6 +407,8 @@ function EventForm({ initialData, onSuccess, onCancel }: { initialData?: EventDa
                 <div className="space-y-4">
                     <div className="space-y-3">
                         <Input placeholder="Event Name *" value={formData.eventName} onChange={e => setFormData({...formData, eventName: e.target.value})} className="bg-slate-50 font-medium" />
+                        
+                        {/* [!code highlight] Updated: 50/50 Layout with Labels */}
                         <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-1.5">
                                 <Label className="text-xs text-slate-500 uppercase tracking-wide">Event Type</Label>
@@ -427,6 +425,7 @@ function EventForm({ initialData, onSuccess, onCancel }: { initialData?: EventDa
                                 </Select>
                             </div>
                         </div>
+
                         <Input placeholder="Customer Name *" value={formData.customerName} onChange={e => setFormData({...formData, customerName: e.target.value})} className="bg-slate-50" />
                         <div className="grid grid-cols-2 gap-3">
                             <Input placeholder="Mobile" value={formData.customerMobile} onChange={e => setFormData({...formData, customerMobile: e.target.value})} className="bg-slate-50" />
@@ -459,6 +458,7 @@ function EventForm({ initialData, onSuccess, onCancel }: { initialData?: EventDa
                         
                         {formData.days?.map((day: EventDayConfig, i: number) => (
                             <TabsContent key={i} value={`day-${i}`} className="border rounded-md p-4 mt-2 space-y-4 bg-white">
+                                {/* Date Picker... */}
                                 <div className="space-y-1">
                                     <div className="border rounded-md p-2 bg-slate-50 flex items-center justify-between">
                                         <Label className="text-xs text-slate-500 ml-2">Date</Label>
@@ -499,7 +499,7 @@ function EventForm({ initialData, onSuccess, onCancel }: { initialData?: EventDa
                                             </SelectContent>
                                         </Select>
                                         
-                                        {/* [!code highlight] Package Features & Details */}
+                                        {/* [!code highlight] Package Features Display */}
                                         {day.packageId && (() => {
                                             const pkg = packages.find(p => p.id === day.packageId);
                                             if (!pkg) return null;
@@ -560,7 +560,7 @@ function EventForm({ initialData, onSuccess, onCancel }: { initialData?: EventDa
                                                 </div>
                                             ))}
                                             
-                                            {/* Add Parameter Dropdown */}
+                                            {/* [!code highlight] Add Parameter via Dropdown */}
                                             <div className="flex gap-2">
                                                 <Select onValueChange={(val) => {
                                                     if (val === 'custom_new') {
