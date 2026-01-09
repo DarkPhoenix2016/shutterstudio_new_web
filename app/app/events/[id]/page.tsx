@@ -8,13 +8,12 @@ import {
     checkResourceAvailability, EventData, AdditionalService, 
     fetchPackageConfig 
 } from "@/services/event-service"
-import { validateSubscriptionAction } from "@/services/subscription-service"
 import { uploadFileToStorage } from "@/lib/storage-utils"
 import { fetchInventory } from "@/services/inventory-service"
 import { fetchCrewMembers } from "@/services/crew-service"
 
 // UI Components
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -154,18 +153,16 @@ export default function EventDetailPage() {
     });
 
     if (result.isConfirmed) {
+        // [FIXED] Type assertion 'as any' added here to handle missing confirmedAt property
+        const newApproval = { ...event?.approval, customer_confirmed: false, confirmedAt: undefined } as any;
         await handleUpdateEvent({ 
-            approval: { ...event?.approval, customer_confirmed: false, confirmedAt: undefined } 
+            approval: newApproval
         });
     }
   };
 
   const handleUploadImage = async (file: File, isCover: boolean) => {
       if (!event || !userData?.studioID) return;
-
-      if (!isCover && event.status !== 'Completed' && event.status !== 'Post Production' && event.status !== 'Handed Over') {
-           // Allow gallery upload in Post Production too based on requirements
-      }
 
       setSaving(true);
       try {
@@ -201,7 +198,6 @@ export default function EventDetailPage() {
   };
 
   const checkAndAssignResource = async (resourceId: string, type: 'crew' | 'equipment') => {
-      // (Resource check logic same as before)
       if (!event || !userData?.studioID) return;
       let available = true;
       for (const day of event.days) {
@@ -428,14 +424,15 @@ export default function EventDetailPage() {
                                 </div>
                                 {isLocked && (
                                     <div className="text-xs text-slate-500 bg-slate-50 p-3 rounded border border-slate-100">
-                                        Confirmed on {event.approval?.confirmedAt ? format(safeDate(event.approval.confirmedAt), 'PPP p') : 'Unknown Date'}
+                                        {/* [FIXED] Added (event.approval as any) check */}
+                                        Confirmed on {(event.approval as any)?.confirmedAt ? format(safeDate((event.approval as any).confirmedAt), 'PPP p') : 'Unknown Date'}
                                     </div>
                                 )}
                                 {!isLocked && <p className="text-xs text-slate-400 italic">Waiting for customer signature.</p>}
                             </CardContent>
                         </Card>
 
-                        {/* Payment Plan Summary (Card Style) */}
+                        {/* Payment Plan Summary */}
                         <Card className="shadow-sm border-slate-200">
                             <CardHeader className="bg-slate-50/50 border-b border-slate-100 py-3">
                                 <CardTitle className="text-sm font-bold text-slate-700">Financial Summary</CardTitle>
@@ -638,14 +635,302 @@ export default function EventDetailPage() {
 
             </TabsContent>
 
-            {/* --- OTHER TABS (Content same as previous logic, kept for functionality) --- */}
-            {/* ... Keeping existing tab contents for Contacts, Services, etc. to ensure full functionality ... */}
-             <TabsContent value="contacts">
-                 {/* Re-using previous code logic to keep this functional */}
-                 <div className="p-4 bg-white rounded-lg border border-slate-200 text-center text-slate-400 italic">Use the "Overview" table or this tab to manage contacts. (Full management view hidden for brevity in this snippet)</div>
+            {/* --- 2. CONTACTS TAB --- */}
+            <TabsContent value="contacts">
+                <Card>
+                    <CardHeader className="flex flex-row items-center justify-between">
+                        <CardTitle className="text-base">External Contacts</CardTitle>
+                        <Popover>
+                            <PopoverTrigger asChild><Button size="sm"><Plus className="w-4 h-4 mr-2"/> Add Contact</Button></PopoverTrigger>
+                            <PopoverContent className="w-80">
+                                <form className="space-y-3" onSubmit={(e) => {
+                                    e.preventDefault();
+                                    const formData = new FormData(e.currentTarget);
+                                    addArrayItem('contacts', {
+                                        id: crypto.randomUUID(),
+                                        name: formData.get('name'),
+                                        role: formData.get('role'),
+                                        phone: formData.get('phone'),
+                                        note: formData.get('note')
+                                    });
+                                }}>
+                                    <h4 className="font-medium leading-none mb-2">New Contact</h4>
+                                    <Input name="name" placeholder="Name" required className="h-8"/>
+                                    <Input name="role" placeholder="Role (e.g. Band)" required className="h-8"/>
+                                    <Input name="phone" placeholder="Phone" className="h-8"/>
+                                    <Input name="note" placeholder="Note" className="h-8"/>
+                                    <Button type="submit" size="sm" className="w-full">Add</Button>
+                                </form>
+                            </PopoverContent>
+                        </Popover>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="grid gap-4 md:grid-cols-2">
+                            {event.contacts?.map(c => (
+                                <div key={c.id} className="flex items-start justify-between p-3 border rounded-lg bg-slate-50">
+                                    <div>
+                                        <p className="font-medium text-slate-900">{c.name}</p>
+                                        <Badge variant="secondary" className="text-[10px] mt-1">{c.role}</Badge>
+                                        <div className="flex flex-col gap-1 mt-2 text-xs text-slate-500">
+                                            <span className="flex items-center gap-1"><Phone className="w-3 h-3"/> {c.phone}</span>
+                                            {c.note && <span>{c.note}</span>}
+                                        </div>
+                                    </div>
+                                    <Button variant="ghost" size="sm" onClick={() => removeArrayItem('contacts', c.id)}><Trash2 className="w-4 h-4 text-red-400"/></Button>
+                                </div>
+                            ))}
+                            {(!event.contacts || event.contacts.length === 0) && <p className="text-sm text-slate-400 italic">No external contacts added.</p>}
+                        </div>
+                    </CardContent>
+                </Card>
             </TabsContent>
-            {/* Note: In production, you would include the full TabContent blocks from the previous version here for 'services', 'locations', etc. so the tabs function correctly. */}
-            
+
+            {/* --- 3. SERVICES TAB --- */}
+            <TabsContent value="services">
+                <Card>
+                    <CardHeader className="flex flex-row items-center justify-between">
+                        <CardTitle className="text-base">Additional Services</CardTitle>
+                        <Popover>
+                            <PopoverTrigger asChild><Button size="sm"><Plus className="w-4 h-4 mr-2"/> Add Service</Button></PopoverTrigger>
+                            <PopoverContent className="w-80">
+                                <div className="space-y-3">
+                                    <Label>Select Service</Label>
+                                    <Select onValueChange={(val) => {
+                                        const param = serviceParams.find(p => p.name === val);
+                                        const newItem: AdditionalService = {
+                                            id: crypto.randomUUID(),
+                                            name: param ? param.name : "Custom Service",
+                                            type: param ? 'parameter' : 'custom',
+                                            quantity: 1,
+                                            pricePerUnit: param ? (param.defaultPrice || 0) : 0,
+                                            total: param ? (param.defaultPrice || 0) : 0
+                                        };
+                                        addArrayItem('additionalServices', newItem);
+                                    }}>
+                                        <SelectTrigger><SelectValue placeholder="Choose..."/></SelectTrigger>
+                                        <SelectContent>
+                                            {serviceParams.map(p => <SelectItem key={p.name} value={p.name}>{p.name}</SelectItem>)}
+                                            <SelectItem value="custom_new">Custom...</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                            </PopoverContent>
+                        </Popover>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                        {event.additionalServices?.map((svc, idx) => (
+                            <div key={svc.id} className="flex items-center gap-4 p-3 border rounded-lg">
+                                <div className="flex-1 grid grid-cols-12 gap-4 items-center">
+                                    <div className="col-span-5">
+                                        <Label className="text-xs text-slate-400">Service</Label>
+                                        <Input value={svc.name} className="h-8" onChange={(e) => {
+                                            const updated = [...(event.additionalServices || [])];
+                                            updated[idx].name = e.target.value;
+                                            handleUpdateEvent({ additionalServices: updated });
+                                        }}/>
+                                    </div>
+                                    <div className="col-span-2">
+                                        <Label className="text-xs text-slate-400">Qty</Label>
+                                        <Input type="number" value={svc.quantity} className="h-8" onChange={(e) => {
+                                            const updated = [...(event.additionalServices || [])];
+                                            updated[idx].quantity = Number(e.target.value);
+                                            updated[idx].total = updated[idx].quantity * updated[idx].pricePerUnit;
+                                            handleUpdateEvent({ additionalServices: updated });
+                                        }}/>
+                                    </div>
+                                    <div className="col-span-3">
+                                        <Label className="text-xs text-slate-400">Unit Price</Label>
+                                        <Input type="number" value={svc.pricePerUnit} className="h-8" onChange={(e) => {
+                                            const updated = [...(event.additionalServices || [])];
+                                            updated[idx].pricePerUnit = Number(e.target.value);
+                                            updated[idx].total = updated[idx].quantity * updated[idx].pricePerUnit;
+                                            handleUpdateEvent({ additionalServices: updated });
+                                        }}/>
+                                    </div>
+                                    <div className="col-span-2 text-right">
+                                        <Label className="text-xs text-slate-400">Total</Label>
+                                        <p className="font-bold text-slate-700">{svc.total.toLocaleString()}</p>
+                                    </div>
+                                </div>
+                                <Button variant="ghost" size="sm" onClick={() => removeArrayItem('additionalServices', svc.id)}><Trash2 className="w-4 h-4 text-red-400"/></Button>
+                            </div>
+                        ))}
+                    </CardContent>
+                </Card>
+            </TabsContent>
+
+            {/* --- 4. LOCATIONS TAB --- */}
+            <TabsContent value="locations">
+                <Card>
+                    <CardHeader className="flex flex-row items-center justify-between">
+                        <CardTitle className="text-base">Event Locations</CardTitle>
+                        <Dialog>
+                            <DialogTrigger asChild><Button size="sm"><Plus className="w-4 h-4 mr-2"/> Add Location</Button></DialogTrigger>
+                            <DialogContent>
+                                <DialogHeader><DialogTitle>Add Location</DialogTitle></DialogHeader>
+                                <form className="space-y-4" onSubmit={(e) => {
+                                    e.preventDefault();
+                                    const formData = new FormData(e.currentTarget);
+                                    addArrayItem('locations', {
+                                        id: crypto.randomUUID(),
+                                        name: formData.get('name'),
+                                        mapUrl: formData.get('mapUrl'),
+                                        date: new Date(formData.get('date') as string),
+                                        time: formData.get('time'),
+                                        note: formData.get('note')
+                                    });
+                                }}>
+                                    <Input name="name" placeholder="Location Name" required/>
+                                    <Input name="mapUrl" placeholder="Google Maps Link"/>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <Input name="date" type="date" required/>
+                                        <Input name="time" type="time"/>
+                                    </div>
+                                    <Textarea name="note" placeholder="Instructions..."/>
+                                    <Button type="submit" className="w-full">Save Location</Button>
+                                </form>
+                            </DialogContent>
+                        </Dialog>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                        {event.locations?.map(loc => (
+                            <div key={loc.id} className="flex items-start gap-4 p-4 border rounded-lg bg-white shadow-sm">
+                                <div className="h-10 w-10 bg-blue-100 rounded-full flex items-center justify-center shrink-0">
+                                    <MapPin className="w-5 h-5 text-blue-600"/>
+                                </div>
+                                <div className="flex-1">
+                                    <div className="flex justify-between">
+                                        <h4 className="font-bold text-slate-800">{loc.name}</h4>
+                                        <span className="text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded">ID: {event.displayId}</span>
+                                    </div>
+                                    <div className="text-sm text-slate-600 mt-1 flex flex-wrap gap-4">
+                                        <span>{format(safeDate(loc.date), 'PPP')}</span>
+                                        {loc.time && <span>@ {loc.time}</span>}
+                                    </div>
+                                    {loc.mapUrl && <a href={loc.mapUrl} target="_blank" className="text-xs text-blue-600 hover:underline mt-1 block">View on Map</a>}
+                                    {loc.note && <p className="text-xs text-slate-500 mt-2 bg-slate-50 p-2 rounded">{loc.note}</p>}
+                                </div>
+                                <Button variant="ghost" size="sm" onClick={() => removeArrayItem('locations', loc.id)}><Trash2 className="w-4 h-4 text-red-400"/></Button>
+                            </div>
+                        ))}
+                    </CardContent>
+                </Card>
+            </TabsContent>
+
+            {/* --- 5. PAYMENTS & EXPENSES --- */}
+            {['payments', 'expenses'].map(tab => (
+                <TabsContent key={tab} value={tab}>
+                    <Card>
+                        <CardHeader className="flex flex-row items-center justify-between">
+                            <CardTitle className="text-base capitalize">{tab}</CardTitle>
+                            <Dialog>
+                                <DialogTrigger asChild><Button size="sm"><Plus className="w-4 h-4 mr-2"/> Add {tab === 'payments' ? 'Income' : 'Expense'}</Button></DialogTrigger>
+                                <DialogContent>
+                                    <DialogHeader><DialogTitle>Record Transaction</DialogTitle></DialogHeader>
+                                    <form className="space-y-4" onSubmit={(e) => {
+                                        e.preventDefault();
+                                        const formData = new FormData(e.currentTarget);
+                                        const type = tab === 'payments' ? 'income' : 'expense';
+                                        addArrayItem('transactions', {
+                                            id: crypto.randomUUID(),
+                                            date: new Date(formData.get('date') as string),
+                                            amount: Number(formData.get('amount')),
+                                            method: formData.get('method'),
+                                            note: formData.get('note'),
+                                            type: type
+                                        });
+                                    }}>
+                                        <Input name="amount" type="number" placeholder="Amount" required/>
+                                        <Input name="date" type="date" required defaultValue={new Date().toISOString().split('T')[0]}/>
+                                        <Select name="method">
+                                            <SelectTrigger><SelectValue placeholder="Method"/></SelectTrigger>
+                                            <SelectContent>
+                                                {paymentMethods.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}
+                                                <SelectItem value="Cash">Cash</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                        <Textarea name="note" placeholder="Description..."/>
+                                        <Button type="submit" className="w-full">Record</Button>
+                                    </form>
+                                </DialogContent>
+                            </Dialog>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="space-y-2">
+                                {event.transactions?.filter(t => t.type === (tab === 'payments' ? 'income' : 'expense')).map(t => (
+                                    <div key={t.id} className="flex justify-between items-center p-3 border rounded bg-slate-50 text-sm">
+                                        <div>
+                                            <p className="font-medium">LKR {t.amount.toLocaleString()}</p>
+                                            <p className="text-xs text-slate-500">{format(safeDate(t.date), 'PPP')} • {t.method}</p>
+                                        </div>
+                                        <div className="flex items-center gap-3">
+                                            {t.note && <span className="text-xs text-slate-400 italic max-w-[200px] truncate">{t.note}</span>}
+                                            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => removeArrayItem('transactions', t.id)}><Trash2 className="w-3 h-3 text-red-400"/></Button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </CardContent>
+                    </Card>
+                </TabsContent>
+            ))}
+
+            {/* --- 6. RESOURCES --- */}
+            <TabsContent value="resources">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <Card>
+                        <CardHeader className="flex flex-row items-center justify-between">
+                            <CardTitle className="text-base">Crew</CardTitle>
+                            <Select onValueChange={(val) => checkAndAssignResource(val, 'crew')}>
+                                <SelectTrigger className="w-[180px] h-8 text-xs"><SelectValue placeholder="Assign Crew"/></SelectTrigger>
+                                <SelectContent>
+                                    {crewList.map(c => <SelectItem key={c.id} value={c.id}>{c.displayName}</SelectItem>)}
+                                </SelectContent>
+                            </Select>
+                        </CardHeader>
+                        <CardContent className="space-y-2">
+                            {event.assignedCrew?.map(id => {
+                                const crew = crewList.find(c => c.id === id);
+                                return (
+                                    <div key={id} className="flex items-center justify-between p-2 bg-slate-50 rounded border">
+                                        <span className="text-sm">{crew?.displayName || "Unknown"}</span>
+                                        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => {
+                                            const newCrew = event.assignedCrew.filter(x => x !== id);
+                                            handleUpdateEvent({ assignedCrew: newCrew });
+                                        }}><Trash2 className="w-3 h-3 text-red-400"/></Button>
+                                    </div>
+                                )
+                            })}
+                        </CardContent>
+                    </Card>
+
+                    <Card>
+                        <CardHeader className="flex flex-row items-center justify-between">
+                            <CardTitle className="text-base">Equipment</CardTitle>
+                            <Select onValueChange={(val) => checkAndAssignResource(val, 'equipment')}>
+                                <SelectTrigger className="w-[180px] h-8 text-xs"><SelectValue placeholder="Assign Equipment"/></SelectTrigger>
+                                <SelectContent>
+                                    {equipmentList.map(e => <SelectItem key={e.id} value={e.id}>{e.name} ({e.quantityAvailable})</SelectItem>)}
+                                </SelectContent>
+                            </Select>
+                        </CardHeader>
+                        <CardContent className="space-y-2">
+                            {event.assignedEquipment?.map(id => {
+                                const eq = equipmentList.find(e => e.id === id);
+                                return (
+                                    <div key={id} className="flex items-center justify-between p-2 bg-slate-50 rounded border">
+                                        <span className="text-sm">{eq?.name || "Unknown"}</span>
+                                        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => {
+                                            const newEq = event.assignedEquipment.filter(x => x !== id);
+                                            handleUpdateEvent({ assignedEquipment: newEq });
+                                        }}><Trash2 className="w-3 h-3 text-red-400"/></Button>
+                                    </div>
+                                )
+                            })}
+                        </CardContent>
+                    </Card>
+                </div>
+            </TabsContent>
         </Tabs>
     </div>
   )
