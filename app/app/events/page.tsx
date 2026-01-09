@@ -147,7 +147,7 @@ export default function EventsPage() {
       {/* CREATE EVENT FORM */}
       {isDesktop ? (
         <Sheet open={isFormOpen} onOpenChange={setIsFormOpen}>
-            <SheetContent className="w-full sm:max-w-[700px] p-0 flex flex-col h-full border-l shadow-2xl">
+            <SheetContent className="w-full sm:max-w-[800px] p-0 flex flex-col h-full border-l shadow-2xl">
                 <SheetHeader className="px-6 py-4 border-b bg-white shrink-0">
                     <SheetTitle>New Event</SheetTitle>
                     <SheetDescription>Create a new inquiry or schedule an event.</SheetDescription>
@@ -210,9 +210,10 @@ function EventForm({ onSuccess, onCancel }: { onSuccess: () => void, onCancel: (
         init()
     }, [userData])
 
-    // Financial Calculation
+    // Financial Calculation with Explicit Types
     const financials = useMemo(() => {
-        const total = (formData.days || []).reduce((acc, day) => acc + (day.cost || 0), 0);
+        // [!code highlight] Added Types: (acc: number, day: EventDayConfig)
+        const total = (formData.days || []).reduce((acc: number, day: EventDayConfig) => acc + (day.cost || 0), 0);
         let discountAmount = 0;
         
         if (formData.discountType === 'percentage') {
@@ -252,7 +253,8 @@ function EventForm({ onSuccess, onCancel }: { onSuccess: () => void, onCancel: (
         }
         
         if (updates.customItems && updatedDay.type === 'custom') {
-            updatedDay.cost = updates.customItems.reduce((sum, item) => sum + (item.price || 0), 0);
+            // [!code highlight] Added Types: (sum: number, item: CustomItem)
+            updatedDay.cost = updates.customItems.reduce((sum: number, item: CustomItem) => sum + (item.price || 0), 0);
         }
 
         newDays[index] = updatedDay;
@@ -275,7 +277,8 @@ function EventForm({ onSuccess, onCancel }: { onSuccess: () => void, onCancel: (
 
     const removeCustomItem = (dayIndex: number, itemIndex: number) => {
         const day = formData.days![dayIndex];
-        const newItems = (day.customItems || []).filter((_, i) => i !== itemIndex);
+        // [!code highlight] Added Types: (_: CustomItem, i: number)
+        const newItems = (day.customItems || []).filter((_: CustomItem, i: number) => i !== itemIndex);
         updateDayConfig(dayIndex, { customItems: newItems });
     }
 
@@ -363,12 +366,14 @@ function EventForm({ onSuccess, onCancel }: { onSuccess: () => void, onCancel: (
 
                     <Tabs defaultValue="day-0" className="w-full">
                         <TabsList className="w-full justify-start overflow-x-auto h-auto p-1 bg-slate-100">
-                            {formData.days?.map((_, i) => (
+                            {/* [!code highlight] Added Types: (_: EventDayConfig, i: number) */}
+                            {formData.days?.map((_: EventDayConfig, i: number) => (
                                 <TabsTrigger key={i} value={`day-${i}`} className="px-4 py-1.5 text-xs">Day {i + 1}</TabsTrigger>
                             ))}
                         </TabsList>
                         
-                        {formData.days?.map((day, i) => (
+                        {/* [!code highlight] Added Types: (day: EventDayConfig, i: number) */}
+                        {formData.days?.map((day: EventDayConfig, i: number) => (
                             <TabsContent key={i} value={`day-${i}`} className="border rounded-md p-4 mt-2 space-y-4 bg-white">
                                 <div className="space-y-1">
                                     <div className="border rounded-md p-2 bg-slate-50 flex items-center justify-between">
@@ -417,7 +422,8 @@ function EventForm({ onSuccess, onCancel }: { onSuccess: () => void, onCancel: (
 
                                     <TabsContent value="custom" className="pt-2 space-y-3">
                                         <div className="space-y-2">
-                                            {day.customItems?.map((item, itemIdx) => (
+                                            {/* [!code highlight] Added Types: (item: CustomItem, itemIdx: number) */}
+                                            {day.customItems?.map((item: CustomItem, itemIdx: number) => (
                                                 <div key={itemIdx} className="grid grid-cols-10 gap-2 items-start">
                                                     <div className="col-span-4">
                                                         <Input 
@@ -508,7 +514,6 @@ function EventForm({ onSuccess, onCancel }: { onSuccess: () => void, onCancel: (
                 </div>
             </div>
 
-            {/* FIXED FOOTER */}
             <div className="p-4 border-t bg-white flex gap-3 shrink-0 mt-auto">
                 <Button variant="outline" className="flex-1" onClick={onCancel}>Cancel</Button>
                 <Button className="bg-[#1C4D8D] flex-1" onClick={handleSubmit} disabled={submitting}>
