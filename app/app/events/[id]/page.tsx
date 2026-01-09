@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useMemo, useRef } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { useAuth } from "@/context/AuthContext"
 import { useParams, useRouter } from "next/navigation"
 import { 
@@ -12,6 +12,8 @@ import { uploadFileToStorage } from "@/lib/storage-utils"
 import { compressImage } from "@/lib/image-utils"
 import { fetchInventory, InventoryItem } from "@/services/inventory-service"
 import { fetchCrewMembers } from "@/services/crew-service"
+import { doc, getDoc } from "firebase/firestore" // Needed for direct studio fetch
+import { db } from "@/lib/firebase" // Ensure this path matches your project structure
 
 // UI Components
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -138,6 +140,7 @@ export default function EventDetailPage() {
   const [saving, setSaving] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [activeTab, setActiveTab] = useState("overview")
+  const [currency, setCurrency] = useState("LKR") // Default Currency
 
   // Edit States for Modals
   const [editingContact, setEditingContact] = useState<EventContact | null>(null)
@@ -153,6 +156,10 @@ export default function EventDetailPage() {
   // --- ADDITIONALS (SERVICES) STATE ---
   const [editingService, setEditingService] = useState<AdditionalService | null>(null)
   const [isServiceOpen, setIsServiceOpen] = useState(false)
+  // New state to control "Custom" vs "Preset" logic
+  const [serviceNameInput, setServiceNameInput] = useState("") 
+  const [servicePriceInput, setServicePriceInput] = useState<number>(0)
+  const [isCustomService, setIsCustomService] = useState(false)
 
   // Lists & Data
   const [paymentMethods, setPaymentMethods] = useState<string[]>([])
@@ -165,6 +172,13 @@ export default function EventDetailPage() {
   useEffect(() => {
     const load = async () => {
       if (userData?.studioID && id) {
+        // Fetch Studio Doc for Currency
+        const studioRef = doc(db, "Studios", userData.studioID);
+        const studioSnap = await getDoc(studioRef);
+        if(studioSnap.exists()) {
+            setCurrency(studioSnap.data().base_currency || "LKR");
+        }
+
         const [evtData, methods, crew, equip, params, allPackages] = await Promise.all([
             fetchEventById(userData.studioID, id as string),
             fetchStudioSettingsList(userData.studioID, 'payment_methods'),
@@ -309,7 +323,7 @@ export default function EventDetailPage() {
       const currentList = (event[field] as any[]) || [];
       await handleUpdateEvent({ [field]: currentList.filter((x: any) => x.id !== id) });
   };
-  // (Save functions for modals are condensed below in standard format)
+  
   const saveContact = async (f: FormData) => {
       if(!event) return;
       const item = { id: editingContact?.id || crypto.randomUUID(), name: f.get('name') as string, role: f.get('role') as string, phone: f.get('phone') as string, note: f.get('note') as string };
@@ -332,17 +346,16 @@ export default function EventDetailPage() {
   // --- ADDITIONALS HANDLER ---
   const saveService = async (formData: FormData) => {
       if(!event) return;
-      
       const quantity = Number(formData.get('quantity'));
       const price = Number(formData.get('price'));
       
       const newItem: AdditionalService = {
           id: editingService ? editingService.id : crypto.randomUUID(),
-          name: formData.get('name') as string,
-          type: 'custom', // Defaulting to custom for manual edits
+          name: serviceNameInput, // Use state instead of getting raw formData if logic controls it
+          type: isCustomService ? 'custom' : 'parameter', 
           quantity: quantity,
           pricePerUnit: price,
-          total: quantity * price // Auto-calc total
+          total: quantity * price
       };
 
       const currentList = event.additionalServices || [];
@@ -354,6 +367,29 @@ export default function EventDetailPage() {
       setIsServiceOpen(false);
       setEditingService(null);
   };
+
+  // Helper to open Add Service Modal
+  const openAddService = () => {
+      setEditingService(null);
+      setServiceNameInput("");
+      setServicePriceInput(0);
+      setIsCustomService(false);
+      setIsServiceOpen(true);
+  }
+
+  // Helper to open Edit Service Modal
+  const openEditService = (svc: AdditionalService) => {
+      setEditingService(svc);
+      setServiceNameInput(svc.name);
+      setServicePriceInput(svc.pricePerUnit);
+      
+      // Determine if it's custom or preset based on name match in params
+      const isPreset = serviceParams.some(p => p.name === svc.name);
+      setIsCustomService(!isPreset);
+      
+      setIsServiceOpen(true);
+  }
+
   const statusOptions = ["Quotation", "Scheduled", "In Progress", "Post Production", "Review", "Completed", "Handed Over"];
   const showGallery = event && ["Post Production", "Review", "Completed", "Handed Over"].includes(event.status || "");
   const isLocked = event?.approval?.customer_confirmed;
@@ -485,11 +521,11 @@ export default function EventDetailPage() {
                         <Card className="shadow-sm border-slate-200">
                             <CardHeader className="bg-slate-50/50 border-b border-slate-100 py-3"><CardTitle className="text-sm font-bold text-slate-700">Financial Summary</CardTitle></CardHeader>
                             <CardContent className="p-4 space-y-3 text-sm">
-                                <div className="flex justify-between"><span className="text-slate-500">Total Budget</span><span className="font-medium text-slate-900">{financials.total.toLocaleString()}</span></div>
-                                {financials.discountAmount > 0 && <div className="flex justify-between text-red-500"><span>Discount</span><span>- {financials.discountAmount.toLocaleString()}</span></div>}
-                                <div className="flex justify-between font-bold border-t border-slate-100 pt-2"><span>Final</span><span>{financials.finalBudget.toLocaleString()}</span></div>
-                                <div className="flex justify-between text-green-600"><span>Paid</span><span>{financials.paid.toLocaleString()}</span></div>
-                                <div className="flex justify-between text-red-600 font-bold bg-red-50 p-2 rounded"><span>Due Amount</span><span>{financials.due.toLocaleString()}</span></div>
+                                <div className="flex justify-between"><span className="text-slate-500">Total Budget</span><span className="font-medium text-slate-900">{currency} {financials.total.toLocaleString()}</span></div>
+                                {financials.discountAmount > 0 && <div className="flex justify-between text-red-500"><span>Discount</span><span>- {currency} {financials.discountAmount.toLocaleString()}</span></div>}
+                                <div className="flex justify-between font-bold border-t border-slate-100 pt-2"><span>Final</span><span>{currency} {financials.finalBudget.toLocaleString()}</span></div>
+                                <div className="flex justify-between text-green-600"><span>Paid</span><span>{currency} {financials.paid.toLocaleString()}</span></div>
+                                <div className="flex justify-between text-red-600 font-bold bg-red-50 p-2 rounded"><span>Due Amount</span><span>{currency} {financials.due.toLocaleString()}</span></div>
                             </CardContent>
                         </Card>
                     </div>
@@ -584,9 +620,9 @@ export default function EventDetailPage() {
              <TabsContent value="payments">
                 {/* FINANCIAL SUMMARY BAR */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                    <Card className="bg-blue-50 border-blue-100 shadow-sm"><CardContent className="p-4 flex items-center justify-between"><div><p className="text-xs font-semibold text-blue-600 uppercase">Total Event Budget</p><p className="text-2xl font-bold text-blue-900">{financials.finalBudget.toLocaleString()}</p></div><Wallet className="h-8 w-8 text-blue-200"/></CardContent></Card>
-                    <Card className="bg-green-50 border-green-100 shadow-sm"><CardContent className="p-4 flex items-center justify-between"><div><p className="text-xs font-semibold text-green-600 uppercase">Total Paid</p><p className="text-2xl font-bold text-green-900">{financials.paid.toLocaleString()}</p></div><CheckCircle className="h-8 w-8 text-green-200"/></CardContent></Card>
-                    <Card className="bg-red-50 border-red-100 shadow-sm"><CardContent className="p-4 flex items-center justify-between"><div><p className="text-xs font-semibold text-red-600 uppercase">Balance Due</p><p className="text-2xl font-bold text-red-900">{financials.due.toLocaleString()}</p></div><DollarSign className="h-8 w-8 text-red-200"/></CardContent></Card>
+                    <Card className="bg-blue-50 border-blue-100 shadow-sm"><CardContent className="p-4 flex items-center justify-between"><div><p className="text-xs font-semibold text-blue-600 uppercase">Total Event Budget</p><p className="text-2xl font-bold text-blue-900">{currency} {financials.finalBudget.toLocaleString()}</p></div><Wallet className="h-8 w-8 text-blue-200"/></CardContent></Card>
+                    <Card className="bg-green-50 border-green-100 shadow-sm"><CardContent className="p-4 flex items-center justify-between"><div><p className="text-xs font-semibold text-green-600 uppercase">Total Paid</p><p className="text-2xl font-bold text-green-900">{currency} {financials.paid.toLocaleString()}</p></div><CheckCircle className="h-8 w-8 text-green-200"/></CardContent></Card>
+                    <Card className="bg-red-50 border-red-100 shadow-sm"><CardContent className="p-4 flex items-center justify-between"><div><p className="text-xs font-semibold text-red-600 uppercase">Balance Due</p><p className="text-2xl font-bold text-red-900">{currency} {financials.due.toLocaleString()}</p></div><DollarSign className="h-8 w-8 text-red-200"/></CardContent></Card>
                 </div>
                 {/* INCOME ONLY TABLE */}
                 <Card>
@@ -595,7 +631,7 @@ export default function EventDetailPage() {
                         <div className="space-y-2">
                              {event.transactions?.filter(t => t.type === 'income').map(t => (
                                 <div key={t.id} className="flex justify-between items-center p-3 border rounded bg-white text-sm hover:bg-slate-50 group">
-                                    <div className="flex items-center gap-3"><div className="p-2 rounded-full bg-green-100 text-green-600"><DollarSign className="w-4 h-4"/></div><div><p className="font-bold text-green-700">+ {t.amount.toLocaleString()}</p><p className="text-xs text-slate-500">{format(safeDate(t.date), 'PPP')} • {t.method}</p></div></div>
+                                    <div className="flex items-center gap-3"><div className="p-2 rounded-full bg-green-100 text-green-600"><DollarSign className="w-4 h-4"/></div><div><p className="font-bold text-green-700">+ {currency} {t.amount.toLocaleString()}</p><p className="text-xs text-slate-500">{format(safeDate(t.date), 'PPP')} • {t.method}</p></div></div>
                                     <div className="flex items-center gap-4">{t.note && <span className="text-xs text-slate-400 italic max-w-[200px] truncate hidden md:block">{t.note}</span>}<div className="flex gap-1 opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity"><Button variant="ghost" size="icon" className="h-8 w-8 text-blue-600" onClick={() => { setEditingTransaction(t); setTransactionType('income'); setIsTransactionOpen(true); }}><Pencil className="w-4 h-4"/></Button><Button variant="ghost" size="icon" className="h-8 w-8 text-red-400" onClick={() => removeArrayItem('transactions', t.id)}><Trash2 className="w-4 h-4"/></Button></div></div>
                                 </div>
                             ))}
@@ -609,9 +645,9 @@ export default function EventDetailPage() {
              <TabsContent value="expenses">
                 {/* EXPENSE SUMMARY BAR */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                    <Card className="bg-slate-50 border-slate-100 shadow-sm"><CardContent className="p-4 flex items-center justify-between"><div><p className="text-xs font-semibold text-slate-600 uppercase">Total Revenue</p><p className="text-2xl font-bold text-slate-900">{financials.finalBudget.toLocaleString()}</p></div><Wallet className="h-8 w-8 text-slate-200"/></CardContent></Card>
-                    <Card className="bg-amber-50 border-amber-100 shadow-sm"><CardContent className="p-4 flex items-center justify-between"><div><p className="text-xs font-semibold text-amber-600 uppercase">Utilized (Expenses)</p><p className="text-2xl font-bold text-amber-900">{financials.totalExpenses.toLocaleString()}</p></div><TrendingUp className="h-8 w-8 text-amber-200"/></CardContent></Card>
-                    <Card className="bg-emerald-50 border-emerald-100 shadow-sm"><CardContent className="p-4 flex items-center justify-between"><div><p className="text-xs font-semibold text-emerald-600 uppercase">Rest (Profit)</p><p className="text-2xl font-bold text-emerald-900">{financials.profit.toLocaleString()}</p></div><DollarSign className="h-8 w-8 text-emerald-200"/></CardContent></Card>
+                    <Card className="bg-slate-50 border-slate-100 shadow-sm"><CardContent className="p-4 flex items-center justify-between"><div><p className="text-xs font-semibold text-slate-600 uppercase">Total Revenue</p><p className="text-2xl font-bold text-slate-900">{currency} {financials.finalBudget.toLocaleString()}</p></div><Wallet className="h-8 w-8 text-slate-200"/></CardContent></Card>
+                    <Card className="bg-amber-50 border-amber-100 shadow-sm"><CardContent className="p-4 flex items-center justify-between"><div><p className="text-xs font-semibold text-amber-600 uppercase">Utilized (Expenses)</p><p className="text-2xl font-bold text-amber-900">{currency} {financials.totalExpenses.toLocaleString()}</p></div><TrendingUp className="h-8 w-8 text-amber-200"/></CardContent></Card>
+                    <Card className="bg-emerald-50 border-emerald-100 shadow-sm"><CardContent className="p-4 flex items-center justify-between"><div><p className="text-xs font-semibold text-emerald-600 uppercase">Rest (Profit)</p><p className="text-2xl font-bold text-emerald-900">{currency} {financials.profit.toLocaleString()}</p></div><DollarSign className="h-8 w-8 text-emerald-200"/></CardContent></Card>
                 </div>
                 {/* EXPENSE ONLY TABLE */}
                 <Card>
@@ -620,7 +656,7 @@ export default function EventDetailPage() {
                         <div className="space-y-2">
                              {event.transactions?.filter(t => t.type === 'expense').map(t => (
                                 <div key={t.id} className="flex justify-between items-center p-3 border rounded bg-white text-sm hover:bg-slate-50 group">
-                                    <div className="flex items-center gap-3"><div className="p-2 rounded-full bg-red-100 text-red-600"><DollarSign className="w-4 h-4"/></div><div><p className="font-bold text-red-700">- {t.amount.toLocaleString()}</p><p className="text-xs text-slate-500">{format(safeDate(t.date), 'PPP')} • {t.method}</p></div></div>
+                                    <div className="flex items-center gap-3"><div className="p-2 rounded-full bg-red-100 text-red-600"><DollarSign className="w-4 h-4"/></div><div><p className="font-bold text-red-700">- {currency} {t.amount.toLocaleString()}</p><p className="text-xs text-slate-500">{format(safeDate(t.date), 'PPP')} • {t.method}</p></div></div>
                                     <div className="flex items-center gap-4">{t.note && <span className="text-xs text-slate-400 italic max-w-[200px] truncate hidden md:block">{t.note}</span>}<div className="flex gap-1 opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity"><Button variant="ghost" size="icon" className="h-8 w-8 text-blue-600" onClick={() => { setEditingTransaction(t); setTransactionType('expense'); setIsTransactionOpen(true); }}><Pencil className="w-4 h-4"/></Button><Button variant="ghost" size="icon" className="h-8 w-8 text-red-400" onClick={() => removeArrayItem('transactions', t.id)}><Trash2 className="w-4 h-4"/></Button></div></div>
                                 </div>
                             ))}
@@ -699,7 +735,7 @@ export default function EventDetailPage() {
                 </div>
             </TabsContent>
 
-            {/* --- 5. CONTACTS / LOCATIONS / SERVICES TABS --- */}
+            {/* --- 5. CONTACTS / LOCATIONS / ADDITIONALS TABS --- */}
             <TabsContent value="contacts">
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between">
@@ -765,7 +801,7 @@ export default function EventDetailPage() {
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between">
                         <CardTitle className="text-base">Additional Services</CardTitle>
-                        <Button size="sm" onClick={() => { setEditingService(null); setIsServiceOpen(true); }}>
+                        <Button size="sm" onClick={openAddService}>
                             <Plus className="w-4 h-4 mr-2"/> Add Service
                         </Button>
                     </CardHeader>
@@ -776,8 +812,8 @@ export default function EventDetailPage() {
                                     <tr>
                                         <th className="px-4 py-3">Service Name</th>
                                         <th className="px-4 py-3 text-center">Qty</th>
-                                        <th className="px-4 py-3 text-right">Unit Price</th>
-                                        <th className="px-4 py-3 text-right">Total</th>
+                                        <th className="px-4 py-3 text-right">Unit Price ({currency})</th>
+                                        <th className="px-4 py-3 text-right">Total ({currency})</th>
                                         <th className="px-4 py-3 text-right">Actions</th>
                                     </tr>
                                 </thead>
@@ -789,7 +825,7 @@ export default function EventDetailPage() {
                                             <td className="px-4 py-3 text-right text-slate-600">{svc.pricePerUnit.toLocaleString()}</td>
                                             <td className="px-4 py-3 text-right font-bold text-slate-800">{svc.total.toLocaleString()}</td>
                                             <td className="px-4 py-3 text-right flex justify-end gap-2">
-                                                <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-600" onClick={() => { setEditingService(svc); setIsServiceOpen(true); }}>
+                                                <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-600" onClick={() => openEditService(svc)}>
                                                     <Pencil className="w-4 h-4"/>
                                                 </Button>
                                                 <Button variant="ghost" size="icon" className="h-8 w-8 text-red-400" onClick={() => removeArrayItem('additionalServices', svc.id)}>
@@ -814,43 +850,71 @@ export default function EventDetailPage() {
                             <DialogTitle>{editingService ? 'Edit Service' : 'Add Additional Service'}</DialogTitle>
                         </DialogHeader>
                         <form action={saveService} className="space-y-4">
-                            {/* Pre-defined Service Select or Custom Input */}
+                            {/* Service Selection Dropdown */}
+                            <div className="space-y-2">
+                                <Label>Service Type</Label>
+                                <Select 
+                                    value={isCustomService ? "custom" : (serviceNameInput || "")} 
+                                    onValueChange={(val) => {
+                                        if (val === "custom") {
+                                            setIsCustomService(true);
+                                            setServiceNameInput(""); // Clear input for custom typing
+                                            setServicePriceInput(0);
+                                        } else {
+                                            setIsCustomService(false);
+                                            const p = serviceParams.find(param => param.name === val);
+                                            if (p) {
+                                                setServiceNameInput(p.name);
+                                                setServicePriceInput(p.defaultPrice || 0);
+                                            }
+                                        }
+                                    }}
+                                >
+                                    <SelectTrigger><SelectValue placeholder="Select Service..."/></SelectTrigger>
+                                    <SelectContent>
+                                        {serviceParams.map(p => (
+                                            <SelectItem key={p.name} value={p.name}>{p.name} ({currency} {p.defaultPrice})</SelectItem>
+                                        ))}
+                                        <SelectItem value="custom" className="font-bold text-blue-600">Custom Service / Other</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+
+                            {/* Service Name Input (Read-only if Preset, Editable if Custom) */}
                             <div className="space-y-2">
                                 <Label>Service Name</Label>
-                                {/* If adding new, allow picking from pre-defined list or typing custom */}
-                                {!editingService ? (
-                                    <Select name="name" onValueChange={(val) => {
-                                        // Auto-fill price if a preset is selected
-                                        const param = serviceParams.find(p => p.name === val);
-                                        const form = document.getElementById('service-form') as HTMLFormElement;
-                                        if(param && form) {
-                                            // Note: Direct DOM manipulation for quick prototype. 
-                                            // Better to control state, but form action pattern works here if we let user type.
-                                        }
-                                    }}>
-                                        <SelectTrigger><SelectValue placeholder="Select or Type Custom..."/></SelectTrigger>
-                                        <SelectContent>
-                                            {serviceParams.map(p => <SelectItem key={p.name} value={p.name}>{p.name} (LKR {p.defaultPrice})</SelectItem>)}
-                                            <SelectItem value="Custom Service">Custom Service</SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                ) : null}
                                 <Input 
                                     name="name" 
+                                    value={serviceNameInput}
+                                    onChange={(e) => setServiceNameInput(e.target.value)}
                                     placeholder="Service Name (e.g. Extra Drone Hour)" 
                                     required 
-                                    defaultValue={editingService?.name} 
+                                    readOnly={!isCustomService}
+                                    className={!isCustomService ? "bg-slate-100 text-slate-500 cursor-not-allowed" : ""}
                                 />
                             </div>
 
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="space-y-2">
                                     <Label>Quantity</Label>
-                                    <Input name="quantity" type="number" min="1" required defaultValue={editingService?.quantity || 1} />
+                                    <Input 
+                                        name="quantity" 
+                                        type="number" 
+                                        min="1" 
+                                        required 
+                                        defaultValue={editingService?.quantity || 1} 
+                                    />
                                 </div>
                                 <div className="space-y-2">
-                                    <Label>Unit Price (LKR)</Label>
-                                    <Input name="price" type="number" min="0" required defaultValue={editingService?.pricePerUnit || 0} />
+                                    <Label>Unit Price ({currency})</Label>
+                                    <Input 
+                                        name="price" 
+                                        type="number" 
+                                        min="0" 
+                                        required 
+                                        value={servicePriceInput}
+                                        onChange={(e) => setServicePriceInput(Number(e.target.value))}
+                                    />
                                 </div>
                             </div>
                             
