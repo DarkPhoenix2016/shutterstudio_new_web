@@ -5,14 +5,14 @@ import { useAuth } from "@/context/AuthContext"
 import { useRouter } from "next/navigation"
 import { 
     fetchEvents, createEvent, updateEvent, deleteEvent, 
-    fetchStudioSettingsList, fetchPackagesList, 
-    EventData, EventDayConfig, CustomItem 
+    fetchStudioSettingsList, fetchPackagesList, fetchPackageConfig,
+    EventData, EventDayConfig, CustomItem, PackageParameter 
 } from "@/services/event-service"
 import { validateSubscriptionAction } from "@/services/subscription-service"
 import { useMediaQuery } from "@/hooks/use-media-query"
 
 // UI
-import { Card, CardContent, CardFooter } from "@/components/ui/card"
+import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -28,7 +28,7 @@ import { Separator } from "@/components/ui/separator"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 
 // Icons
-import { Plus, Calendar as CalendarIcon, MapPin, Users, Search, Loader2, Package, AlertCircle, Trash2, MoreVertical, Edit, Trash } from "lucide-react"
+import { Plus, Calendar as CalendarIcon, MapPin, Search, Loader2, AlertCircle, Trash, MoreVertical, Edit, Check } from "lucide-react"
 import { format } from "date-fns"
 import { cn } from "@/lib/utils"
 import Swal from "sweetalert2"
@@ -45,7 +45,7 @@ export default function EventsPage() {
   
   // Form State
   const [isFormOpen, setIsFormOpen] = useState(false)
-  const [editingEvent, setEditingEvent] = useState<EventData | null>(null) // [!code highlight] Track edit state
+  const [editingEvent, setEditingEvent] = useState<EventData | null>(null) 
   const isDesktop = useMediaQuery("(min-width: 768px)")
 
   useEffect(() => {
@@ -82,14 +82,13 @@ export default function EventsPage() {
     return 'bg-slate-100 text-slate-700'
   }
 
-  // [!code highlight] Action Handlers
   const handleAddNew = () => {
       setEditingEvent(null);
       setIsFormOpen(true);
   }
 
   const handleEdit = (e: React.MouseEvent, event: EventData) => {
-      e.stopPropagation(); // Prevent card click
+      e.stopPropagation();
       setEditingEvent(event);
       setIsFormOpen(true);
   }
@@ -100,7 +99,7 @@ export default function EventsPage() {
 
       const result = await Swal.fire({
           title: 'Delete Event?',
-          text: `Are you sure you want to delete ${event.displayId || event.eventName}? This cannot be undone.`,
+          text: `Are you sure you want to delete ${event.displayId || event.eventName}?`,
           icon: 'warning',
           showCancelButton: true,
           confirmButtonColor: '#d33',
@@ -158,7 +157,6 @@ export default function EventsPage() {
                             {event.status}
                         </Badge>
                         
-                        {/* [!code highlight] Card Actions Dropdown */}
                         <div className="absolute top-2 left-2">
                             <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
@@ -215,7 +213,7 @@ export default function EventsPage() {
                     <SheetDescription>{editingEvent ? "Update event details and budget." : "Create a new inquiry or schedule an event."}</SheetDescription>
                 </SheetHeader>
                 <EventForm 
-                    initialData={editingEvent} // [!code highlight] Pass data
+                    initialData={editingEvent}
                     onSuccess={() => { setIsFormOpen(false); loadData(); }} 
                     onCancel={() => setIsFormOpen(false)} 
                 />
@@ -229,7 +227,7 @@ export default function EventsPage() {
                     <DrawerDescription>{editingEvent ? "Update event details and budget." : "Create a new inquiry or schedule an event."}</DrawerDescription>
                 </DrawerHeader>
                 <EventForm 
-                    initialData={editingEvent} // [!code highlight] Pass data
+                    initialData={editingEvent}
                     onSuccess={() => { setIsFormOpen(false); loadData(); }} 
                     onCancel={() => setIsFormOpen(false)} 
                 />
@@ -249,6 +247,8 @@ function EventForm({ initialData, onSuccess, onCancel }: { initialData?: EventDa
     const [typeList, setTypeList] = useState<string[]>(DEFAULT_TYPES)
     const [statusList, setStatusList] = useState<string[]>(DEFAULT_STATUSES)
     const [packages, setPackages] = useState<any[]>([])
+    // [!code highlight] Config Parameters List
+    const [configParams, setConfigParams] = useState<PackageParameter[]>([])
 
     // Form Data
     const [formData, setFormData] = useState<Partial<EventData>>({
@@ -261,30 +261,32 @@ function EventForm({ initialData, onSuccess, onCancel }: { initialData?: EventDa
         notes: ""
     })
 
-    // [!code highlight] Load Initial Data for Edit
+    // Load Initial Data
     useEffect(() => {
         if (initialData) {
             setFormData({
                 ...initialData,
-                // Ensure dates are Dates (just in case)
                 days: initialData.days.map(d => ({ ...d, date: d.date instanceof Date ? d.date : new Date() }))
             })
         }
     }, [initialData])
 
+    // Load Studio Configs
     useEffect(() => {
         const init = async () => {
             if(!userData?.studioID) return;
             try {
-                const [types, statuses, pkgs] = await Promise.all([
+                const [types, statuses, pkgs, params] = await Promise.all([
                     fetchStudioSettingsList(userData.studioID, 'EVENT_TYPES'),
                     fetchStudioSettingsList(userData.studioID, 'EVENT_STATUS'),
-                    fetchPackagesList(userData.studioID)
+                    fetchPackagesList(userData.studioID),
+                    fetchPackageConfig(userData.studioID)
                 ]);
                 
                 if(types.length) setTypeList(types);
                 if(statuses.length) setStatusList(statuses);
                 setPackages(pkgs);
+                setConfigParams(params);
             } catch(e) { console.error(e) }
             setLoaded(true)
         }
@@ -306,7 +308,7 @@ function EventForm({ initialData, onSuccess, onCancel }: { initialData?: EventDa
         return { total, discountAmount, subTotal };
     }, [formData.days, formData.discount, formData.discountType])
 
-    // Handlers (Reduced code repetition - using same logic as before)
+    // Handlers
     const handleDayCountChange = (count: number) => {
         const newCount = Math.max(1, count);
         const currentDays = [...(formData.days || [])];
@@ -336,9 +338,14 @@ function EventForm({ initialData, onSuccess, onCancel }: { initialData?: EventDa
         setFormData({ ...formData, days: newDays });
     }
 
-    const addCustomItem = (dayIndex: number) => {
+    // Custom Items Handlers
+    const addCustomItem = (dayIndex: number, param?: PackageParameter) => {
         const day = formData.days![dayIndex];
-        const newItems = [...(day.customItems || []), { name: "", quantity: 1, unit: "", price: 0 }];
+        const newItem: CustomItem = param 
+            ? { name: param.name, quantity: 1, unit: param.unit || "", price: param.defaultPrice || 0 }
+            : { name: "", quantity: 1, unit: "", price: 0 }; // Blank item fallback
+
+        const newItems = [...(day.customItems || []), newItem];
         updateDayConfig(dayIndex, { customItems: newItems });
     }
 
@@ -361,7 +368,6 @@ function EventForm({ initialData, onSuccess, onCancel }: { initialData?: EventDa
 
         setSubmitting(true);
         
-        // Check Limits (Only if creating new)
         if (!initialData) {
             const limitCheck = await validateSubscriptionAction(userData.studioID, 'create_event');
             if (!limitCheck.allowed) {
@@ -378,11 +384,9 @@ function EventForm({ initialData, onSuccess, onCancel }: { initialData?: EventDa
             } as EventData;
 
             if (initialData && initialData.id) {
-                // Update
                 await updateEvent(userData.studioID, initialData.id, eventPayload);
                 Swal.fire({ icon: 'success', title: 'Event Updated', timer: 1500, showConfirmButton: false });
             } else {
-                // Create
                 eventPayload.inquiryDate = new Date();
                 eventPayload.advancePaid = 0;
                 eventPayload.assignedCrew = [];
@@ -403,22 +407,28 @@ function EventForm({ initialData, onSuccess, onCancel }: { initialData?: EventDa
 
     return (
         <div className="flex flex-col h-full overflow-hidden">
-            {/* Same Scrollable Content Layout as before... */}
             <div className="flex-1 overflow-y-auto px-6 py-6 space-y-8 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+                
                 {/* 1. CUSTOMER & META */}
                 <div className="space-y-4">
-                    <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Details</h3>
                     <div className="space-y-3">
                         <Input placeholder="Event Name *" value={formData.eventName} onChange={e => setFormData({...formData, eventName: e.target.value})} className="bg-slate-50 font-medium" />
-                        <div className="grid grid-cols-2 gap-3">
-                            <Select value={formData.eventType} onValueChange={v => setFormData({...formData, eventType: v})}>
-                                <SelectTrigger className="bg-slate-50"><SelectValue placeholder="Type"/></SelectTrigger>
-                                <SelectContent>{typeList.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
-                            </Select>
-                            <Select value={formData.status} onValueChange={(v:any) => setFormData({...formData, status: v})}>
-                                <SelectTrigger className="bg-slate-50"><SelectValue/></SelectTrigger>
-                                <SelectContent>{statusList.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
-                            </Select>
+                        {/* [!code highlight] Updated: 50% width and labeled dropdowns */}
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-1.5">
+                                <Label className="text-xs text-slate-500 uppercase tracking-wide">Event Type</Label>
+                                <Select value={formData.eventType} onValueChange={v => setFormData({...formData, eventType: v})}>
+                                    <SelectTrigger className="bg-slate-50"><SelectValue placeholder="Select..."/></SelectTrigger>
+                                    <SelectContent>{typeList.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
+                                </Select>
+                            </div>
+                            <div className="space-y-1.5">
+                                <Label className="text-xs text-slate-500 uppercase tracking-wide">Status</Label>
+                                <Select value={formData.status} onValueChange={(v:any) => setFormData({...formData, status: v})}>
+                                    <SelectTrigger className="bg-slate-50"><SelectValue/></SelectTrigger>
+                                    <SelectContent>{statusList.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
+                                </Select>
+                            </div>
                         </div>
                         <Input placeholder="Customer Name *" value={formData.customerName} onChange={e => setFormData({...formData, customerName: e.target.value})} className="bg-slate-50" />
                         <div className="grid grid-cols-2 gap-3">
@@ -491,17 +501,34 @@ function EventForm({ initialData, onSuccess, onCancel }: { initialData?: EventDa
                                                 ))}
                                             </SelectContent>
                                         </Select>
-                                        <div className="bg-blue-50 p-2 rounded text-xs text-blue-700 flex justify-between px-3">
-                                            <span>Package Cost:</span>
-                                            <span className="font-bold">LKR {(day.cost || 0).toLocaleString()}</span>
-                                        </div>
+                                        {/* [!code highlight] Display Package Features */}
+                                        {day.packageId && (() => {
+                                            const pkg = packages.find(p => p.id === day.packageId);
+                                            if (!pkg) return null;
+                                            return (
+                                                <div className="bg-slate-50 p-3 rounded border text-xs text-slate-600 space-y-2">
+                                                    <div className="flex justify-between font-bold text-slate-800">
+                                                        <span>Price:</span>
+                                                        <span>LKR {Number(pkg.price).toLocaleString()}</span>
+                                                    </div>
+                                                    {pkg.description && <p>{pkg.description}</p>}
+                                                    {pkg.features && pkg.features.length > 0 && (
+                                                        <div className="flex flex-wrap gap-1">
+                                                            {pkg.features.map((f: string, idx: number) => (
+                                                                <Badge key={idx} variant="secondary" className="text-[10px] bg-white border border-slate-200">{f}</Badge>
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            )
+                                        })()}
                                     </TabsContent>
 
                                     <TabsContent value="custom" className="pt-2 space-y-3">
                                         <div className="space-y-2">
                                             {day.customItems?.map((item: CustomItem, itemIdx: number) => (
-                                                <div key={itemIdx} className="grid grid-cols-10 gap-2 items-start">
-                                                    <div className="col-span-4">
+                                                <div key={itemIdx} className="grid grid-cols-12 gap-2 items-center">
+                                                    <div className="col-span-5">
                                                         <Input 
                                                             placeholder="Item" className="h-8 text-xs" 
                                                             value={item.name}
@@ -510,12 +537,12 @@ function EventForm({ initialData, onSuccess, onCancel }: { initialData?: EventDa
                                                     </div>
                                                     <div className="col-span-2">
                                                         <Input 
-                                                            type="number" placeholder="Qty" className="h-8 text-xs"
+                                                            type="number" placeholder="Qty" className="h-8 text-xs text-center"
                                                             value={item.quantity}
                                                             onChange={(e) => updateCustomItem(i, itemIdx, 'quantity', Number(e.target.value))}
                                                         />
                                                     </div>
-                                                    <div className="col-span-3">
+                                                    <div className="col-span-4">
                                                         <Input 
                                                             type="number" placeholder="Price" className="h-8 text-xs text-right"
                                                             value={item.price}
@@ -523,15 +550,35 @@ function EventForm({ initialData, onSuccess, onCancel }: { initialData?: EventDa
                                                         />
                                                     </div>
                                                     <div className="col-span-1 flex justify-center">
-                                                        <Button variant="ghost" size="icon" className="h-8 w-8 text-red-400 hover:text-red-600" onClick={() => removeCustomItem(i, itemIdx)}>
-                                                            <Trash2 className="h-3 w-3" />
+                                                        <Button variant="ghost" size="icon" className="h-7 w-7 text-red-400 hover:text-red-600" onClick={() => removeCustomItem(i, itemIdx)}>
+                                                            <Trash className="h-3 w-3" />
                                                         </Button>
                                                     </div>
                                                 </div>
                                             ))}
-                                            <Button variant="outline" size="sm" className="w-full text-xs border-dashed text-slate-500" onClick={() => addCustomItem(i)}>
-                                                <Plus className="h-3 w-3 mr-1" /> Add Item
-                                            </Button>
+                                            
+                                            {/* [!code highlight] Add Parameter via Dropdown */}
+                                            <div className="flex gap-2">
+                                                <Select onValueChange={(val) => {
+                                                    if (val === 'custom_new') {
+                                                        addCustomItem(i);
+                                                    } else {
+                                                        const param = configParams.find(p => p.name === val);
+                                                        addCustomItem(i, param);
+                                                    }
+                                                }}>
+                                                    <SelectTrigger className="h-8 text-xs bg-slate-50 border-dashed">
+                                                        <SelectValue placeholder="+ Add Parameter" />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        {configParams.map((p, idx) => (
+                                                            <SelectItem key={idx} value={p.name}>{p.name} {p.unit ? `(${p.unit})` : ''}</SelectItem>
+                                                        ))}
+                                                        <Separator className="my-1"/>
+                                                        <SelectItem value="custom_new">Other (Custom)...</SelectItem>
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
                                         </div>
                                         <div className="bg-slate-50 p-2 rounded text-xs text-slate-700 flex justify-between px-3 border">
                                             <span>Total Custom Cost:</span>

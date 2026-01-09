@@ -23,36 +23,33 @@ export interface EventDayConfig {
 
 export interface EventData {
   id?: string;
-  displayId?: string; // e.g. OMG00001
-  // Customer Info
+  displayId?: string;
   customerName: string;
   customerMobile: string;
   customerEmail?: string;
   couplePhotoUrl?: string;
-
-  // Event Meta
   eventName: string;
   eventType: string; 
   status: string;
   inquiryDate: any;
-  
-  // Scheduling
   dayCount: number;
   days: EventDayConfig[]; 
-  
-  // Financials
   totalBudget: number;
   discountType: 'fixed' | 'percentage';
   discount: number;
   finalBudget: number;
   advancePaid: number;
-  
-  // Resources
   assignedCrew: string[];
   assignedEquipment: string[];
-  
   notes?: string;
   createdAt?: any;
+}
+
+// [!code highlight] Interface for Studio Package Parameters
+export interface PackageParameter {
+  name: string;
+  unit?: string; // e.g. "Hours", "Pages"
+  defaultPrice?: number;
 }
 
 // --- FUNCTIONS ---
@@ -84,7 +81,13 @@ export const fetchPackagesList = async (studioId: string) => {
 
     const packages = await Promise.all(idList.map(async (pkgId) => {
         const pkgSnap = await getDoc(doc(db, "Studios", studioId, "Packages", pkgId));
-        return pkgSnap.exists() ? { id: pkgSnap.id, ...pkgSnap.data() } : null;
+        // [!code highlight] Return extra fields (features, description) if they exist
+        return pkgSnap.exists() ? { 
+            id: pkgSnap.id, 
+            ...pkgSnap.data(),
+            features: pkgSnap.data().features || [], // Ensure array
+            description: pkgSnap.data().description || ""
+        } : null;
     }));
     
     return packages.filter(p => p !== null);
@@ -94,11 +97,25 @@ export const fetchPackagesList = async (studioId: string) => {
   }
 };
 
+// [!code highlight] 2.1 Fetch Package Configuration Parameters (For Custom Plans)
+export const fetchPackageConfig = async (studioId: string) => {
+    try {
+        const ref = doc(db, "Studios", studioId, "Packages", "CONFIG");
+        const snap = await getDoc(ref);
+        if (snap.exists() && Array.isArray(snap.data().parameters)) {
+            return snap.data().parameters as PackageParameter[];
+        }
+        return [];
+    } catch (e) {
+        console.error("Error fetching package config:", e);
+        return [];
+    }
+};
+
 // 3. Create Event with Custom ID Transaction
 export const createEvent = async (studioId: string, event: EventData) => {
   try {
     await runTransaction(db, async (transaction) => {
-      // A. Reference to Studio Document (for Invoice Counters)
       const studioRef = doc(db, "Studios", studioId);
       const studioDoc = await transaction.get(studioRef);
       
@@ -109,30 +126,23 @@ export const createEvent = async (studioId: string, event: EventData) => {
       const nextStr = data.invoice_next || "00001";
       const currentInt = data.invoice_current || 0;
 
-      // B. Generate New ID
-      const customId = `${invoiceText}${nextStr}`; // e.g., OMG00002
-
-      // C. Calculate Next Sequence
+      const customId = `${invoiceText}${nextStr}`; 
       const nextInt = parseInt(nextStr, 10);
       const newNextStr = String(nextInt + 1).padStart(5, '0');
 
-      // D. Create Event Reference (Using Custom ID as Doc ID or Auto ID? Using Custom ID is cleaner for URLs)
-      // Let's use Auto ID for Firestore Doc ID to prevent collisions if configs reset, but store customId as field.
       const newEventRef = doc(collection(db, "Studios", studioId, "Events"));
 
-      // E. Write Event
       transaction.set(newEventRef, {
         ...event,
-        displayId: customId, // Store the readable ID
+        displayId: customId, 
         createdAt: serverTimestamp()
       });
 
-      // F. Update Studio Counters
       transaction.update(studioRef, {
-        invoice_last: currentInt, // Move current to last
-        invoice_current: nextInt, // Set new current
-        invoice_number: nextStr,  // Set string representation
-        invoice_next: newNextStr  // Prepare for next
+        invoice_last: currentInt, 
+        invoice_current: nextInt, 
+        invoice_number: nextStr,  
+        invoice_next: newNextStr  
       });
     });
   } catch (error) {
@@ -166,7 +176,7 @@ export const deleteEvent = async (studioId: string, eventId: string) => {
 // 6. Fetch All Events
 export const fetchEvents = async (studioId: string) => {
     const ref = collection(db, "Studios", studioId, "Events");
-    const q = query(ref, orderBy("createdAt", "desc")); // Changed to createdAt for consistency
+    const q = query(ref, orderBy("createdAt", "desc"));
     const snap = await getDocs(q);
     
     return snap.docs.map(d => {
