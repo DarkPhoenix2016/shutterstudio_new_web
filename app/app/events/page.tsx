@@ -22,11 +22,10 @@ import { Textarea } from "@/components/ui/textarea"
 import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
 
 // Icons
-import { Plus, Calendar as CalendarIcon, MapPin, Users, Search, Loader2, Package, Check, AlertCircle } from "lucide-react"
+import { Plus, Calendar as CalendarIcon, MapPin, Users, Search, Loader2, Package, AlertCircle } from "lucide-react"
 import { format } from "date-fns"
 import { cn } from "@/lib/utils"
 import Swal from "sweetalert2"
@@ -80,6 +79,7 @@ export default function EventsPage() {
 
   return (
     <div className="space-y-6 p-6 animate-in fade-in duration-500">
+      {/* HEADER */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h1 className="text-3xl font-bold text-[#0F2854]">Events</h1>
@@ -96,9 +96,9 @@ export default function EventsPage() {
         </div>
       </div>
 
+      {/* EVENTS GRID */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
         {filteredEvents.map((event) => {
-            // Check completeness
             const isIncomplete = (!event.assignedCrew?.length || !event.assignedEquipment?.length) && event.status !== 'Inquiry';
             
             return (
@@ -108,7 +108,6 @@ export default function EventsPage() {
                     onClick={() => router.push(`/app/events/${event.id}`)}
                 >
                     <div className="h-32 bg-slate-100 relative">
-                        {/* Simplified Image Placeholder */}
                         <div className="w-full h-full flex items-center justify-center text-slate-300">
                             <CalendarIcon className="h-10 w-10" />
                         </div>
@@ -143,28 +142,27 @@ export default function EventsPage() {
         })}
       </div>
 
+      {/* CREATE EVENT FORM (Responsive Wrapper) */}
       {isDesktop ? (
         <Sheet open={isFormOpen} onOpenChange={setIsFormOpen}>
-            <SheetContent className="w-[600px] sm:w-[600px] p-0 flex flex-col h-full">
-                <SheetHeader className="p-6 pb-2">
+            <SheetContent className="w-[600px] sm:w-[600px] p-0 flex flex-col h-full border-l shadow-2xl">
+                <SheetHeader className="px-6 py-4 border-b bg-white shrink-0">
                     <SheetTitle>New Event</SheetTitle>
                     <SheetDescription>Create a new inquiry or schedule an event.</SheetDescription>
                 </SheetHeader>
-                <ScrollArea className="flex-1 px-6">
-                    <EventForm onSuccess={() => { setIsFormOpen(false); loadData(); }} onCancel={() => setIsFormOpen(false)} />
-                </ScrollArea>
+                {/* Form Component Handles the rest */}
+                <EventForm onSuccess={() => { setIsFormOpen(false); loadData(); }} onCancel={() => setIsFormOpen(false)} />
             </SheetContent>
         </Sheet>
       ) : (
         <Drawer open={isFormOpen} onOpenChange={setIsFormOpen}>
-            <DrawerContent className="h-[95vh] flex flex-col">
-                <DrawerHeader className="text-left">
+            <DrawerContent className="h-[95vh] flex flex-col p-0 rounded-t-xl">
+                <DrawerHeader className="px-6 py-4 border-b bg-white text-left shrink-0">
                     <DrawerTitle>New Event</DrawerTitle>
                     <DrawerDescription>Create a new inquiry or schedule an event.</DrawerDescription>
                 </DrawerHeader>
-                <ScrollArea className="flex-1 px-4">
-                    <EventForm onSuccess={() => { setIsFormOpen(false); loadData(); }} onCancel={() => setIsFormOpen(false)} />
-                </ScrollArea>
+                {/* Form Component Handles the rest */}
+                <EventForm onSuccess={() => { setIsFormOpen(false); loadData(); }} onCancel={() => setIsFormOpen(false)} />
             </DrawerContent>
         </Drawer>
       )}
@@ -172,7 +170,7 @@ export default function EventsPage() {
   )
 }
 
-// --- COMPLEX FORM COMPONENT ---
+// --- SUB-COMPONENT: EVENT FORM ---
 function EventForm({ onSuccess, onCancel }: { onSuccess: () => void, onCancel: () => void }) {
     const { userData } = useAuth()
     const [submitting, setSubmitting] = useState(false)
@@ -228,7 +226,6 @@ function EventForm({ onSuccess, onCancel }: { onSuccess: () => void, onCancel: (
         if (newCount > currentDays.length) {
             // Add days
             for(let i = currentDays.length; i < newCount; i++) {
-                // Default next date to prev date + 1
                 const prevDate = new Date(currentDays[i-1].date);
                 prevDate.setDate(prevDate.getDate() + 1);
                 currentDays.push({ date: prevDate, type: 'package', cost: 0 });
@@ -245,7 +242,6 @@ function EventForm({ onSuccess, onCancel }: { onSuccess: () => void, onCancel: (
         const newDays = [...(formData.days || [])];
         newDays[index] = { ...newDays[index], ...updates };
         
-        // Auto-update cost if package selected
         if (updates.packageId && updates.type !== 'custom') {
             const pkg = packages.find(p => p.id === updates.packageId);
             if (pkg) newDays[index].cost = Number(pkg.price || 0);
@@ -282,180 +278,189 @@ function EventForm({ onSuccess, onCancel }: { onSuccess: () => void, onCancel: (
     if (!loaded) return <div className="p-8 text-center text-slate-400">Loading configurations...</div>
 
     return (
-        <div className="space-y-8 py-4 pb-20">
+        <div className="flex flex-col h-full overflow-hidden">
             
-            {/* 1. CUSTOMER INFO */}
-            <div className="space-y-4">
-                <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Customer Information</h3>
-                <div className="space-y-3">
-                    <div className="space-y-1">
-                        <Label>Customer Name <span className="text-red-500">*</span></Label>
-                        <Input value={formData.customerName} onChange={e => setFormData({...formData, customerName: e.target.value})} className="bg-slate-50" />
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
+            {/* --- SCROLLABLE CONTENT --- */}
+            {/* [!code highlight] Added hidden scrollbar classes */}
+            <div className="flex-1 overflow-y-auto px-6 py-6 space-y-8 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+                
+                {/* 1. CUSTOMER INFO */}
+                <div className="space-y-4">
+                    <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Customer Information</h3>
+                    <div className="space-y-3">
                         <div className="space-y-1">
-                            <Label>Mobile</Label>
-                            <Input value={formData.customerMobile} onChange={e => setFormData({...formData, customerMobile: e.target.value})} className="bg-slate-50" />
+                            <Label>Customer Name <span className="text-red-500">*</span></Label>
+                            <Input value={formData.customerName} onChange={e => setFormData({...formData, customerName: e.target.value})} className="bg-slate-50" />
                         </div>
-                        <div className="space-y-1">
-                            <Label>Email</Label>
-                            <Input value={formData.customerEmail} onChange={e => setFormData({...formData, customerEmail: e.target.value})} className="bg-slate-50" />
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            {/* 2. EVENT META */}
-            <div className="space-y-4">
-                <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Event Basics</h3>
-                <div className="space-y-3">
-                    <div className="space-y-1">
-                        <Label>Event Name <span className="text-red-500">*</span></Label>
-                        <Input placeholder="e.g. Rajitha & Randini Wedding" value={formData.eventName} onChange={e => setFormData({...formData, eventName: e.target.value})} className="bg-slate-50" />
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
-                        <div className="space-y-1">
-                            <Label>Type</Label>
-                            <Select value={formData.eventType} onValueChange={v => setFormData({...formData, eventType: v})}>
-                                <SelectTrigger className="bg-slate-50"><SelectValue placeholder="Select type"/></SelectTrigger>
-                                <SelectContent>
-                                    {typeList.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
-                                </SelectContent>
-                            </Select>
-                        </div>
-                        <div className="space-y-1">
-                            <Label>Status</Label>
-                            <Select value={formData.status} onValueChange={(v:any) => setFormData({...formData, status: v})}>
-                                <SelectTrigger className="bg-slate-50"><SelectValue/></SelectTrigger>
-                                <SelectContent>
-                                    {statusList.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-                                </SelectContent>
-                            </Select>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            {/* 3. SCHEDULE & PRICING */}
-            <div className="space-y-4">
-                <div className="flex justify-between items-center">
-                    <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Schedule & Packages</h3>
-                    <div className="flex items-center gap-2">
-                        <Label className="text-xs">Duration (Days)</Label>
-                        <Input 
-                            type="number" min="1" max="7" 
-                            className="w-16 h-8 text-center bg-slate-50" 
-                            value={formData.dayCount} 
-                            onChange={e => handleDayCountChange(Number(e.target.value))} 
-                        />
-                    </div>
-                </div>
-
-                <Tabs defaultValue="day-0" className="w-full">
-                    <TabsList className="w-full justify-start overflow-x-auto h-auto p-1 bg-slate-100">
-                        {formData.days?.map((_, i) => (
-                            <TabsTrigger key={i} value={`day-${i}`} className="px-4 py-2 text-xs">Day {i + 1}</TabsTrigger>
-                        ))}
-                    </TabsList>
-                    
-                    {formData.days?.map((day, i) => (
-                        <TabsContent key={i} value={`day-${i}`} className="border rounded-md p-4 mt-2 space-y-4 bg-white">
+                        <div className="grid grid-cols-2 gap-3">
                             <div className="space-y-1">
-                                <Label>Date for Day {i + 1}</Label>
-                                <div className="border rounded-md p-2 bg-slate-50">
-                                    <Popover>
-                                        <PopoverTrigger asChild>
-                                            <Button variant="outline" className="w-full justify-start text-left font-normal bg-white h-9">
-                                                <CalendarIcon className="mr-2 h-4 w-4" />
-                                                {day.date ? format(day.date, "PPP") : <span>Pick a date</span>}
-                                            </Button>
-                                        </PopoverTrigger>
-                                        <PopoverContent className="w-auto p-0">
-                                            <Calendar
-                                                mode="single"
-                                                selected={day.date}
-                                                onSelect={(d) => d && updateDayConfig(i, { date: d })}
-                                                initialFocus
-                                            />
-                                        </PopoverContent>
-                                    </Popover>
-                                </div>
+                                <Label>Mobile</Label>
+                                <Input value={formData.customerMobile} onChange={e => setFormData({...formData, customerMobile: e.target.value})} className="bg-slate-50" />
                             </div>
-
-                            <Tabs defaultValue={day.type} onValueChange={(v:any) => updateDayConfig(i, { type: v })} className="w-full">
-                                <TabsList className="w-full grid grid-cols-2">
-                                    <TabsTrigger value="package">Catalogue Package</TabsTrigger>
-                                    <TabsTrigger value="custom">Custom Plan</TabsTrigger>
-                                </TabsList>
-                                
-                                <TabsContent value="package" className="pt-2 space-y-3">
-                                    <div className="space-y-1">
-                                        <Label>Select Package</Label>
-                                        <Select value={day.packageId} onValueChange={(v) => updateDayConfig(i, { packageId: v })}>
-                                            <SelectTrigger><SelectValue placeholder="Choose from catalogue..." /></SelectTrigger>
-                                            <SelectContent>
-                                                {packages.map(p => (
-                                                    <SelectItem key={p.id} value={p.id}>
-                                                        {p.name} - LKR {p.price}
-                                                    </SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
-                                    </div>
-                                    <div className="bg-blue-50 p-2 rounded text-xs text-blue-700 flex justify-between">
-                                        <span>Base Price:</span>
-                                        <span className="font-bold">LKR {day.cost || 0}</span>
-                                    </div>
-                                </TabsContent>
-
-                                <TabsContent value="custom" className="pt-2 space-y-3">
-                                    <div className="space-y-1">
-                                        <Label>Custom Cost Estimate</Label>
-                                        <Input type="number" value={day.cost} onChange={(e) => updateDayConfig(i, { cost: Number(e.target.value) })} />
-                                    </div>
-                                    <div className="text-xs text-slate-400">
-                                        * Define custom deliverables later in the specific plan section.
-                                    </div>
-                                </TabsContent>
-                            </Tabs>
-                        </TabsContent>
-                    ))}
-                </Tabs>
-
-                {/* FINANCIAL SUMMARY */}
-                <div className="bg-slate-50 p-4 rounded-lg space-y-3 border">
-                    <div className="flex justify-between text-sm">
-                        <span className="text-slate-600">Total Budget (All Days)</span>
-                        <span className="font-semibold">LKR {financials.total.toLocaleString()}</span>
+                            <div className="space-y-1">
+                                <Label>Email</Label>
+                                <Input value={formData.customerEmail} onChange={e => setFormData({...formData, customerEmail: e.target.value})} className="bg-slate-50" />
+                            </div>
+                        </div>
                     </div>
-                    <div className="flex justify-between items-center text-sm">
-                        <span className="text-slate-600">Discount</span>
-                        <div className="w-24">
+                </div>
+
+                {/* 2. EVENT META */}
+                <div className="space-y-4">
+                    <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Event Basics</h3>
+                    <div className="space-y-3">
+                        <div className="space-y-1">
+                            <Label>Event Name <span className="text-red-500">*</span></Label>
+                            <Input placeholder="e.g. Rajitha & Randini Wedding" value={formData.eventName} onChange={e => setFormData({...formData, eventName: e.target.value})} className="bg-slate-50" />
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                            <div className="space-y-1">
+                                <Label>Type</Label>
+                                <Select value={formData.eventType} onValueChange={v => setFormData({...formData, eventType: v})}>
+                                    <SelectTrigger className="bg-slate-50"><SelectValue placeholder="Select type"/></SelectTrigger>
+                                    <SelectContent>
+                                        {typeList.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className="space-y-1">
+                                <Label>Status</Label>
+                                <Select value={formData.status} onValueChange={(v:any) => setFormData({...formData, status: v})}>
+                                    <SelectTrigger className="bg-slate-50"><SelectValue/></SelectTrigger>
+                                    <SelectContent>
+                                        {statusList.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* 3. SCHEDULE & PRICING */}
+                <div className="space-y-4">
+                    <div className="flex justify-between items-center">
+                        <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Schedule & Packages</h3>
+                        <div className="flex items-center gap-2">
+                            <Label className="text-xs">Duration (Days)</Label>
                             <Input 
-                                type="number" 
-                                className="h-7 text-right" 
-                                placeholder="0" 
-                                value={formData.discount} 
-                                onChange={e => setFormData({...formData, discount: Number(e.target.value)})} 
+                                type="number" min="1" max="7" 
+                                className="w-16 h-8 text-center bg-slate-50" 
+                                value={formData.dayCount} 
+                                onChange={e => handleDayCountChange(Number(e.target.value))} 
                             />
                         </div>
                     </div>
-                    <Separator className="bg-slate-300"/>
-                    <div className="flex justify-between text-base font-bold text-[#1C4D8D]">
-                        <span>Sub Total</span>
-                        <span>LKR {financials.subTotal.toLocaleString()}</span>
+
+                    <Tabs defaultValue="day-0" className="w-full">
+                        <TabsList className="w-full justify-start overflow-x-auto h-auto p-1 bg-slate-100">
+                            {formData.days?.map((_, i) => (
+                                <TabsTrigger key={i} value={`day-${i}`} className="px-4 py-2 text-xs">Day {i + 1}</TabsTrigger>
+                            ))}
+                        </TabsList>
+                        
+                        {formData.days?.map((day, i) => (
+                            <TabsContent key={i} value={`day-${i}`} className="border rounded-md p-4 mt-2 space-y-4 bg-white">
+                                <div className="space-y-1">
+                                    <Label>Date for Day {i + 1}</Label>
+                                    <div className="border rounded-md p-2 bg-slate-50">
+                                        <Popover>
+                                            <PopoverTrigger asChild>
+                                                <Button variant="outline" className="w-full justify-start text-left font-normal bg-white h-9">
+                                                    <CalendarIcon className="mr-2 h-4 w-4" />
+                                                    {day.date ? format(day.date, "PPP") : <span>Pick a date</span>}
+                                                </Button>
+                                            </PopoverTrigger>
+                                            <PopoverContent className="w-auto p-0">
+                                                <Calendar
+                                                    mode="single"
+                                                    selected={day.date}
+                                                    onSelect={(d) => d && updateDayConfig(i, { date: d })}
+                                                    initialFocus
+                                                />
+                                            </PopoverContent>
+                                        </Popover>
+                                    </div>
+                                </div>
+
+                                <Tabs defaultValue={day.type} onValueChange={(v:any) => updateDayConfig(i, { type: v })} className="w-full">
+                                    <TabsList className="w-full grid grid-cols-2">
+                                        <TabsTrigger value="package">Catalogue Package</TabsTrigger>
+                                        <TabsTrigger value="custom">Custom Plan</TabsTrigger>
+                                    </TabsList>
+                                    
+                                    <TabsContent value="package" className="pt-2 space-y-3">
+                                        <div className="space-y-1">
+                                            <Label>Select Package</Label>
+                                            <Select value={day.packageId} onValueChange={(v) => updateDayConfig(i, { packageId: v })}>
+                                                <SelectTrigger><SelectValue placeholder="Choose from catalogue..." /></SelectTrigger>
+                                                <SelectContent>
+                                                    {packages.map(p => (
+                                                        <SelectItem key={p.id} value={p.id}>
+                                                            {p.name} - LKR {p.price}
+                                                        </SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                        <div className="bg-blue-50 p-2 rounded text-xs text-blue-700 flex justify-between">
+                                            <span>Base Price:</span>
+                                            <span className="font-bold">LKR {day.cost || 0}</span>
+                                        </div>
+                                    </TabsContent>
+
+                                    <TabsContent value="custom" className="pt-2 space-y-3">
+                                        <div className="space-y-1">
+                                            <Label>Custom Cost Estimate</Label>
+                                            <Input type="number" value={day.cost} onChange={(e) => updateDayConfig(i, { cost: Number(e.target.value) })} />
+                                        </div>
+                                        <div className="text-xs text-slate-400">
+                                            * Define custom deliverables later in the specific plan section.
+                                        </div>
+                                    </TabsContent>
+                                </Tabs>
+                            </TabsContent>
+                        ))}
+                    </Tabs>
+
+                    {/* FINANCIAL SUMMARY */}
+                    <div className="bg-slate-50 p-4 rounded-lg space-y-3 border">
+                        <div className="flex justify-between text-sm">
+                            <span className="text-slate-600">Total Budget (All Days)</span>
+                            <span className="font-semibold">LKR {financials.total.toLocaleString()}</span>
+                        </div>
+                        <div className="flex justify-between items-center text-sm">
+                            <span className="text-slate-600">Discount</span>
+                            <div className="w-24">
+                                <Input 
+                                    type="number" 
+                                    className="h-7 text-right" 
+                                    placeholder="0" 
+                                    value={formData.discount} 
+                                    onChange={e => setFormData({...formData, discount: Number(e.target.value)})} 
+                                />
+                            </div>
+                        </div>
+                        <Separator className="bg-slate-300"/>
+                        <div className="flex justify-between text-base font-bold text-[#1C4D8D]">
+                            <span>Sub Total</span>
+                            <span>LKR {financials.subTotal.toLocaleString()}</span>
+                        </div>
                     </div>
                 </div>
+
+                {/* 4. OTHER INFO */}
+                <div className="space-y-2">
+                    <Label>Additional Information</Label>
+                    <Textarea placeholder="Any specific requirements or notes..." value={formData.notes} onChange={e => setFormData({...formData, notes: e.target.value})} className="bg-slate-50" />
+                </div>
+                
+                {/* Spacer to ensure content doesn't get hidden behind footer on small screens if needed */}
+                <div className="h-4"></div>
             </div>
 
-            {/* 4. OTHER INFO */}
-            <div className="space-y-2">
-                <Label>Additional Information</Label>
-                <Textarea placeholder="Any specific requirements or notes..." value={formData.notes} onChange={e => setFormData({...formData, notes: e.target.value})} className="bg-slate-50" />
-            </div>
-
-            {/* ACTIONS */}
-            <div className="flex gap-3 pt-2">
+            {/* --- FIXED FOOTER --- */}
+            {/* [!code highlight] Fixed Footer implementation */}
+            <div className="p-4 border-t bg-white flex gap-3 shrink-0 mt-auto">
                 <Button variant="outline" className="flex-1" onClick={onCancel}>Cancel</Button>
                 <Button className="bg-[#1C4D8D] flex-1" onClick={handleSubmit} disabled={submitting}>
                     {submitting ? <Loader2 className="animate-spin h-4 w-4 mr-2"/> : "Create Event"}
