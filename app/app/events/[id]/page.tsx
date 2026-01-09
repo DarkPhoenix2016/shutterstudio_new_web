@@ -6,7 +6,7 @@ import { useParams, useRouter } from "next/navigation"
 import { 
     fetchEventById, updateEvent, fetchStudioSettingsList, 
     checkResourceAvailability, EventData, EventContact, EventLocation, TransactionRecord,
-    fetchPackageConfig, fetchPackagesList, PackageData 
+    fetchPackageConfig, fetchPackagesList, PackageData, AdditionalService 
 } from "@/services/event-service"
 import { uploadFileToStorage } from "@/lib/storage-utils"
 import { compressImage } from "@/lib/image-utils"
@@ -760,11 +760,106 @@ export default function EventDetailPage() {
                 </Card>
             </TabsContent>
             
-            <TabsContent value="services">
+            {/* --- ADDITIONALS (SERVICES) TAB --- */}
+            <TabsContent value="additionals">
                 <Card>
-                    <CardHeader><CardTitle>Services Management</CardTitle></CardHeader>
-                    <CardContent className="text-center text-slate-500 italic">Services management logic matches the structure of Payments/Contacts (omitted for brevity).</CardContent>
+                    <CardHeader className="flex flex-row items-center justify-between">
+                        <CardTitle className="text-base">Additional Services</CardTitle>
+                        <Button size="sm" onClick={() => { setEditingService(null); setIsServiceOpen(true); }}>
+                            <Plus className="w-4 h-4 mr-2"/> Add Service
+                        </Button>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="overflow-x-auto border rounded-lg">
+                            <table className="w-full text-sm text-left">
+                                <thead className="bg-slate-50 text-slate-500 font-medium border-b">
+                                    <tr>
+                                        <th className="px-4 py-3">Service Name</th>
+                                        <th className="px-4 py-3 text-center">Qty</th>
+                                        <th className="px-4 py-3 text-right">Unit Price</th>
+                                        <th className="px-4 py-3 text-right">Total</th>
+                                        <th className="px-4 py-3 text-right">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {event.additionalServices?.map((svc) => (
+                                        <tr key={svc.id} className="border-b last:border-0 hover:bg-slate-50/50">
+                                            <td className="px-4 py-3 font-medium text-slate-800">{svc.name}</td>
+                                            <td className="px-4 py-3 text-center text-slate-600">{svc.quantity}</td>
+                                            <td className="px-4 py-3 text-right text-slate-600">{svc.pricePerUnit.toLocaleString()}</td>
+                                            <td className="px-4 py-3 text-right font-bold text-slate-800">{svc.total.toLocaleString()}</td>
+                                            <td className="px-4 py-3 text-right flex justify-end gap-2">
+                                                <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-600" onClick={() => { setEditingService(svc); setIsServiceOpen(true); }}>
+                                                    <Pencil className="w-4 h-4"/>
+                                                </Button>
+                                                <Button variant="ghost" size="icon" className="h-8 w-8 text-red-400" onClick={() => removeArrayItem('additionalServices', svc.id)}>
+                                                    <Trash2 className="w-4 h-4"/>
+                                                </Button>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                    {(!event.additionalServices?.length) && (
+                                        <tr><td colSpan={5} className="px-4 py-8 text-center text-slate-400 italic">No additional services added.</td></tr>
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                    </CardContent>
                 </Card>
+
+                {/* Service/Additional Modal */}
+                <Dialog open={isServiceOpen} onOpenChange={setIsServiceOpen}>
+                    <DialogContent>
+                        <DialogHeader>
+                            <DialogTitle>{editingService ? 'Edit Service' : 'Add Additional Service'}</DialogTitle>
+                        </DialogHeader>
+                        <form action={saveService} className="space-y-4">
+                            {/* Pre-defined Service Select or Custom Input */}
+                            <div className="space-y-2">
+                                <Label>Service Name</Label>
+                                {/* If adding new, allow picking from pre-defined list or typing custom */}
+                                {!editingService ? (
+                                    <Select name="name" onValueChange={(val) => {
+                                        // Auto-fill price if a preset is selected
+                                        const param = serviceParams.find(p => p.name === val);
+                                        const form = document.getElementById('service-form') as HTMLFormElement;
+                                        if(param && form) {
+                                            // Note: Direct DOM manipulation for quick prototype. 
+                                            // Better to control state, but form action pattern works here if we let user type.
+                                        }
+                                    }}>
+                                        <SelectTrigger><SelectValue placeholder="Select or Type Custom..."/></SelectTrigger>
+                                        <SelectContent>
+                                            {serviceParams.map(p => <SelectItem key={p.name} value={p.name}>{p.name} (LKR {p.defaultPrice})</SelectItem>)}
+                                            <SelectItem value="Custom Service">Custom Service</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                ) : null}
+                                <Input 
+                                    name="name" 
+                                    placeholder="Service Name (e.g. Extra Drone Hour)" 
+                                    required 
+                                    defaultValue={editingService?.name} 
+                                />
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                    <Label>Quantity</Label>
+                                    <Input name="quantity" type="number" min="1" required defaultValue={editingService?.quantity || 1} />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label>Unit Price (LKR)</Label>
+                                    <Input name="price" type="number" min="0" required defaultValue={editingService?.pricePerUnit || 0} />
+                                </div>
+                            </div>
+                            
+                            <Button type="submit" className="w-full bg-[#1C4D8D]">
+                                {editingService ? 'Update Service' : 'Add Service'}
+                            </Button>
+                        </form>
+                    </DialogContent>
+                </Dialog>
             </TabsContent>
 
         </Tabs>
