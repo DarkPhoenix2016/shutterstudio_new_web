@@ -7,6 +7,8 @@ import {
     fetchEvents, createEvent, fetchStudioSettingsList, fetchPackagesList, 
     EventData, EventDayConfig, CustomItem 
 } from "@/lib/event-service"
+// [!code highlight] Import Validation Service
+import { validateSubscriptionAction } from "@/lib/subscription-service"
 import { useMediaQuery } from "@/hooks/use-media-query"
 
 // UI
@@ -30,7 +32,6 @@ import { format } from "date-fns"
 import { cn } from "@/lib/utils"
 import Swal from "sweetalert2"
 
-// Defaults
 const DEFAULT_TYPES = ["Wedding", "Homecoming", "Preshoot", "Engagement", "Birthday", "Corporate", "Other"];
 const DEFAULT_STATUSES = ["Inquiry", "Tentative", "Confirmed", "Completed", "Cancelled"];
 
@@ -142,10 +143,8 @@ export default function EventsPage() {
         })}
       </div>
 
-      {/* CREATE EVENT FORM (Responsive Wrapper) */}
       {isDesktop ? (
         <Sheet open={isFormOpen} onOpenChange={setIsFormOpen}>
-            {/* [!code highlight] Increased width to 800px */}
             <SheetContent className="w-full sm:max-w-[800px] p-0 flex flex-col h-full border-l shadow-2xl">
                 <SheetHeader className="px-6 py-4 border-b bg-white shrink-0">
                     <SheetTitle>New Event</SheetTitle>
@@ -169,7 +168,6 @@ export default function EventsPage() {
   )
 }
 
-// --- SUB-COMPONENT: EVENT FORM ---
 function EventForm({ onSuccess, onCancel }: { onSuccess: () => void, onCancel: () => void }) {
     const { userData } = useAuth()
     const [submitting, setSubmitting] = useState(false)
@@ -186,7 +184,6 @@ function EventForm({ onSuccess, onCancel }: { onSuccess: () => void, onCancel: (
         eventName: "", eventType: "", status: "Inquiry",
         dayCount: 1,
         days: [{ date: new Date(), type: 'package', cost: 0, customItems: [] }],
-        // [!code highlight] Discount defaults
         discountType: 'fixed',
         discount: 0,
         notes: ""
@@ -211,7 +208,6 @@ function EventForm({ onSuccess, onCancel }: { onSuccess: () => void, onCancel: (
         init()
     }, [userData])
 
-    // [!code highlight] Updated Financial Logic
     const financials = useMemo(() => {
         const total = (formData.days || []).reduce((acc, day) => acc + (day.cost || 0), 0);
         let discountAmount = 0;
@@ -226,11 +222,11 @@ function EventForm({ onSuccess, onCancel }: { onSuccess: () => void, onCancel: (
         return { total, discountAmount, subTotal };
     }, [formData.days, formData.discount, formData.discountType])
 
-    // --- DAY HANDLERS ---
+    // ... (Handlers: handleDayCountChange, updateDayConfig, addCustomItem, etc. same as previous code) ...
+    // Keeping code concise, assuming these handler functions exist exactly as in the previous response
     const handleDayCountChange = (count: number) => {
         const newCount = Math.max(1, count);
         const currentDays = [...(formData.days || [])];
-        
         if (newCount > currentDays.length) {
             for(let i = currentDays.length; i < newCount; i++) {
                 const prevDate = new Date(currentDays[i-1].date);
@@ -246,21 +242,17 @@ function EventForm({ onSuccess, onCancel }: { onSuccess: () => void, onCancel: (
     const updateDayConfig = (index: number, updates: Partial<EventDayConfig>) => {
         const newDays = [...(formData.days || [])];
         const updatedDay = { ...newDays[index], ...updates };
-        
         if (updates.packageId && updatedDay.type === 'package') {
             const pkg = packages.find(p => p.id === updates.packageId);
             if (pkg) updatedDay.cost = Number(pkg.price || 0);
         }
-        
         if (updates.customItems && updatedDay.type === 'custom') {
             updatedDay.cost = updates.customItems.reduce((sum, item) => sum + (item.price || 0), 0);
         }
-
         newDays[index] = updatedDay;
         setFormData({ ...formData, days: newDays });
     }
 
-    // --- CUSTOM ITEM HANDLERS ---
     const addCustomItem = (dayIndex: number) => {
         const day = formData.days![dayIndex];
         const newItems = [...(day.customItems || []), { name: "", quantity: 1, unit: "", price: 0 }];
@@ -285,6 +277,18 @@ function EventForm({ onSuccess, onCancel }: { onSuccess: () => void, onCancel: (
         if(!formData.eventName || !formData.customerName) return Swal.fire({ icon: 'warning', title: 'Missing Name fields' });
 
         setSubmitting(true);
+        
+        // [!code highlight] 1. Check Subscription Limits
+        const limitCheck = await validateSubscriptionAction(userData.studioID, 'create_event');
+        if (!limitCheck.allowed) {
+            setSubmitting(false);
+            return Swal.fire({ 
+                icon: 'error', 
+                title: 'Limit Reached', 
+                text: limitCheck.message || "You have reached your event limit." 
+            });
+        }
+
         try {
             await createEvent(userData.studioID, {
                 ...formData,
@@ -309,7 +313,6 @@ function EventForm({ onSuccess, onCancel }: { onSuccess: () => void, onCancel: (
 
     return (
         <div className="flex flex-col h-full overflow-hidden">
-            
             {/* SCROLLABLE CONTENT */}
             <div className="flex-1 overflow-y-auto px-6 py-6 space-y-8 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
                 
@@ -451,7 +454,6 @@ function EventForm({ onSuccess, onCancel }: { onSuccess: () => void, onCancel: (
                         ))}
                     </Tabs>
 
-                    {/* [!code highlight] Updated Financial Summary with Discount Toggle */}
                     <div className="bg-slate-50 p-4 rounded-lg space-y-3 border">
                         <div className="flex justify-between text-sm">
                             <span className="text-slate-600">Total Budget</span>
@@ -499,7 +501,6 @@ function EventForm({ onSuccess, onCancel }: { onSuccess: () => void, onCancel: (
                 </div>
             </div>
 
-            {/* FIXED FOOTER */}
             <div className="p-4 border-t bg-white flex gap-3 shrink-0 mt-auto">
                 <Button variant="outline" className="flex-1" onClick={onCancel}>Cancel</Button>
                 <Button className="bg-[#1C4D8D] flex-1" onClick={handleSubmit} disabled={submitting}>
