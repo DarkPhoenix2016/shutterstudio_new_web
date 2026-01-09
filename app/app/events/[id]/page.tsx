@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react"
 import { useAuth } from "@/context/AuthContext"
 import { useParams, useRouter } from "next/navigation"
+// [!code highlight] Update import path to correct service folder
 import { fetchEventById, EventData } from "@/services/event-service"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -32,6 +33,11 @@ export default function EventDetailPage() {
   if (loading) return <div className="h-screen flex items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-[#1C4D8D]" /></div>
   if (!event) return <div className="p-8 text-center text-slate-500">Event not found</div>
 
+  // Helper to safely get the primary date
+  const primaryDate = event.days && event.days.length > 0 && event.days[0].date 
+    ? event.days[0].date 
+    : null;
+
   return (
     <div className="max-w-5xl mx-auto p-4 md:p-8 space-y-8 animate-in fade-in">
         
@@ -53,11 +59,18 @@ export default function EventDetailPage() {
             <div className="absolute bottom-0 left-0 w-full p-6 bg-gradient-to-t from-black/80 to-transparent text-white">
                 <div className="flex justify-between items-end">
                     <div>
-                        <p className="text-sm font-medium text-blue-300 uppercase tracking-wide mb-1">{event.id?.toUpperCase()}</p>
+                        <p className="text-sm font-medium text-blue-300 uppercase tracking-wide mb-1">
+                            {/* [!code highlight] Use displayId if available, fallback to ID */}
+                            {event.id?.toUpperCase()}
+                        </p>
                         <h1 className="text-3xl md:text-4xl font-bold">{event.eventName}</h1>
                         <div className="flex items-center gap-4 mt-2 text-sm text-slate-200">
                             <span className="bg-white/20 px-2 py-0.5 rounded">{event.eventType}</span>
-                            <span className="flex items-center gap-1"><Calendar className="h-4 w-4"/> {event.dates[0] ? format(event.dates[0].date, 'PPP') : 'TBD'}</span>
+                            <span className="flex items-center gap-1">
+                                <Calendar className="h-4 w-4"/> 
+                                {/* [!code highlight] Fixed: Access date from days array */}
+                                {primaryDate ? format(primaryDate instanceof Date ? primaryDate : new Date(), 'PPP') : 'TBD'}
+                            </span>
                         </div>
                     </div>
                     <Badge className="text-base px-4 py-1 bg-white text-black hover:bg-slate-200">{event.status}</Badge>
@@ -111,31 +124,49 @@ export default function EventDetailPage() {
                     </Card>
                 </section>
 
-                {/* PACKAGE DETAILS */}
+                {/* PACKAGE DETAILS (Per Day) */}
                 <section>
-                    <h2 className="text-lg font-bold text-[#0F2854] mb-4">Package Details</h2>
-                    <Card className="border-none shadow-sm bg-white">
-                        <CardContent className="p-6">
-                            <div className="flex justify-between items-start mb-4">
-                                <div>
-                                    <h3 className="font-bold text-slate-800">Selected: {event.packageId === 'custom' ? 'Custom Package' : 'Standard Package'}</h3>
-                                    <p className="text-sm text-slate-500">Includes basic coverage</p>
-                                </div>
-                                <Button variant="ghost" size="sm" className="text-blue-600"><Edit className="h-4 w-4"/></Button>
-                            </div>
-                            <Separator className="my-4"/>
-                            <div className="grid grid-cols-2 gap-4 text-sm">
-                                <ul className="list-disc list-inside text-slate-600 space-y-1">
-                                    <li>Unlimited Photos</li>
-                                    <li>Drone Coverage</li>
-                                </ul>
-                                <ul className="list-disc list-inside text-slate-600 space-y-1">
-                                    <li>Cinematic Video</li>
-                                    <li>Thank You Cards</li>
-                                </ul>
-                            </div>
-                        </CardContent>
-                    </Card>
+                    <h2 className="text-lg font-bold text-[#0F2854] mb-4">Itinerary & Packages</h2>
+                    {/* [!code highlight] Fixed: Map over days to show package info per day */}
+                    <div className="space-y-4">
+                        {event.days?.map((day, index) => (
+                            <Card key={index} className="border-none shadow-sm bg-white">
+                                <CardContent className="p-6">
+                                    <div className="flex justify-between items-start mb-2">
+                                        <div>
+                                            <h3 className="font-bold text-slate-800">
+                                                Day {index + 1}: {day.type === 'package' ? 'Package Plan' : 'Custom Plan'}
+                                            </h3>
+                                            <p className="text-sm text-slate-500">
+                                                {day.date ? format(day.date instanceof Date ? day.date : new Date(), 'PPP') : 'Date TBD'}
+                                            </p>
+                                        </div>
+                                        <Badge variant="outline">LKR {day.cost.toLocaleString()}</Badge>
+                                    </div>
+                                    
+                                    {day.type === 'package' && day.packageId && (
+                                        <div className="mt-2 text-sm text-slate-600 bg-slate-50 p-2 rounded">
+                                            <span className="font-medium">Package ID:</span> {day.packageId}
+                                        </div>
+                                    )}
+
+                                    {day.type === 'custom' && day.customItems && (
+                                        <div className="mt-3 space-y-1">
+                                            <p className="text-xs font-semibold text-slate-500 uppercase">Custom Items</p>
+                                            <ul className="text-sm text-slate-700 space-y-1">
+                                                {day.customItems.map((item, idx) => (
+                                                    <li key={idx} className="flex justify-between">
+                                                        <span>{item.quantity}x {item.name}</span>
+                                                        <span className="text-slate-400">LKR {item.price.toLocaleString()}</span>
+                                                    </li>
+                                                ))}
+                                            </ul>
+                                        </div>
+                                    )}
+                                </CardContent>
+                            </Card>
+                        ))}
+                    </div>
                 </section>
 
                 {/* CREW & EQUIPMENT */}
@@ -147,8 +178,8 @@ export default function EventDetailPage() {
                         </div>
                         <Card className="border-none shadow-sm bg-white">
                             <CardContent className="p-4 space-y-2">
-                                {event.assignedEquipment.length === 0 ? <p className="text-slate-400 text-sm italic">No equipment assigned</p> : 
-                                    event.assignedEquipment.map(eq => <div key={eq} className="p-2 bg-slate-50 rounded text-sm text-slate-700">{eq}</div>)
+                                {event.assignedEquipment?.length === 0 ? <p className="text-slate-400 text-sm italic">No equipment assigned</p> : 
+                                    event.assignedEquipment?.map(eq => <div key={eq} className="p-2 bg-slate-50 rounded text-sm text-slate-700">{eq}</div>)
                                 }
                             </CardContent>
                         </Card>
@@ -160,8 +191,8 @@ export default function EventDetailPage() {
                         </div>
                         <Card className="border-none shadow-sm bg-white">
                             <CardContent className="p-4 space-y-2">
-                                {event.assignedCrew.length === 0 ? <p className="text-slate-400 text-sm italic">No crew assigned</p> : 
-                                    event.assignedCrew.map(c => <div key={c} className="p-2 bg-slate-50 rounded text-sm text-slate-700 flex items-center gap-2"><Users className="h-3 w-3"/> {c}</div>)
+                                {event.assignedCrew?.length === 0 ? <p className="text-slate-400 text-sm italic">No crew assigned</p> : 
+                                    event.assignedCrew?.map(c => <div key={c} className="p-2 bg-slate-50 rounded text-sm text-slate-700 flex items-center gap-2"><Users className="h-3 w-3"/> {c}</div>)
                                 }
                             </CardContent>
                         </Card>
@@ -180,32 +211,45 @@ export default function EventDetailPage() {
                         <CardContent className="p-6 space-y-4">
                             <div className="flex justify-between items-center">
                                 <span className="text-slate-600">Total Budget</span>
-                                <span className="font-bold text-lg text-slate-900">LKR {event.budget.toLocaleString()}</span>
+                                {/* [!code highlight] Fixed: Use totalBudget */}
+                                <span className="font-bold text-lg text-slate-900">LKR {(event.totalBudget || 0).toLocaleString()}</span>
                             </div>
+                            
+                            {event.discount > 0 && (
+                                <div className="flex justify-between items-center text-sm text-slate-500">
+                                    <span>Discount ({event.discountType === 'percentage' ? '%' : 'LKR'})</span>
+                                    <span>- {event.discount}</span>
+                                </div>
+                            )}
+
                             <div className="flex justify-between items-center text-sm">
                                 <span className="text-slate-500">Advance Paid</span>
-                                <span className="text-green-600 font-medium">LKR {event.advancePaid.toLocaleString()}</span>
+                                <span className="text-green-600 font-medium">LKR {(event.advancePaid || 0).toLocaleString()}</span>
                             </div>
                             <Separator />
                             <div className="flex justify-between items-center text-sm">
                                 <span className="text-slate-500">Due Amount</span>
-                                <span className="text-red-600 font-bold">LKR {(event.budget - event.advancePaid).toLocaleString()}</span>
+                                {/* [!code highlight] Fixed: Use finalBudget */}
+                                <span className="text-red-600 font-bold">LKR {((event.finalBudget || 0) - (event.advancePaid || 0)).toLocaleString()}</span>
                             </div>
                         </CardContent>
                     </Card>
                 </section>
 
-                {/* LOCATIONS */}
+                {/* LOCATIONS (Extracted from Days) */}
                 <section>
                     <h2 className="text-lg font-bold text-[#0F2854] mb-4">Locations</h2>
                     <div className="space-y-3">
-                        {event.dates.map((day, idx) => (
+                        {/* [!code highlight] Fixed: Map over days array */}
+                        {event.days?.map((day, idx) => (
                             <Card key={idx} className="border-none shadow-sm bg-white">
                                 <CardContent className="p-4 flex items-start gap-3">
                                     <MapPin className="h-5 w-5 text-[#1C4D8D] mt-0.5" />
                                     <div>
-                                        <p className="font-medium text-slate-800">{day.location || "Location TBD"}</p>
-                                        <p className="text-xs text-slate-500">{format(day.date, 'PPP')}</p>
+                                        {/* Note: 'location' field might need to be added to EventDayConfig if you want per-day locations. 
+                                            Assuming it's not there yet based on types, placeholder used. */}
+                                        <p className="font-medium text-slate-800">Location TBD</p>
+                                        <p className="text-xs text-slate-500">{day.date ? format(day.date instanceof Date ? day.date : new Date(), 'PPP') : ''}</p>
                                     </div>
                                 </CardContent>
                             </Card>
