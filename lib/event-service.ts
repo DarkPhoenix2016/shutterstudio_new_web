@@ -1,40 +1,40 @@
 import { db } from "@/lib/firebase";
-import { collection, getDocs, doc, getDoc, addDoc, serverTimestamp, query, orderBy, where, Timestamp } from "firebase/firestore";
+import { collection, getDocs, doc, getDoc, addDoc, serverTimestamp, query, orderBy, Timestamp } from "firebase/firestore";
 
 // --- TYPES ---
 
-export interface EventDay {
+export interface EventDayConfig {
   date: Date;
-  startTime?: string;
-  endTime?: string;
-  location?: string;
-  type?: string; // e.g., "Ceremony", "Reception"
+  type: 'package' | 'custom';
+  packageId?: string; // If package
+  customItems?: { name: string; value: string | number }[]; // If custom
+  cost: number;
 }
 
 export interface EventData {
   id?: string;
-  // Customer Info
+  // Customer
   customerName: string;
   customerMobile: string;
   customerEmail?: string;
-  couplePhotoUrl?: string;
-
-  // Event Meta
+  
+  // Meta
   eventName: string;
-  eventType: string; // Wedding, Preshoot, etc.
-  status: 'Inquiry' | 'Quoted' | 'Scheduled' | 'Shooting' | 'Editing' | 'Completed' | 'Cancelled';
+  eventType: string;
+  status: string;
   inquiryDate: any;
   
-  // Scheduling
-  dates: EventDay[]; // Multi-day support
-
-  // Financials & Package
-  packageId: string; // 'custom' or ID from catalogue
-  packageName?: string;
-  budget: number;
+  // Schedule & Pricing
+  dayCount: number;
+  days: EventDayConfig[]; // Array of configs per day
+  
+  // Financials
+  totalBudget: number;
+  discount: number;
+  finalBudget: number;
   advancePaid: number;
   
-  // Resources (IDs)
+  // Resources
   assignedCrew: string[];
   assignedEquipment: string[];
   
@@ -44,61 +44,70 @@ export interface EventData {
 
 // --- FUNCTIONS ---
 
-export const fetchEvents = async (studioId: string) => {
+// 1. Fetch Dynamic Settings Lists
+export const fetchStudioSettingsList = async (studioId: string, settingType: 'EVENT_TYPES' | 'EVENT_STATUS') => {
   try {
-    const ref = collection(db, "Studios", studioId, "Events");
-    const q = query(ref, orderBy("inquiryDate", "desc"));
-    const snap = await getDocs(q);
-    return snap.docs.map(d => {
-      const data = d.data();
-      return { 
-        id: d.id, 
-        ...data,
-        // Convert Firestore Timestamps to JS Dates
-        inquiryDate: data.inquiryDate instanceof Timestamp ? data.inquiryDate.toDate() : data.inquiryDate,
-        dates: Array.isArray(data.dates) 
-          ? data.dates.map((day: any) => ({ ...day, date: day.date instanceof Timestamp ? day.date.toDate() : day.date })) 
-          : []
-      } as EventData;
-    });
-  } catch (error) {
-    console.error("Error fetching events:", error);
+    const ref = doc(db, "Studios", studioId, "Settings", settingType);
+    const snap = await getDoc(ref);
+    if (snap.exists() && Array.isArray(snap.data().LIST)) {
+      return snap.data().LIST as string[];
+    }
+    return [];
+  } catch (e) {
+    console.error(`Error fetching ${settingType}`, e);
     return [];
   }
 };
 
-export const fetchEventById = async (studioId: string, eventId: string) => {
+// 2. Fetch Packages for Dropdown
+export const fetchPackagesList = async (studioId: string) => {
   try {
-    const ref = doc(db, "Studios", studioId, "Events", eventId);
-    const snap = await getDoc(ref);
-    if (snap.exists()) {
-      const data = snap.data();
-      return {
-        id: snap.id,
-        ...data,
-        inquiryDate: data.inquiryDate instanceof Timestamp ? data.inquiryDate.toDate() : data.inquiryDate,
-        dates: Array.isArray(data.dates) 
-          ? data.dates.map((day: any) => ({ ...day, date: day.date instanceof Timestamp ? day.date.toDate() : day.date })) 
-          : []
-      } as EventData;
-    }
-    return null;
-  } catch (error) {
-    console.error("Error fetching event:", error);
-    return null;
+    // A. Get List of IDs
+    const listRef = doc(db, "Studios", studioId, "Packages", "package_list");
+    const listSnap = await getDoc(listRef);
+    if (!listSnap.exists()) return [];
+    
+    const idList: string[] = listSnap.data().LIST || [];
+    if (idList.length === 0) return [];
+
+    // B. Fetch Details for each ID
+    const packages = await Promise.all(idList.map(async (pkgId) => {
+        const pkgSnap = await getDoc(doc(db, "Studios", studioId, "Packages", pkgId));
+        return pkgSnap.exists() ? { id: pkgSnap.id, ...pkgSnap.data() } : null;
+    }));
+    
+    return packages.filter(p => p !== null);
+  } catch (e) {
+    console.error("Error fetching packages", e);
+    return [];
   }
 };
 
+// 3. Create Event
 export const createEvent = async (studioId: string, event: EventData) => {
   try {
     const ref = collection(db, "Studios", studioId, "Events");
-    const docRef = await addDoc(ref, {
+    await addDoc(ref, {
       ...event,
       createdAt: serverTimestamp()
     });
-    return docRef.id;
   } catch (error) {
     console.error("Error creating event:", error);
     throw error;
   }
+};
+
+// 4. Fetch Events (unchanged logic, just ensuring it matches new types)
+export const fetchEvents = async (studioId: string) => {
+    const ref = collection(db, "Studios", studioId, "Events");
+    const q = query(ref, orderBy("inquiryDate", "desc"));
+    const snap = await getDocs(q);
+    return snap.docs.map(d => {
+        const data = d.data();
+        return { 
+            id: d.id, 
+            ...data, 
+            inquiryDate: data.inquiryDate instanceof Timestamp ? data.inquiryDate.toDate() : data.inquiryDate 
+        } as EventData;
+    });
 };
