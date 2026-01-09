@@ -39,6 +39,23 @@ const Toast = Swal.mixin({
   timer: 3000
 })
 
+// --- HELPER: SAFE DATE PARSING ---
+const safeDate = (dateInput: any): Date => {
+  try {
+    if (!dateInput) return new Date();
+    if (dateInput instanceof Date) return dateInput;
+    // Handle Firestore Timestamp-like objects (checking for seconds property or toDate method)
+    if (typeof dateInput === 'object') {
+        if (typeof dateInput.toDate === 'function') return dateInput.toDate();
+        if ('seconds' in dateInput) return new Date(dateInput.seconds * 1000); 
+    }
+    const d = new Date(dateInput);
+    return isNaN(d.getTime()) ? new Date() : d;
+  } catch (e) {
+    return new Date(); // Fallback to now if absolute failure
+  }
+};
+
 export default function EventDetailPage() {
   const { id } = useParams()
   const { userData } = useAuth()
@@ -149,12 +166,10 @@ export default function EventDetailPage() {
   const handleUploadImage = async (file: File, isCover: boolean) => {
       if (!event || !userData?.studioID) return;
 
-      // Rule: Only upload gallery if status is Completed
       if (!isCover && event.status !== 'Completed') {
           return Swal.fire('Restricted', 'Gallery images can only be uploaded when event is Completed.', 'warning');
       }
 
-      // Check Limit for Gallery
       if (!isCover) {
           const limitCheck = await validateSubscriptionAction(userData.studioID, 'check_photo_limit', (event.galleryUrls?.length || 0) + 1);
           if (!limitCheck.allowed) return Swal.fire('Limit Reached', limitCheck.message, 'error');
@@ -162,7 +177,6 @@ export default function EventDetailPage() {
 
       setSaving(true);
       try {
-          // Path: Studios/[studioid]/Events/[event display id]/[filename]
           const fileName = isCover 
             ? 'cover' 
             : `${(event.galleryUrls?.length || 0) + 1}`;
@@ -229,7 +243,6 @@ export default function EventDetailPage() {
       }
   };
 
-  // Status mapping for the visual pills
   const statusOptions = ["Quotation", "Scheduled", "In Progress", "Post Production", "Review", "Completed", "Handed Over"];
 
   if (loading || !event) return <div className="h-screen flex items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-[#1C4D8D]" /></div>
@@ -262,7 +275,7 @@ export default function EventDetailPage() {
                 <TabsTrigger value="expenses" className="px-4 py-2">Expenses</TabsTrigger>
             </TabsList>
 
-            {/* --- 1. OVERVIEW TAB (UPDATED DESIGN) --- */}
+            {/* --- 1. OVERVIEW TAB (UPDATED & SAFE DATE FIXED) --- */}
             <TabsContent value="overview" className="bg-gray-50 min-h-screen font-sans text-slate-800 -mx-4 -mt-4 p-4 md:p-6 rounded-lg">
                 <div className="max-w-5xl mx-auto bg-white rounded-xl shadow-sm overflow-hidden">
                     
@@ -285,9 +298,14 @@ export default function EventDetailPage() {
                             </span>
                             <div className="flex items-center gap-2">
                                 <h1 className="text-3xl font-bold text-slate-900">{event.eventName}</h1>
-                                {isLocked && <Lock className="w-5 h-5 text-green-600" title="Confirmed"/>}
+                                {/* Fixed TS Error: Wrapped Lock in a span to accept title prop */}
+                                {isLocked && (
+                                    <span title="Confirmed">
+                                        <Lock className="w-5 h-5 text-green-600"/>
+                                    </span>
+                                )}
                             </div>
-                            <p className="text-slate-500">{event.days.length > 0 ? format(new Date(event.days[0].date), 'PPP') : 'Date TBD'}</p>
+                            <p className="text-slate-500">{event.days.length > 0 ? format(safeDate(event.days[0].date), 'PPP') : 'Date TBD'}</p>
                         </div>
                     </div>
 
@@ -387,11 +405,13 @@ export default function EventDetailPage() {
                                 <div className="grid grid-cols-2 gap-4 text-sm">
                                     <div>
                                         <p className="text-slate-500 text-xs">Inquiry Date</p>
-                                        <p className="font-medium">{format(new Date(event.createdAt || new Date()), 'MM/dd/yyyy')}</p>
+                                        {/* FIXED: Uses safeDate() to prevent RangeError */}
+                                        <p className="font-medium">{format(safeDate(event.createdAt), 'MM/dd/yyyy')}</p>
                                     </div>
                                     <div>
                                         <p className="text-slate-500 text-xs">Event Date & Time</p>
-                                        <p className="font-medium">{event.days.length > 0 ? format(new Date(event.days[0].date), 'MM/dd/yyyy, h:mm a') : 'TBD'}</p>
+                                        {/* FIXED: Uses safeDate() */}
+                                        <p className="font-medium">{event.days.length > 0 ? format(safeDate(event.days[0].date), 'MM/dd/yyyy, h:mm a') : 'TBD'}</p>
                                     </div>
                                 </div>
                             </section>
@@ -495,7 +515,8 @@ export default function EventDetailPage() {
                                     {event.locations?.map((loc, i) => (
                                         <div key={i} className="grid grid-cols-3 text-xs text-slate-500">
                                             <div><p className="uppercase tracking-wider font-semibold mb-1">Location</p><p className="text-slate-800 font-medium">{loc.name}</p></div>
-                                            <div><p className="uppercase tracking-wider font-semibold mb-1">Date</p><p className="text-slate-800">{format(new Date(loc.date), 'MM/dd/yyyy')}</p></div>
+                                            {/* FIXED: Uses safeDate() */}
+                                            <div><p className="uppercase tracking-wider font-semibold mb-1">Date</p><p className="text-slate-800">{format(safeDate(loc.date), 'MM/dd/yyyy')}</p></div>
                                             <div><p className="uppercase tracking-wider font-semibold mb-1">Note</p><p className="text-slate-800">{loc.note || "--"}</p></div>
                                         </div>
                                     ))}
@@ -515,7 +536,8 @@ export default function EventDetailPage() {
                                 <div className="space-y-2">
                                     {event.transactions?.filter(t => t.type === 'income').slice(0,3).map((t, i) => (
                                         <div key={i} className="grid grid-cols-3 text-xs text-slate-500">
-                                            <div><p className="uppercase tracking-wider font-semibold mb-1">Date</p><p className="text-slate-800">{format(new Date(t.date), 'MM/dd/yyyy')}</p></div>
+                                            {/* FIXED: Uses safeDate() */}
+                                            <div><p className="uppercase tracking-wider font-semibold mb-1">Date</p><p className="text-slate-800">{format(safeDate(t.date), 'MM/dd/yyyy')}</p></div>
                                             <div><p className="uppercase tracking-wider font-semibold mb-1">Amount</p><p className="text-slate-800">LKR {t.amount.toLocaleString()}</p></div>
                                             <div><p className="uppercase tracking-wider font-semibold mb-1">Remarks</p><p className="text-slate-800">{t.note || t.method}</p></div>
                                         </div>
@@ -696,7 +718,8 @@ export default function EventDetailPage() {
                                         <span className="text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded">ID: {event.displayId}</span>
                                     </div>
                                     <div className="text-sm text-slate-600 mt-1 flex flex-wrap gap-4">
-                                        <span>{format(loc.date instanceof Date ? loc.date : new Date(), 'PPP')}</span>
+                                        {/* FIXED: Uses safeDate() */}
+                                        <span>{format(safeDate(loc.date), 'PPP')}</span>
                                         {loc.time && <span>@ {loc.time}</span>}
                                     </div>
                                     {loc.mapUrl && <a href={loc.mapUrl} target="_blank" className="text-xs text-blue-600 hover:underline mt-1 block">View on Map</a>}
@@ -753,7 +776,8 @@ export default function EventDetailPage() {
                                     <div key={t.id} className="flex justify-between items-center p-3 border rounded bg-slate-50 text-sm">
                                         <div>
                                             <p className="font-medium">LKR {t.amount.toLocaleString()}</p>
-                                            <p className="text-xs text-slate-500">{format(t.date instanceof Date ? t.date : new Date(), 'PPP')} • {t.method}</p>
+                                            {/* FIXED: Uses safeDate() */}
+                                            <p className="text-xs text-slate-500">{format(safeDate(t.date), 'PPP')} • {t.method}</p>
                                         </div>
                                         <div className="flex items-center gap-3">
                                             {t.note && <span className="text-xs text-slate-400 italic max-w-[200px] truncate">{t.note}</span>}
