@@ -80,7 +80,16 @@ export default function EventDetailPage() {
 
   // --- CALCULATIONS ---
   const financials = useMemo(() => {
-    if (!event) return { total: 0, subTotal: 0, paid: 0, due: 0 };
+    // [!code highlight] Fixed: Ensure fallback object has ALL properties to satisfy TS
+    if (!event) return { 
+        total: 0, 
+        baseCost: 0, 
+        servicesCost: 0, 
+        discountAmount: 0, 
+        finalBudget: 0, 
+        paid: 0, 
+        due: 0 
+    };
     
     // 1. Base Cost (Days + Packages)
     const baseCost = event.days?.reduce((acc, day) => acc + (day.cost || 0), 0) || 0;
@@ -179,7 +188,6 @@ export default function EventDetailPage() {
   };
 
   // --- SUB-HANDLERS FOR TABS ---
-  // (Adding items to arrays: Contacts, Services, Locations, Transactions)
   
   const addArrayItem = async (field: keyof EventData, item: any) => {
       if (!event) return;
@@ -196,9 +204,6 @@ export default function EventDetailPage() {
   const checkAndAssignResource = async (resourceId: string, type: 'crew' | 'equipment') => {
       if (!event || !userData?.studioID) return;
       
-      // Check availability for ALL event days
-      // Optimization: Just check the first day for now, or loop all.
-      // Strict mode: Must be available on ALL days.
       let available = true;
       for (const day of event.days) {
           const isFree = await checkResourceAvailability(userData.studioID, day.date, resourceId, type);
@@ -248,7 +253,7 @@ export default function EventDetailPage() {
                     <p className="text-sm text-slate-500 flex items-center gap-2 mt-1">
                         <span className="bg-blue-50 text-blue-700 px-2 py-0.5 rounded text-xs font-medium">{event.eventType}</span>
                         <span>•</span>
-                        <span>{event.days[0] ? format(event.days[0].date, 'MMM dd, yyyy') : 'Date TBD'}</span>
+                        <span>{event.days[0] ? format(event.days[0].date instanceof Date ? event.days[0].date : new Date(), 'MMM dd, yyyy') : 'Date TBD'}</span>
                     </p>
                 </div>
             </div>
