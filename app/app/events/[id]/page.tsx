@@ -150,6 +150,10 @@ export default function EventDetailPage() {
   const [isTransactionOpen, setIsTransactionOpen] = useState(false)
   const [transactionType, setTransactionType] = useState<'income' | 'expense'>('income')
 
+  // --- ADDITIONALS (SERVICES) STATE ---
+  const [editingService, setEditingService] = useState<AdditionalService | null>(null)
+  const [isServiceOpen, setIsServiceOpen] = useState(false)
+
   // Lists & Data
   const [paymentMethods, setPaymentMethods] = useState<string[]>([])
   const [crewList, setCrewList] = useState<any[]>([])
@@ -325,6 +329,31 @@ export default function EventDetailPage() {
       await handleUpdateEvent({ transactions: list }); setIsTransactionOpen(false); setEditingTransaction(null);
   }
 
+  // --- ADDITIONALS HANDLER ---
+  const saveService = async (formData: FormData) => {
+      if(!event) return;
+      
+      const quantity = Number(formData.get('quantity'));
+      const price = Number(formData.get('price'));
+      
+      const newItem: AdditionalService = {
+          id: editingService ? editingService.id : crypto.randomUUID(),
+          name: formData.get('name') as string,
+          type: 'custom', // Defaulting to custom for manual edits
+          quantity: quantity,
+          pricePerUnit: price,
+          total: quantity * price // Auto-calc total
+      };
+
+      const currentList = event.additionalServices || [];
+      const updatedList = editingService 
+          ? currentList.map(s => s.id === newItem.id ? newItem : s)
+          : [...currentList, newItem];
+
+      await handleUpdateEvent({ additionalServices: updatedList });
+      setIsServiceOpen(false);
+      setEditingService(null);
+  };
   const statusOptions = ["Quotation", "Scheduled", "In Progress", "Post Production", "Review", "Completed", "Handed Over"];
   const showGallery = event && ["Post Production", "Review", "Completed", "Handed Over"].includes(event.status || "");
   const isLocked = event?.approval?.customer_confirmed;
@@ -337,7 +366,7 @@ export default function EventDetailPage() {
         {/* HEADER NAV */}
         <div className="flex justify-between items-center">
             <Button variant="ghost" onClick={() => router.back()} className="text-slate-500 hover:text-slate-800 -ml-2">
-                <ArrowLeft className="h-4 w-4 mr-2"/> Back to Calendar
+                <ArrowLeft className="h-4 w-4 mr-2"/> Back to Events
             </Button>
             <div className="flex gap-2">
                 <Button disabled={saving} onClick={() => handleUpdateEvent({})} className="bg-[#1C4D8D]">
@@ -350,7 +379,7 @@ export default function EventDetailPage() {
             <TabsList className="w-full justify-start overflow-x-auto h-auto p-1 bg-white border border-gray-200 rounded-lg mb-6 shadow-sm">
                 <TabsTrigger value="overview" className="px-6 py-2">Overview</TabsTrigger>
                 <TabsTrigger value="contacts" className="px-6 py-2">Contacts</TabsTrigger>
-                <TabsTrigger value="services" className="px-6 py-2">Services</TabsTrigger>
+                <TabsTrigger value="additionals" className="px-6 py-2">Additionals</TabsTrigger>
                 <TabsTrigger value="locations" className="px-6 py-2">Locations</TabsTrigger>
                 <TabsTrigger value="resources" className="px-6 py-2">Resources</TabsTrigger>
                 <TabsTrigger value="payments" className="px-6 py-2">Payments</TabsTrigger>
