@@ -5,7 +5,7 @@ import { useAuth } from "@/context/AuthContext"
 import { useRouter, usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
 // [!code highlight] Import Subscription Service
-import { getStudioPackageConfig } from "@/lib/subscription-service"
+import { getStudioPackageConfig } from "@/services/subscription-service"
 import {
   Sidebar,
   SidebarContent,
