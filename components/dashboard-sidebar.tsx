@@ -4,6 +4,8 @@ import { useMemo, useState, useEffect } from "react"
 import { useAuth } from "@/context/AuthContext"
 import { useRouter, usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
+// [!code highlight] Import Subscription Service
+import { getStudioPackageConfig } from "@/lib/subscription-service"
 import {
   Sidebar,
   SidebarContent,
@@ -44,8 +46,23 @@ export function DashboardSidebar() {
   const router = useRouter()
   const pathname = usePathname()
 
-  // State for the single currently open group
+  // State
   const [openGroupLabel, setOpenGroupLabel] = useState<string | null>(null)
+  // [!code highlight] State for dynamic package name
+  const [planName, setPlanName] = useState<string>("Basic")
+
+  // [!code highlight] Effect: Fetch Subscription Plan
+  useEffect(() => {
+    const fetchPlan = async () => {
+      if (userData?.studioID) {
+        const config = await getStudioPackageConfig(userData.studioID)
+        if (config?.packageName) {
+          setPlanName(config.packageName)
+        }
+      }
+    }
+    fetchPlan()
+  }, [userData?.studioID])
 
   const handleLogout = async () => {
     try {
@@ -85,20 +102,16 @@ export function DashboardSidebar() {
 
   }, [userData, rolePermissions, globalSettings])
 
-  // --- HELPER: Determine if an item is active ---
+  // Helper: Determine if an item is active
   const isItemActive = (itemPath: string, currentPath: string) => {
-     // 1. Exact match always wins
      if (currentPath === itemPath) return true;
-     
-     // 2. Sub-path match (e.g. /events/new matches /events), 
-     // BUT ignore root paths like "/app" or "/" to prevent them from matching everything.
      if (itemPath !== '/app' && itemPath !== '/' && currentPath.startsWith(`${itemPath}/`)) {
         return true;
      }
      return false;
   }
 
-  // Logic: Only expand the group containing the current path
+  // Logic: Auto-expand active group
   useEffect(() => {
     if (navStructure.length > 0) {
       const activeGroup = navStructure.find(group => 
@@ -135,8 +148,9 @@ export function DashboardSidebar() {
               <span className="font-bold truncate leading-none text-sm text-white mb-0.5">
                  {studioName}
               </span>
+              {/* [!code highlight] Dynamic Plan Name */}
               <span className="text-[9px] text-[#4988C4] font-bold uppercase tracking-widest leading-none">
-                 PRO LICENSE
+                 {planName} LICENSE
               </span>
             </div>
           </div>
@@ -150,7 +164,6 @@ export function DashboardSidebar() {
       </SidebarHeader>
 
       {/* --- CONTENT --- */}
-      {/* Increased top padding (pt-6) to separate header from first category */}
       <SidebarContent className="px-2 pt-6 scrollbar-thin scrollbar-thumb-white/10 gap-0">
         {navStructure.map((group) => (
             <Collapsible 
@@ -173,7 +186,6 @@ export function DashboardSidebar() {
                   <SidebarGroupContent>
                     <SidebarMenu className="gap-0.5">
                       {group.items.map((item) => {
-                        // [!code highlight] Use the stricter helper function
                         const isActive = isItemActive(item.path, pathname);
                         const IconComponent = ICON_MAP[item.icon] || Camera 
 
@@ -209,7 +221,7 @@ export function DashboardSidebar() {
         ))}
       </SidebarContent>
 
-      {/* --- FOOTER: User Profile --- */}
+      {/* --- FOOTER --- */}
       <SidebarFooter className="p-3 mt-auto">
         <SidebarSeparator className="bg-white/10 mb-2" />
         
