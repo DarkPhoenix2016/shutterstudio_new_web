@@ -40,20 +40,31 @@ export const getStudioPackageConfig = async (studioId: string) => {
 
 /**
  * 2. Get Limits from Platform Packages
- * Path: /Platform/packages/{packageId}
+ * Path: /Platform/packages (Document) -> Field: [packageId]
  */
 export const getPlatformPackageLimits = async (packageId: string): Promise<PackageLimits | null> => {
   try {
-    const ref = doc(db, "Platform", "packages", packageId);
+    // [!code highlight] Fixed: Fetch the single document 'packages' in 'Platform' collection
+    // This creates a valid 2-segment reference: Collection(Platform) -> Document(packages)
+    const ref = doc(db, "Platform", "packages");
     const snap = await getDoc(ref);
     
     if (snap.exists()) {
       const data = snap.data();
+      
+      // [!code highlight] Fixed: Access the specific package map from the document fields
+      const pkgData = data[packageId];
+
+      if (!pkgData) {
+          console.warn(`Package '${packageId}' not found inside Platform/packages document.`);
+          return null;
+      }
+
       return {
-        packageName: data.name || "Unknown",
-        events_limit: Number(data.events_limit) || 0,
-        users_limit: Number(data.users_limit) || 0,
-        photos_per_event: Number(data.photos_per_event) || 0,
+        packageName: pkgData.name || "Unknown",
+        events_limit: Number(pkgData.events_limit) || 0,
+        users_limit: Number(pkgData.users_limit) || 0,
+        photos_per_event: Number(pkgData.photos_per_event) || 0,
       };
     }
     return null;
