@@ -90,7 +90,7 @@ export const addInventoryItem = async (studioId: string, item: Omit<InventoryIte
   }
 };
 
-// [!code highlight] 2.1 Update Item
+// 2.1 Update Item
 export const updateInventoryItem = async (studioId: string, itemId: string, updates: Partial<InventoryItem>) => {
   try {
     const ref = doc(db, "Studios", studioId, "Inventory", itemId);
@@ -101,7 +101,7 @@ export const updateInventoryItem = async (studioId: string, itemId: string, upda
   }
 };
 
-// [!code highlight] 2.2 Delete Item
+// 2.2 Delete Item
 export const deleteInventoryItem = async (studioId: string, itemId: string) => {
   try {
     const ref = doc(db, "Studios", studioId, "Inventory", itemId);
@@ -113,9 +113,10 @@ export const deleteInventoryItem = async (studioId: string, itemId: string) => {
 };
 
 // 3. Category Management
+// [!code highlight] UPDATED PATH: Studios/{id}/Settings/Inventory/Categories
 export const fetchCategories = async (studioId: string) => {
   try {
-    const ref = collection(db, "Studios", studioId, "InventoryConfig", "Categories", "List");
+    const ref = collection(db, "Studios", studioId, "Settings", "Inventory", "Categories");
     const snap = await getDocs(ref);
     return snap.docs.map(d => ({ id: d.id, ...d.data() } as InventoryCategory));
   } catch (error) {
@@ -126,7 +127,7 @@ export const fetchCategories = async (studioId: string) => {
 
 export const addCategory = async (studioId: string, category: InventoryCategory) => {
   try {
-    const ref = collection(db, "Studios", studioId, "InventoryConfig", "Categories", "List");
+    const ref = collection(db, "Studios", studioId, "Settings", "Inventory", "Categories");
     await addDoc(ref, category);
   } catch (error) {
     console.error("Error adding category:", error);
@@ -134,10 +135,9 @@ export const addCategory = async (studioId: string, category: InventoryCategory)
   }
 };
 
-// [!code highlight] 3.1 Update Category
 export const updateCategory = async (studioId: string, categoryId: string, updates: Partial<InventoryCategory>) => {
   try {
-    const ref = doc(db, "Studios", studioId, "InventoryConfig", "Categories", "List", categoryId);
+    const ref = doc(db, "Studios", studioId, "Settings", "Inventory", "Categories", categoryId);
     await updateDoc(ref, updates);
   } catch (error) {
     console.error("Error updating category:", error);
@@ -147,7 +147,7 @@ export const updateCategory = async (studioId: string, categoryId: string, updat
 
 export const deleteCategory = async (studioId: string, categoryId: string) => {
   try {
-    await deleteDoc(doc(db, "Studios", studioId, "InventoryConfig", "Categories", "List", categoryId));
+    await deleteDoc(doc(db, "Studios", studioId, "Settings", "Inventory", "Categories", categoryId));
   } catch (error) {
     console.error("Error deleting category:", error);
     throw error;
@@ -182,7 +182,7 @@ export const adjustStock = async (
         newTotal += change;
         newAvail += change;
       } else if (type === 'remove') {
-        // [!code highlight] VALIDATION: Cannot reduce total below what is currently assigned (total - avail)
+        // VALIDATION: Cannot reduce total below what is currently assigned (total - avail)
         const assignedCount = currentTotal - currentAvail;
         if ((newTotal - change) < assignedCount) {
             throw `Cannot remove items currently assigned. ${assignedCount} items are in use.`;
@@ -221,7 +221,7 @@ export const adjustStock = async (
   }
 };
 
-// 5. Fetch Item History (unchanged)
+// 5. Fetch Item History
 export const fetchItemHistory = async (studioId: string, itemId: string) => {
   const ref = collection(db, "Studios", studioId, "Inventory", itemId, "Transactions");
   const q = query(ref, orderBy("date", "desc"));
@@ -229,7 +229,7 @@ export const fetchItemHistory = async (studioId: string, itemId: string) => {
   return snap.docs.map(d => ({ id: d.id, ...d.data() } as StockTransaction));
 };
 
-// 6. Stats (unchanged)
+// 6. Stats
 export const calculateInventoryStats = (items: InventoryItem[]) => {
   const totalItems = items.length;
   const totalValue = items.reduce((acc, item) => acc + (item.quantityTotal * (item.costPerEvent || 0)), 0); 
