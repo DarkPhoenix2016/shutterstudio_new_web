@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useMemo } from "react"
+import { useState, useEffect, useMemo, useRef } from "react"
 import { useAuth } from "@/context/AuthContext"
 import { useParams, useRouter } from "next/navigation"
 import { 
@@ -10,7 +10,7 @@ import {
 } from "@/services/event-service"
 import { uploadFileToStorage } from "@/lib/storage-utils"
 import { compressImage } from "@/lib/image-utils"
-import { fetchInventory } from "@/services/inventory-service"
+import { fetchInventory, InventoryItem } from "@/services/inventory-service"
 import { fetchCrewMembers } from "@/services/crew-service"
 
 // UI Components
@@ -28,7 +28,8 @@ import {
     Loader2, ArrowLeft, Save, Upload, MapPin, Phone, Mail, 
     Plus, Trash2, Camera, Lock, FileText, MessageSquare, 
     Calendar, CheckCircle, RefreshCcw, ExternalLink,
-    MessageCircle, Settings, LayoutGrid, Pencil, Check, DollarSign, TrendingUp, Wallet
+    MessageCircle, Settings, LayoutGrid, Pencil, Check, DollarSign, 
+    TrendingUp, Wallet, Search, Users, Briefcase, ChevronDown
 } from "lucide-react"
 import { format } from "date-fns"
 import Swal from "sweetalert2"
@@ -56,6 +57,76 @@ const safeDate = (dateInput: any): Date => {
   }
 };
 
+// --- HELPER: CUSTOM SEARCHABLE SELECT ---
+function SearchableSelect({ 
+    options, 
+    placeholder, 
+    onSelect, 
+    grouped = false 
+}: { 
+    options: { id: string, label: string, group?: string, disabled?: boolean }[], 
+    placeholder: string, 
+    onSelect: (val: string) => void,
+    grouped?: boolean
+}) {
+    const [open, setOpen] = useState(false)
+    const [search, setSearch] = useState("")
+
+    const filtered = options.filter(opt => opt.label.toLowerCase().includes(search.toLowerCase()))
+
+    // Grouping Logic
+    const groupedOptions = useMemo(() => {
+        if (!grouped) return { "All": filtered };
+        return filtered.reduce((acc, opt) => {
+            const g = opt.group || "Other";
+            if (!acc[g]) acc[g] = [];
+            acc[g].push(opt);
+            return acc;
+        }, {} as Record<string, typeof options>);
+    }, [filtered, grouped]);
+
+    return (
+        <Popover open={open} onOpenChange={setOpen}>
+            <PopoverTrigger asChild>
+                <Button variant="outline" role="combobox" className="w-[220px] justify-between text-xs h-9">
+                    {placeholder}
+                    <ChevronDown className="ml-2 h-3 w-3 shrink-0 opacity-50" />
+                </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-[220px] p-0">
+                <div className="p-2 border-b">
+                    <div className="flex items-center px-2">
+                        <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
+                        <input 
+                            className="flex h-6 w-full rounded-md bg-transparent text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50"
+                            placeholder="Search..."
+                            value={search}
+                            onChange={(e) => setSearch(e.target.value)}
+                        />
+                    </div>
+                </div>
+                <div className="max-h-[200px] overflow-y-auto p-1">
+                    {Object.entries(groupedOptions).map(([group, opts]) => (
+                        <div key={group}>
+                            {grouped && opts.length > 0 && <div className="px-2 py-1.5 text-xs font-semibold text-slate-500 bg-slate-50">{group}</div>}
+                            {opts.map(opt => (
+                                <div 
+                                    key={opt.id}
+                                    onClick={() => { if(!opt.disabled) { onSelect(opt.id); setOpen(false); setSearch(""); } }}
+                                    className={`relative flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-slate-100 ${opt.disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+                                >
+                                    {opt.label}
+                                </div>
+                            ))}
+                        </div>
+                    ))}
+                    {filtered.length === 0 && <div className="py-6 text-center text-xs text-muted-foreground">No matching results.</div>}
+                </div>
+            </PopoverContent>
+        </Popover>
+    )
+}
+
 export default function EventDetailPage() {
   const { id } = useParams()
   const { userData } = useAuth()
@@ -82,7 +153,7 @@ export default function EventDetailPage() {
   // Lists & Data
   const [paymentMethods, setPaymentMethods] = useState<string[]>([])
   const [crewList, setCrewList] = useState<any[]>([])
-  const [equipmentList, setEquipmentList] = useState<any[]>([])
+  const [equipmentList, setEquipmentList] = useState<InventoryItem[]>([])
   const [serviceParams, setServiceParams] = useState<any[]>([])
   const [activePackage, setActivePackage] = useState<PackageData | null>(null)
 
@@ -207,63 +278,7 @@ export default function EventDetailPage() {
       }
   };
 
-  // --- ARRAY MANIPULATION (ADD / EDIT / DELETE) ---
-  const removeArrayItem = async (field: keyof EventData, id: string) => {
-      if (!event) return;
-      const currentList = (event[field] as any[]) || [];
-      await handleUpdateEvent({ [field]: currentList.filter((x: any) => x.id !== id) });
-  };
-
-  const saveContact = async (formData: FormData) => {
-      if(!event) return;
-      const newItem: EventContact = {
-          id: editingContact ? editingContact.id : crypto.randomUUID(),
-          name: formData.get('name') as string,
-          role: formData.get('role') as string,
-          phone: formData.get('phone') as string,
-          note: formData.get('note') as string
-      };
-      const updatedList = editingContact 
-          ? (event.contacts || []).map(c => c.id === newItem.id ? newItem : c)
-          : [...(event.contacts || []), newItem];
-      await handleUpdateEvent({ contacts: updatedList });
-      setIsContactOpen(false); setEditingContact(null);
-  };
-
-  const saveLocation = async (formData: FormData) => {
-      if(!event) return;
-      const newItem: EventLocation = {
-          id: editingLocation ? editingLocation.id : crypto.randomUUID(),
-          name: formData.get('name') as string,
-          mapUrl: formData.get('mapUrl') as string,
-          date: new Date(formData.get('date') as string),
-          time: formData.get('time') as string,
-          note: formData.get('note') as string
-      };
-      const updatedList = editingLocation 
-          ? (event.locations || []).map(l => l.id === newItem.id ? newItem : l)
-          : [...(event.locations || []), newItem];
-      await handleUpdateEvent({ locations: updatedList });
-      setIsLocationOpen(false); setEditingLocation(null);
-  };
-
-  const saveTransaction = async (formData: FormData) => {
-      if(!event) return;
-      const newItem: TransactionRecord = {
-          id: editingTransaction ? editingTransaction.id : crypto.randomUUID(),
-          date: new Date(formData.get('date') as string),
-          amount: Number(formData.get('amount')),
-          method: formData.get('method') as string,
-          note: formData.get('note') as string,
-          type: transactionType
-      };
-      const updatedList = editingTransaction
-          ? (event.transactions || []).map(t => t.id === newItem.id ? newItem : t)
-          : [...(event.transactions || []), newItem];
-      await handleUpdateEvent({ transactions: updatedList });
-      setIsTransactionOpen(false); setEditingTransaction(null);
-  };
-
+  // --- RESOURCE ASSIGNMENT LOGIC ---
   const checkAndAssignResource = async (resourceId: string, type: 'crew' | 'equipment') => {
       if (!event || !userData?.studioID) return;
       let available = true;
@@ -283,6 +298,32 @@ export default function EventDetailPage() {
           if (!current.includes(resourceId)) await handleUpdateEvent({ assignedEquipment: [...current, resourceId] });
       }
   };
+
+  // --- ARRAY CRUD HELPERS ---
+  const removeArrayItem = async (field: keyof EventData, id: string) => {
+      if (!event) return;
+      const currentList = (event[field] as any[]) || [];
+      await handleUpdateEvent({ [field]: currentList.filter((x: any) => x.id !== id) });
+  };
+  // (Save functions for modals are condensed below in standard format)
+  const saveContact = async (f: FormData) => {
+      if(!event) return;
+      const item = { id: editingContact?.id || crypto.randomUUID(), name: f.get('name') as string, role: f.get('role') as string, phone: f.get('phone') as string, note: f.get('note') as string };
+      const list = editingContact ? (event.contacts || []).map(c => c.id === item.id ? item : c) : [...(event.contacts || []), item];
+      await handleUpdateEvent({ contacts: list }); setIsContactOpen(false); setEditingContact(null);
+  }
+  const saveLocation = async (f: FormData) => {
+      if(!event) return;
+      const item = { id: editingLocation?.id || crypto.randomUUID(), name: f.get('name') as string, mapUrl: f.get('mapUrl') as string, date: new Date(f.get('date') as string), time: f.get('time') as string, note: f.get('note') as string };
+      const list = editingLocation ? (event.locations || []).map(l => l.id === item.id ? item : l) : [...(event.locations || []), item];
+      await handleUpdateEvent({ locations: list }); setIsLocationOpen(false); setEditingLocation(null);
+  }
+  const saveTransaction = async (f: FormData) => {
+      if(!event) return;
+      const item = { id: editingTransaction?.id || crypto.randomUUID(), date: new Date(f.get('date') as string), amount: Number(f.get('amount')), method: f.get('method') as string, note: f.get('note') as string, type: transactionType };
+      const list = editingTransaction ? (event.transactions || []).map(t => t.id === item.id ? item : t) : [...(event.transactions || []), item];
+      await handleUpdateEvent({ transactions: list }); setIsTransactionOpen(false); setEditingTransaction(null);
+  }
 
   const statusOptions = ["Quotation", "Scheduled", "In Progress", "Post Production", "Review", "Completed", "Handed Over"];
   const showGallery = event && ["Post Production", "Review", "Completed", "Handed Over"].includes(event.status || "");
@@ -326,7 +367,7 @@ export default function EventDetailPage() {
                     <div className="absolute top-4 right-4">
                          <label className="cursor-pointer bg-white/10 hover:bg-white/20 backdrop-blur-md text-white px-3 py-1.5 rounded-full text-xs font-medium flex items-center gap-2 transition-all">
                             {uploading ? <Loader2 className="w-4 h-4 animate-spin"/> : <Camera className="w-4 h-4"/>} Change Cover
-                            <input type="file" className="hidden" accept="image/*" disabled={uploading} onChange={(e) => e.target.files?.[0] && handleUploadImage(e.target.files[0], true)} />
+                            <input type="file" className="hidden" accept=".jpg, .jpeg, .png" disabled={uploading} onChange={(e) => e.target.files?.[0] && handleUploadImage(e.target.files[0], true)} />
                         </label>
                     </div>
                     <div className="absolute bottom-0 left-0 p-8 w-full">
@@ -378,8 +419,9 @@ export default function EventDetailPage() {
                         <CardHeader className="bg-slate-50/50 border-b border-slate-100 flex flex-row justify-between items-center">
                             <div className="flex items-center gap-2"><LayoutGrid className="w-5 h-5 text-slate-500"/><CardTitle className="text-base font-semibold text-slate-800">Event Gallery</CardTitle></div>
                             <label className={`cursor-pointer bg-slate-900 text-white px-3 py-1.5 rounded-md text-xs font-medium flex items-center gap-2 hover:bg-slate-800 transition-colors ${uploading ? 'opacity-50 cursor-not-allowed' : ''}`}>
-                                {uploading ? <Loader2 className="w-4 h-4 animate-spin"/> : <Plus className="w-4 h-4"/>} {uploading ? "Uploading..." : "Add Photos"}
-                                <input type="file" multiple className="hidden" accept="image/*" disabled={uploading} onChange={(e) => { if(e.target.files) Array.from(e.target.files).forEach(f => handleUploadImage(f, false)); }} />
+                                {uploading ? <Loader2 className="w-4 h-4 animate-spin"/> : <Plus className="w-4 h-4"/>} {uploading ? "Uploading..." : "Add Photo"}
+                                {/* RESTRICTED INPUT: Single File, Images Only */}
+                                <input type="file" className="hidden" accept=".jpg, .jpeg, .png" disabled={uploading} onChange={(e) => { if(e.target.files?.[0]) handleUploadImage(e.target.files[0], false); }} />
                             </label>
                         </CardHeader>
                         <CardContent className="p-4">
@@ -471,21 +513,6 @@ export default function EventDetailPage() {
                 {/* MANAGE SECTIONS */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                     <Card className="shadow-sm border-slate-200">
-                        <CardHeader className="bg-slate-50/50 border-b border-slate-100 py-3 flex flex-row justify-between items-center"><CardTitle className="text-sm font-bold text-slate-700">Payment History</CardTitle><Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setActiveTab('payments')}>Manage</Button></CardHeader>
-                        <div className="overflow-x-auto p-0">
-                            <table className="w-full text-sm text-left">
-                                <thead className="bg-slate-50 text-slate-500 font-medium border-b"><tr><th className="px-4 py-2">Date</th><th className="px-4 py-2">Amount</th><th className="px-4 py-2">Method</th></tr></thead>
-                                <tbody>
-                                    {event.transactions?.filter(t => t.type === 'income').map((t, i) => (
-                                        <tr key={i} className="border-b last:border-0"><td className="px-4 py-2 text-slate-600">{format(safeDate(t.date), 'MM/dd/yyyy')}</td><td className="px-4 py-2 font-medium">{t.amount.toLocaleString()}</td><td className="px-4 py-2 text-slate-500">{t.method}</td></tr>
-                                    ))}
-                                    {(!event.transactions?.some(t => t.type === 'income')) && <tr><td colSpan={3} className="px-4 py-4 text-center text-slate-400 italic">No payments recorded.</td></tr>}
-                                </tbody>
-                            </table>
-                        </div>
-                    </Card>
-
-                    <Card className="shadow-sm border-slate-200">
                         <CardHeader className="bg-slate-50/50 border-b border-slate-100 py-3 flex flex-row justify-between items-center"><CardTitle className="text-sm font-bold text-slate-700">Locations</CardTitle><Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setActiveTab('locations')}>Manage</Button></CardHeader>
                          <div className="overflow-x-auto p-0">
                             <table className="w-full text-sm text-left">
@@ -494,6 +521,7 @@ export default function EventDetailPage() {
                                     {event.locations?.map((l, i) => (
                                         <tr key={i} className="border-b last:border-0"><td className="px-4 py-2 font-medium">{l.name}</td><td className="px-4 py-2 text-slate-600">{format(safeDate(l.date), 'MM/dd/yyyy')}</td>
                                         <td className="px-4 py-2 text-right">
+                                            {/* OPEN MAP BUTTON */}
                                             {l.mapUrl && <a href={l.mapUrl} target="_blank" className="inline-flex items-center gap-1 text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded hover:bg-blue-100"><ExternalLink size={12}/> Open Map</a>}
                                         </td></tr>
                                     ))}
@@ -503,7 +531,7 @@ export default function EventDetailPage() {
                         </div>
                     </Card>
 
-                    <Card className="shadow-sm border-slate-200 lg:col-span-2">
+                    <Card className="shadow-sm border-slate-200">
                         <CardHeader className="bg-slate-50/50 border-b border-slate-100 py-3 flex flex-row justify-between items-center"><CardTitle className="text-sm font-bold text-slate-700">Event Contacts</CardTitle><Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setActiveTab('contacts')}>Manage</Button></CardHeader>
                         <div className="overflow-x-auto p-0">
                              <table className="w-full text-sm text-left">
@@ -525,47 +553,21 @@ export default function EventDetailPage() {
 
              {/* --- 2. PAYMENTS TAB (REFINED) --- */}
              <TabsContent value="payments">
+                {/* FINANCIAL SUMMARY BAR */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                    <Card className="bg-blue-50 border-blue-100 shadow-sm">
-                        <CardContent className="p-4 flex items-center justify-between">
-                            <div><p className="text-xs font-semibold text-blue-600 uppercase">Total Event Budget</p><p className="text-2xl font-bold text-blue-900">{financials.finalBudget.toLocaleString()}</p></div>
-                            <Wallet className="h-8 w-8 text-blue-200"/>
-                        </CardContent>
-                    </Card>
-                    <Card className="bg-green-50 border-green-100 shadow-sm">
-                        <CardContent className="p-4 flex items-center justify-between">
-                            <div><p className="text-xs font-semibold text-green-600 uppercase">Total Paid</p><p className="text-2xl font-bold text-green-900">{financials.paid.toLocaleString()}</p></div>
-                            <CheckCircle className="h-8 w-8 text-green-200"/>
-                        </CardContent>
-                    </Card>
-                    <Card className="bg-red-50 border-red-100 shadow-sm">
-                        <CardContent className="p-4 flex items-center justify-between">
-                            <div><p className="text-xs font-semibold text-red-600 uppercase">Balance Due</p><p className="text-2xl font-bold text-red-900">{financials.due.toLocaleString()}</p></div>
-                            <DollarSign className="h-8 w-8 text-red-200"/>
-                        </CardContent>
-                    </Card>
+                    <Card className="bg-blue-50 border-blue-100 shadow-sm"><CardContent className="p-4 flex items-center justify-between"><div><p className="text-xs font-semibold text-blue-600 uppercase">Total Event Budget</p><p className="text-2xl font-bold text-blue-900">{financials.finalBudget.toLocaleString()}</p></div><Wallet className="h-8 w-8 text-blue-200"/></CardContent></Card>
+                    <Card className="bg-green-50 border-green-100 shadow-sm"><CardContent className="p-4 flex items-center justify-between"><div><p className="text-xs font-semibold text-green-600 uppercase">Total Paid</p><p className="text-2xl font-bold text-green-900">{financials.paid.toLocaleString()}</p></div><CheckCircle className="h-8 w-8 text-green-200"/></CardContent></Card>
+                    <Card className="bg-red-50 border-red-100 shadow-sm"><CardContent className="p-4 flex items-center justify-between"><div><p className="text-xs font-semibold text-red-600 uppercase">Balance Due</p><p className="text-2xl font-bold text-red-900">{financials.due.toLocaleString()}</p></div><DollarSign className="h-8 w-8 text-red-200"/></CardContent></Card>
                 </div>
-
+                {/* INCOME ONLY TABLE */}
                 <Card>
-                    <CardHeader className="flex flex-row items-center justify-between">
-                        <CardTitle className="text-base">Incoming Payments</CardTitle>
-                        <Button size="sm" onClick={() => { setTransactionType('income'); setEditingTransaction(null); setIsTransactionOpen(true); }} className="bg-green-600 hover:bg-green-700"><Plus className="w-4 h-4 mr-2"/> Add Payment</Button>
-                    </CardHeader>
+                    <CardHeader className="flex flex-row items-center justify-between"><CardTitle className="text-base">Incoming Payments</CardTitle><Button size="sm" onClick={() => { setTransactionType('income'); setEditingTransaction(null); setIsTransactionOpen(true); }} className="bg-green-600 hover:bg-green-700"><Plus className="w-4 h-4 mr-2"/> Add Payment</Button></CardHeader>
                     <CardContent>
                         <div className="space-y-2">
                              {event.transactions?.filter(t => t.type === 'income').map(t => (
                                 <div key={t.id} className="flex justify-between items-center p-3 border rounded bg-white text-sm hover:bg-slate-50 group">
-                                    <div className="flex items-center gap-3">
-                                        <div className="p-2 rounded-full bg-green-100 text-green-600"><DollarSign className="w-4 h-4"/></div>
-                                        <div><p className="font-bold text-green-700">+ {t.amount.toLocaleString()}</p><p className="text-xs text-slate-500">{format(safeDate(t.date), 'PPP')} • {t.method}</p></div>
-                                    </div>
-                                    <div className="flex items-center gap-4">
-                                        {t.note && <span className="text-xs text-slate-400 italic max-w-[200px] truncate hidden md:block">{t.note}</span>}
-                                        <div className="flex gap-1 opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity">
-                                             <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-600" onClick={() => { setEditingTransaction(t); setTransactionType('income'); setIsTransactionOpen(true); }}><Pencil className="w-4 h-4"/></Button>
-                                             <Button variant="ghost" size="icon" className="h-8 w-8 text-red-400" onClick={() => removeArrayItem('transactions', t.id)}><Trash2 className="w-4 h-4"/></Button>
-                                        </div>
-                                    </div>
+                                    <div className="flex items-center gap-3"><div className="p-2 rounded-full bg-green-100 text-green-600"><DollarSign className="w-4 h-4"/></div><div><p className="font-bold text-green-700">+ {t.amount.toLocaleString()}</p><p className="text-xs text-slate-500">{format(safeDate(t.date), 'PPP')} • {t.method}</p></div></div>
+                                    <div className="flex items-center gap-4">{t.note && <span className="text-xs text-slate-400 italic max-w-[200px] truncate hidden md:block">{t.note}</span>}<div className="flex gap-1 opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity"><Button variant="ghost" size="icon" className="h-8 w-8 text-blue-600" onClick={() => { setEditingTransaction(t); setTransactionType('income'); setIsTransactionOpen(true); }}><Pencil className="w-4 h-4"/></Button><Button variant="ghost" size="icon" className="h-8 w-8 text-red-400" onClick={() => removeArrayItem('transactions', t.id)}><Trash2 className="w-4 h-4"/></Button></div></div>
                                 </div>
                             ))}
                             {(!event.transactions?.some(t => t.type === 'income')) && <p className="text-center py-8 text-slate-400 italic">No payments recorded.</p>}
@@ -576,47 +578,21 @@ export default function EventDetailPage() {
 
              {/* --- 3. EXPENSES TAB (REFINED) --- */}
              <TabsContent value="expenses">
+                {/* EXPENSE SUMMARY BAR */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                    <Card className="bg-slate-50 border-slate-100 shadow-sm">
-                        <CardContent className="p-4 flex items-center justify-between">
-                            <div><p className="text-xs font-semibold text-slate-600 uppercase">Total Revenue</p><p className="text-2xl font-bold text-slate-900">{financials.finalBudget.toLocaleString()}</p></div>
-                            <Wallet className="h-8 w-8 text-slate-200"/>
-                        </CardContent>
-                    </Card>
-                    <Card className="bg-amber-50 border-amber-100 shadow-sm">
-                        <CardContent className="p-4 flex items-center justify-between">
-                            <div><p className="text-xs font-semibold text-amber-600 uppercase">Utilized (Expenses)</p><p className="text-2xl font-bold text-amber-900">{financials.totalExpenses.toLocaleString()}</p></div>
-                            <TrendingUp className="h-8 w-8 text-amber-200"/>
-                        </CardContent>
-                    </Card>
-                    <Card className="bg-emerald-50 border-emerald-100 shadow-sm">
-                        <CardContent className="p-4 flex items-center justify-between">
-                            <div><p className="text-xs font-semibold text-emerald-600 uppercase">Rest (Profit)</p><p className="text-2xl font-bold text-emerald-900">{financials.profit.toLocaleString()}</p></div>
-                            <DollarSign className="h-8 w-8 text-emerald-200"/>
-                        </CardContent>
-                    </Card>
+                    <Card className="bg-slate-50 border-slate-100 shadow-sm"><CardContent className="p-4 flex items-center justify-between"><div><p className="text-xs font-semibold text-slate-600 uppercase">Total Revenue</p><p className="text-2xl font-bold text-slate-900">{financials.finalBudget.toLocaleString()}</p></div><Wallet className="h-8 w-8 text-slate-200"/></CardContent></Card>
+                    <Card className="bg-amber-50 border-amber-100 shadow-sm"><CardContent className="p-4 flex items-center justify-between"><div><p className="text-xs font-semibold text-amber-600 uppercase">Utilized (Expenses)</p><p className="text-2xl font-bold text-amber-900">{financials.totalExpenses.toLocaleString()}</p></div><TrendingUp className="h-8 w-8 text-amber-200"/></CardContent></Card>
+                    <Card className="bg-emerald-50 border-emerald-100 shadow-sm"><CardContent className="p-4 flex items-center justify-between"><div><p className="text-xs font-semibold text-emerald-600 uppercase">Rest (Profit)</p><p className="text-2xl font-bold text-emerald-900">{financials.profit.toLocaleString()}</p></div><DollarSign className="h-8 w-8 text-emerald-200"/></CardContent></Card>
                 </div>
-
+                {/* EXPENSE ONLY TABLE */}
                 <Card>
-                    <CardHeader className="flex flex-row items-center justify-between">
-                        <CardTitle className="text-base">Event Expenses</CardTitle>
-                        <Button size="sm" onClick={() => { setTransactionType('expense'); setEditingTransaction(null); setIsTransactionOpen(true); }} className="bg-red-600 hover:bg-red-700 text-white"><Plus className="w-4 h-4 mr-2"/> Add Expense</Button>
-                    </CardHeader>
+                    <CardHeader className="flex flex-row items-center justify-between"><CardTitle className="text-base">Event Expenses</CardTitle><Button size="sm" onClick={() => { setTransactionType('expense'); setEditingTransaction(null); setIsTransactionOpen(true); }} className="bg-red-600 hover:bg-red-700 text-white"><Plus className="w-4 h-4 mr-2"/> Add Expense</Button></CardHeader>
                     <CardContent>
                         <div className="space-y-2">
                              {event.transactions?.filter(t => t.type === 'expense').map(t => (
                                 <div key={t.id} className="flex justify-between items-center p-3 border rounded bg-white text-sm hover:bg-slate-50 group">
-                                    <div className="flex items-center gap-3">
-                                        <div className="p-2 rounded-full bg-red-100 text-red-600"><DollarSign className="w-4 h-4"/></div>
-                                        <div><p className="font-bold text-red-700">- {t.amount.toLocaleString()}</p><p className="text-xs text-slate-500">{format(safeDate(t.date), 'PPP')} • {t.method}</p></div>
-                                    </div>
-                                    <div className="flex items-center gap-4">
-                                        {t.note && <span className="text-xs text-slate-400 italic max-w-[200px] truncate hidden md:block">{t.note}</span>}
-                                        <div className="flex gap-1 opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity">
-                                             <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-600" onClick={() => { setEditingTransaction(t); setTransactionType('expense'); setIsTransactionOpen(true); }}><Pencil className="w-4 h-4"/></Button>
-                                             <Button variant="ghost" size="icon" className="h-8 w-8 text-red-400" onClick={() => removeArrayItem('transactions', t.id)}><Trash2 className="w-4 h-4"/></Button>
-                                        </div>
-                                    </div>
+                                    <div className="flex items-center gap-3"><div className="p-2 rounded-full bg-red-100 text-red-600"><DollarSign className="w-4 h-4"/></div><div><p className="font-bold text-red-700">- {t.amount.toLocaleString()}</p><p className="text-xs text-slate-500">{format(safeDate(t.date), 'PPP')} • {t.method}</p></div></div>
+                                    <div className="flex items-center gap-4">{t.note && <span className="text-xs text-slate-400 italic max-w-[200px] truncate hidden md:block">{t.note}</span>}<div className="flex gap-1 opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity"><Button variant="ghost" size="icon" className="h-8 w-8 text-blue-600" onClick={() => { setEditingTransaction(t); setTransactionType('expense'); setIsTransactionOpen(true); }}><Pencil className="w-4 h-4"/></Button><Button variant="ghost" size="icon" className="h-8 w-8 text-red-400" onClick={() => removeArrayItem('transactions', t.id)}><Trash2 className="w-4 h-4"/></Button></div></div>
                                 </div>
                             ))}
                             {(!event.transactions?.some(t => t.type === 'expense')) && <p className="text-center py-8 text-slate-400 italic">No expenses recorded.</p>}
@@ -625,7 +601,76 @@ export default function EventDetailPage() {
                 </Card>
             </TabsContent>
 
-            {/* --- 4. CONTACTS TAB --- */}
+             {/* --- 4. RESOURCES TAB (ENHANCED) --- */}
+             <TabsContent value="resources">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* CREW SECTION */}
+                    <Card>
+                        <CardHeader className="flex flex-row items-center justify-between">
+                            <div className="flex flex-col">
+                                <CardTitle className="text-base">Crew</CardTitle>
+                                <span className="text-xs text-slate-500">{event.assignedCrew?.length || 0} Assigned / {crewList.length} Available</span>
+                            </div>
+                            <SearchableSelect 
+                                placeholder="Assign Crew..." 
+                                options={crewList.map(c => ({ 
+                                    id: c.id, 
+                                    label: c.displayName, 
+                                    disabled: event.assignedCrew?.includes(c.id) 
+                                }))}
+                                onSelect={(val) => checkAndAssignResource(val, 'crew')}
+                            />
+                        </CardHeader>
+                        <CardContent className="space-y-2">
+                            {event.assignedCrew?.map(id => {
+                                const crew = crewList.find(c => c.id === id);
+                                return (
+                                    <div key={id} className="flex items-center justify-between p-2 bg-slate-50 rounded border">
+                                        <div className="flex items-center gap-2"><Users className="w-4 h-4 text-slate-400"/><span className="text-sm">{crew?.displayName || "Unknown"}</span></div>
+                                        <Button variant="ghost" size="icon" className="h-6 w-6 text-red-400" onClick={() => { const newCrew = event.assignedCrew.filter(x => x !== id); handleUpdateEvent({ assignedCrew: newCrew }); }}><Trash2 className="w-3 h-3"/></Button>
+                                    </div>
+                                )
+                            })}
+                            {(!event.assignedCrew?.length) && <p className="text-center py-6 text-slate-400 italic text-xs">No crew assigned.</p>}
+                        </CardContent>
+                    </Card>
+
+                    {/* EQUIPMENT SECTION (Categorized) */}
+                    <Card>
+                        <CardHeader className="flex flex-row items-center justify-between">
+                            <div className="flex flex-col">
+                                <CardTitle className="text-base">Equipment</CardTitle>
+                                <span className="text-xs text-slate-500">{event.assignedEquipment?.length || 0} Assigned / {equipmentList.length} Total</span>
+                            </div>
+                            <SearchableSelect 
+                                placeholder="Assign Equipment..." 
+                                grouped={true}
+                                options={equipmentList.map(e => ({ 
+                                    id: e.id!, 
+                                    label: `${e.name} (${e.quantityAvailable} Avail)`, 
+                                    group: e.category,
+                                    disabled: event.assignedEquipment?.includes(e.id!) || e.quantityAvailable < 1
+                                }))}
+                                onSelect={(val) => checkAndAssignResource(val, 'equipment')}
+                            />
+                        </CardHeader>
+                        <CardContent className="space-y-2">
+                            {event.assignedEquipment?.map(id => {
+                                const eq = equipmentList.find(e => e.id === id);
+                                return (
+                                    <div key={id} className="flex items-center justify-between p-2 bg-slate-50 rounded border">
+                                        <div className="flex items-center gap-2"><Briefcase className="w-4 h-4 text-slate-400"/><span className="text-sm">{eq?.name || "Unknown"}</span></div>
+                                        <Button variant="ghost" size="icon" className="h-6 w-6 text-red-400" onClick={() => { const newEq = event.assignedEquipment.filter(x => x !== id); handleUpdateEvent({ assignedEquipment: newEq }); }}><Trash2 className="w-3 h-3"/></Button>
+                                    </div>
+                                )
+                            })}
+                             {(!event.assignedEquipment?.length) && <p className="text-center py-6 text-slate-400 italic text-xs">No equipment assigned.</p>}
+                        </CardContent>
+                    </Card>
+                </div>
+            </TabsContent>
+
+            {/* --- 5. CONTACTS / LOCATIONS / SERVICES TABS --- */}
             <TabsContent value="contacts">
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between">
@@ -657,7 +702,6 @@ export default function EventDetailPage() {
                 </Card>
             </TabsContent>
 
-            {/* --- 5. LOCATIONS TAB --- */}
             <TabsContent value="locations">
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between">
@@ -685,46 +729,6 @@ export default function EventDetailPage() {
                         </div>
                     </CardContent>
                 </Card>
-            </TabsContent>
-
-             {/* --- 6. RESOURCES TAB --- */}
-             <TabsContent value="resources">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <Card>
-                        <CardHeader className="flex flex-row items-center justify-between">
-                            <CardTitle className="text-base">Crew</CardTitle>
-                            <Select onValueChange={(val) => checkAndAssignResource(val, 'crew')}><SelectTrigger className="w-[180px] h-8 text-xs"><SelectValue placeholder="Assign Crew"/></SelectTrigger><SelectContent>{crewList.map(c => <SelectItem key={c.id} value={c.id}>{c.displayName}</SelectItem>)}</SelectContent></Select>
-                        </CardHeader>
-                        <CardContent className="space-y-2">
-                            {event.assignedCrew?.map(id => {
-                                const crew = crewList.find(c => c.id === id);
-                                return (
-                                    <div key={id} className="flex items-center justify-between p-2 bg-slate-50 rounded border">
-                                        <span className="text-sm">{crew?.displayName || "Unknown"}</span>
-                                        <Button variant="ghost" size="icon" className="h-6 w-6 text-red-400" onClick={() => { const newCrew = event.assignedCrew.filter(x => x !== id); handleUpdateEvent({ assignedCrew: newCrew }); }}><Trash2 className="w-3 h-3"/></Button>
-                                    </div>
-                                )
-                            })}
-                        </CardContent>
-                    </Card>
-                    <Card>
-                        <CardHeader className="flex flex-row items-center justify-between">
-                            <CardTitle className="text-base">Equipment</CardTitle>
-                            <Select onValueChange={(val) => checkAndAssignResource(val, 'equipment')}><SelectTrigger className="w-[180px] h-8 text-xs"><SelectValue placeholder="Assign Equipment"/></SelectTrigger><SelectContent>{equipmentList.map(e => <SelectItem key={e.id} value={e.id}>{e.name} ({e.quantityAvailable})</SelectItem>)}</SelectContent></Select>
-                        </CardHeader>
-                        <CardContent className="space-y-2">
-                            {event.assignedEquipment?.map(id => {
-                                const eq = equipmentList.find(e => e.id === id);
-                                return (
-                                    <div key={id} className="flex items-center justify-between p-2 bg-slate-50 rounded border">
-                                        <span className="text-sm">{eq?.name || "Unknown"}</span>
-                                        <Button variant="ghost" size="icon" className="h-6 w-6 text-red-400" onClick={() => { const newEq = event.assignedEquipment.filter(x => x !== id); handleUpdateEvent({ assignedEquipment: newEq }); }}><Trash2 className="w-3 h-3"/></Button>
-                                    </div>
-                                )
-                            })}
-                        </CardContent>
-                    </Card>
-                </div>
             </TabsContent>
             
             <TabsContent value="services">
