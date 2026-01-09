@@ -5,7 +5,7 @@ import { useAuth } from "@/context/AuthContext"
 import { useRouter } from "next/navigation"
 import { 
     fetchEvents, createEvent, fetchStudioSettingsList, fetchPackagesList, 
-    EventData, EventDayConfig 
+    EventData, EventDayConfig, CustomItem 
 } from "@/lib/event-service"
 import { useMediaQuery } from "@/hooks/use-media-query"
 
@@ -25,7 +25,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Separator } from "@/components/ui/separator"
 
 // Icons
-import { Plus, Calendar as CalendarIcon, MapPin, Users, Search, Loader2, Package, AlertCircle } from "lucide-react"
+import { Plus, Calendar as CalendarIcon, MapPin, Users, Search, Loader2, Package, AlertCircle, Trash2, GripVertical } from "lucide-react"
 import { format } from "date-fns"
 import { cn } from "@/lib/utils"
 import Swal from "sweetalert2"
@@ -150,7 +150,6 @@ export default function EventsPage() {
                     <SheetTitle>New Event</SheetTitle>
                     <SheetDescription>Create a new inquiry or schedule an event.</SheetDescription>
                 </SheetHeader>
-                {/* Form Component Handles the rest */}
                 <EventForm onSuccess={() => { setIsFormOpen(false); loadData(); }} onCancel={() => setIsFormOpen(false)} />
             </SheetContent>
         </Sheet>
@@ -161,7 +160,6 @@ export default function EventsPage() {
                     <DrawerTitle>New Event</DrawerTitle>
                     <DrawerDescription>Create a new inquiry or schedule an event.</DrawerDescription>
                 </DrawerHeader>
-                {/* Form Component Handles the rest */}
                 <EventForm onSuccess={() => { setIsFormOpen(false); loadData(); }} onCancel={() => setIsFormOpen(false)} />
             </DrawerContent>
         </Drawer>
@@ -186,12 +184,12 @@ function EventForm({ onSuccess, onCancel }: { onSuccess: () => void, onCancel: (
         customerName: "", customerMobile: "", customerEmail: "",
         eventName: "", eventType: "", status: "Inquiry",
         dayCount: 1,
-        days: [{ date: new Date(), type: 'package', cost: 0 }],
+        // [!code highlight] Initialize customItems
+        days: [{ date: new Date(), type: 'package', cost: 0, customItems: [] }],
         discount: 0,
         notes: ""
     })
 
-    // Init Data
     useEffect(() => {
         const init = async () => {
             if(!userData?.studioID) return;
@@ -218,36 +216,60 @@ function EventForm({ onSuccess, onCancel }: { onSuccess: () => void, onCancel: (
         return { total, subTotal: total - discount };
     }, [formData.days, formData.discount])
 
-    // Handlers
+    // --- DAY HANDLERS ---
     const handleDayCountChange = (count: number) => {
-        const newCount = Math.max(1, count); // Min 1 day
+        const newCount = Math.max(1, count);
         const currentDays = [...(formData.days || [])];
         
         if (newCount > currentDays.length) {
-            // Add days
             for(let i = currentDays.length; i < newCount; i++) {
                 const prevDate = new Date(currentDays[i-1].date);
                 prevDate.setDate(prevDate.getDate() + 1);
-                currentDays.push({ date: prevDate, type: 'package', cost: 0 });
+                currentDays.push({ date: prevDate, type: 'package', cost: 0, customItems: [] });
             }
         } else if (newCount < currentDays.length) {
-            // Remove days
             currentDays.length = newCount;
         }
-        
         setFormData({ ...formData, dayCount: newCount, days: currentDays });
     }
 
     const updateDayConfig = (index: number, updates: Partial<EventDayConfig>) => {
         const newDays = [...(formData.days || [])];
-        newDays[index] = { ...newDays[index], ...updates };
+        const updatedDay = { ...newDays[index], ...updates };
         
-        if (updates.packageId && updates.type !== 'custom') {
+        // Auto-update cost if package selected
+        if (updates.packageId && updatedDay.type === 'package') {
             const pkg = packages.find(p => p.id === updates.packageId);
-            if (pkg) newDays[index].cost = Number(pkg.price || 0);
+            if (pkg) updatedDay.cost = Number(pkg.price || 0);
         }
         
+        // Auto-update cost if custom items changed
+        if (updates.customItems && updatedDay.type === 'custom') {
+            updatedDay.cost = updates.customItems.reduce((sum, item) => sum + (item.price || 0), 0);
+        }
+
+        newDays[index] = updatedDay;
         setFormData({ ...formData, days: newDays });
+    }
+
+    // --- CUSTOM ITEM HANDLERS ---
+    const addCustomItem = (dayIndex: number) => {
+        const day = formData.days![dayIndex];
+        const newItems = [...(day.customItems || []), { name: "", quantity: 1, unit: "", price: 0 }];
+        updateDayConfig(dayIndex, { customItems: newItems });
+    }
+
+    const updateCustomItem = (dayIndex: number, itemIndex: number, field: keyof CustomItem, value: any) => {
+        const day = formData.days![dayIndex];
+        const newItems = [...(day.customItems || [])];
+        newItems[itemIndex] = { ...newItems[itemIndex], [field]: value };
+        updateDayConfig(dayIndex, { customItems: newItems });
+    }
+
+    const removeCustomItem = (dayIndex: number, itemIndex: number) => {
+        const day = formData.days![dayIndex];
+        const newItems = (day.customItems || []).filter((_, i) => i !== itemIndex);
+        updateDayConfig(dayIndex, { customItems: newItems });
     }
 
     const handleSubmit = async () => {
@@ -280,58 +302,28 @@ function EventForm({ onSuccess, onCancel }: { onSuccess: () => void, onCancel: (
     return (
         <div className="flex flex-col h-full overflow-hidden">
             
-            {/* --- SCROLLABLE CONTENT --- */}
-            {/* [!code highlight] Added hidden scrollbar classes */}
+            {/* SCROLLABLE CONTENT */}
             <div className="flex-1 overflow-y-auto px-6 py-6 space-y-8 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
                 
-                {/* 1. CUSTOMER INFO */}
+                {/* 1. CUSTOMER & META (Same as before) */}
                 <div className="space-y-4">
-                    <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Customer Information</h3>
+                    <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Details</h3>
                     <div className="space-y-3">
-                        <div className="space-y-1">
-                            <Label>Customer Name <span className="text-red-500">*</span></Label>
-                            <Input value={formData.customerName} onChange={e => setFormData({...formData, customerName: e.target.value})} className="bg-slate-50" />
-                        </div>
+                        <Input placeholder="Event Name *" value={formData.eventName} onChange={e => setFormData({...formData, eventName: e.target.value})} className="bg-slate-50 font-medium" />
                         <div className="grid grid-cols-2 gap-3">
-                            <div className="space-y-1">
-                                <Label>Mobile</Label>
-                                <Input value={formData.customerMobile} onChange={e => setFormData({...formData, customerMobile: e.target.value})} className="bg-slate-50" />
-                            </div>
-                            <div className="space-y-1">
-                                <Label>Email</Label>
-                                <Input value={formData.customerEmail} onChange={e => setFormData({...formData, customerEmail: e.target.value})} className="bg-slate-50" />
-                            </div>
+                            <Select value={formData.eventType} onValueChange={v => setFormData({...formData, eventType: v})}>
+                                <SelectTrigger className="bg-slate-50"><SelectValue placeholder="Type"/></SelectTrigger>
+                                <SelectContent>{typeList.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
+                            </Select>
+                            <Select value={formData.status} onValueChange={(v:any) => setFormData({...formData, status: v})}>
+                                <SelectTrigger className="bg-slate-50"><SelectValue/></SelectTrigger>
+                                <SelectContent>{statusList.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
+                            </Select>
                         </div>
-                    </div>
-                </div>
-
-                {/* 2. EVENT META */}
-                <div className="space-y-4">
-                    <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Event Basics</h3>
-                    <div className="space-y-3">
-                        <div className="space-y-1">
-                            <Label>Event Name <span className="text-red-500">*</span></Label>
-                            <Input placeholder="e.g. Rajitha & Randini Wedding" value={formData.eventName} onChange={e => setFormData({...formData, eventName: e.target.value})} className="bg-slate-50" />
-                        </div>
+                        <Input placeholder="Customer Name *" value={formData.customerName} onChange={e => setFormData({...formData, customerName: e.target.value})} className="bg-slate-50" />
                         <div className="grid grid-cols-2 gap-3">
-                            <div className="space-y-1">
-                                <Label>Type</Label>
-                                <Select value={formData.eventType} onValueChange={v => setFormData({...formData, eventType: v})}>
-                                    <SelectTrigger className="bg-slate-50"><SelectValue placeholder="Select type"/></SelectTrigger>
-                                    <SelectContent>
-                                        {typeList.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                            <div className="space-y-1">
-                                <Label>Status</Label>
-                                <Select value={formData.status} onValueChange={(v:any) => setFormData({...formData, status: v})}>
-                                    <SelectTrigger className="bg-slate-50"><SelectValue/></SelectTrigger>
-                                    <SelectContent>
-                                        {statusList.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-                                    </SelectContent>
-                                </Select>
-                            </div>
+                            <Input placeholder="Mobile" value={formData.customerMobile} onChange={e => setFormData({...formData, customerMobile: e.target.value})} className="bg-slate-50" />
+                            <Input placeholder="Email" value={formData.customerEmail} onChange={e => setFormData({...formData, customerEmail: e.target.value})} className="bg-slate-50" />
                         </div>
                     </div>
                 </div>
@@ -339,12 +331,12 @@ function EventForm({ onSuccess, onCancel }: { onSuccess: () => void, onCancel: (
                 {/* 3. SCHEDULE & PRICING */}
                 <div className="space-y-4">
                     <div className="flex justify-between items-center">
-                        <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Schedule & Packages</h3>
+                        <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Packages</h3>
                         <div className="flex items-center gap-2">
-                            <Label className="text-xs">Duration (Days)</Label>
+                            <Label className="text-xs">Days</Label>
                             <Input 
                                 type="number" min="1" max="7" 
-                                className="w-16 h-8 text-center bg-slate-50" 
+                                className="w-14 h-7 text-center bg-slate-50 text-xs" 
                                 value={formData.dayCount} 
                                 onChange={e => handleDayCountChange(Number(e.target.value))} 
                             />
@@ -354,20 +346,20 @@ function EventForm({ onSuccess, onCancel }: { onSuccess: () => void, onCancel: (
                     <Tabs defaultValue="day-0" className="w-full">
                         <TabsList className="w-full justify-start overflow-x-auto h-auto p-1 bg-slate-100">
                             {formData.days?.map((_, i) => (
-                                <TabsTrigger key={i} value={`day-${i}`} className="px-4 py-2 text-xs">Day {i + 1}</TabsTrigger>
+                                <TabsTrigger key={i} value={`day-${i}`} className="px-4 py-1.5 text-xs">Day {i + 1}</TabsTrigger>
                             ))}
                         </TabsList>
                         
                         {formData.days?.map((day, i) => (
                             <TabsContent key={i} value={`day-${i}`} className="border rounded-md p-4 mt-2 space-y-4 bg-white">
                                 <div className="space-y-1">
-                                    <Label>Date for Day {i + 1}</Label>
-                                    <div className="border rounded-md p-2 bg-slate-50">
+                                    <div className="border rounded-md p-2 bg-slate-50 flex items-center justify-between">
+                                        <Label className="text-xs text-slate-500 ml-2">Date</Label>
                                         <Popover>
                                             <PopoverTrigger asChild>
-                                                <Button variant="outline" className="w-full justify-start text-left font-normal bg-white h-9">
-                                                    <CalendarIcon className="mr-2 h-4 w-4" />
+                                                <Button variant="ghost" className="h-6 text-sm font-normal">
                                                     {day.date ? format(day.date, "PPP") : <span>Pick a date</span>}
+                                                    <CalendarIcon className="ml-2 h-3 w-3 opacity-50" />
                                                 </Button>
                                             </PopoverTrigger>
                                             <PopoverContent className="w-auto p-0">
@@ -383,38 +375,72 @@ function EventForm({ onSuccess, onCancel }: { onSuccess: () => void, onCancel: (
                                 </div>
 
                                 <Tabs defaultValue={day.type} onValueChange={(v:any) => updateDayConfig(i, { type: v })} className="w-full">
-                                    <TabsList className="w-full grid grid-cols-2">
-                                        <TabsTrigger value="package">Catalogue Package</TabsTrigger>
-                                        <TabsTrigger value="custom">Custom Plan</TabsTrigger>
+                                    <TabsList className="w-full grid grid-cols-2 h-8">
+                                        <TabsTrigger value="package" className="text-xs">Package</TabsTrigger>
+                                        <TabsTrigger value="custom" className="text-xs">Custom Plan</TabsTrigger>
                                     </TabsList>
                                     
+                                    {/* PACKAGE SELECTION */}
                                     <TabsContent value="package" className="pt-2 space-y-3">
-                                        <div className="space-y-1">
-                                            <Label>Select Package</Label>
-                                            <Select value={day.packageId} onValueChange={(v) => updateDayConfig(i, { packageId: v })}>
-                                                <SelectTrigger><SelectValue placeholder="Choose from catalogue..." /></SelectTrigger>
-                                                <SelectContent>
-                                                    {packages.map(p => (
-                                                        <SelectItem key={p.id} value={p.id}>
-                                                            {p.name} - LKR {p.price}
-                                                        </SelectItem>
-                                                    ))}
-                                                </SelectContent>
-                                            </Select>
-                                        </div>
-                                        <div className="bg-blue-50 p-2 rounded text-xs text-blue-700 flex justify-between">
-                                            <span>Base Price:</span>
-                                            <span className="font-bold">LKR {day.cost || 0}</span>
+                                        <Select value={day.packageId} onValueChange={(v) => updateDayConfig(i, { packageId: v })}>
+                                            <SelectTrigger><SelectValue placeholder="Select a package..." /></SelectTrigger>
+                                            <SelectContent>
+                                                {packages.map(p => (
+                                                    <SelectItem key={p.id} value={p.id}>
+                                                        {p.name} - LKR {p.price.toLocaleString()}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                        <div className="bg-blue-50 p-2 rounded text-xs text-blue-700 flex justify-between px-3">
+                                            <span>Package Cost:</span>
+                                            <span className="font-bold">LKR {(day.cost || 0).toLocaleString()}</span>
                                         </div>
                                     </TabsContent>
 
+                                    {/* CUSTOM PLAN BUILDER */}
                                     <TabsContent value="custom" className="pt-2 space-y-3">
-                                        <div className="space-y-1">
-                                            <Label>Custom Cost Estimate</Label>
-                                            <Input type="number" value={day.cost} onChange={(e) => updateDayConfig(i, { cost: Number(e.target.value) })} />
+                                        <div className="space-y-2">
+                                            {/* Item List */}
+                                            {day.customItems?.map((item, itemIdx) => (
+                                                <div key={itemIdx} className="grid grid-cols-10 gap-2 items-start">
+                                                    <div className="col-span-4">
+                                                        <Input 
+                                                            placeholder="Item" 
+                                                            className="h-8 text-xs" 
+                                                            value={item.name}
+                                                            onChange={(e) => updateCustomItem(i, itemIdx, 'name', e.target.value)}
+                                                        />
+                                                    </div>
+                                                    <div className="col-span-2">
+                                                        <Input 
+                                                            type="number" placeholder="Qty" className="h-8 text-xs"
+                                                            value={item.quantity}
+                                                            onChange={(e) => updateCustomItem(i, itemIdx, 'quantity', Number(e.target.value))}
+                                                        />
+                                                    </div>
+                                                    <div className="col-span-3">
+                                                        <Input 
+                                                            type="number" placeholder="Price" className="h-8 text-xs text-right"
+                                                            value={item.price}
+                                                            onChange={(e) => updateCustomItem(i, itemIdx, 'price', Number(e.target.value))}
+                                                        />
+                                                    </div>
+                                                    <div className="col-span-1 flex justify-center">
+                                                        <Button variant="ghost" size="icon" className="h-8 w-8 text-red-400 hover:text-red-600" onClick={() => removeCustomItem(i, itemIdx)}>
+                                                            <Trash2 className="h-3 w-3" />
+                                                        </Button>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                            
+                                            <Button variant="outline" size="sm" className="w-full text-xs border-dashed text-slate-500" onClick={() => addCustomItem(i)}>
+                                                <Plus className="h-3 w-3 mr-1" /> Add Item
+                                            </Button>
                                         </div>
-                                        <div className="text-xs text-slate-400">
-                                            * Define custom deliverables later in the specific plan section.
+                                        <div className="bg-slate-50 p-2 rounded text-xs text-slate-700 flex justify-between px-3 border">
+                                            <span>Total Custom Cost:</span>
+                                            <span className="font-bold">LKR {(day.cost || 0).toLocaleString()}</span>
                                         </div>
                                     </TabsContent>
                                 </Tabs>
@@ -425,7 +451,7 @@ function EventForm({ onSuccess, onCancel }: { onSuccess: () => void, onCancel: (
                     {/* FINANCIAL SUMMARY */}
                     <div className="bg-slate-50 p-4 rounded-lg space-y-3 border">
                         <div className="flex justify-between text-sm">
-                            <span className="text-slate-600">Total Budget (All Days)</span>
+                            <span className="text-slate-600">Total Budget</span>
                             <span className="font-semibold">LKR {financials.total.toLocaleString()}</span>
                         </div>
                         <div className="flex justify-between items-center text-sm">
@@ -433,33 +459,28 @@ function EventForm({ onSuccess, onCancel }: { onSuccess: () => void, onCancel: (
                             <div className="w-24">
                                 <Input 
                                     type="number" 
-                                    className="h-7 text-right" 
+                                    className="h-7 text-right bg-white" 
                                     placeholder="0" 
-                                    value={formData.discount} 
+                                    value={formData.discount || ""} 
                                     onChange={e => setFormData({...formData, discount: Number(e.target.value)})} 
                                 />
                             </div>
                         </div>
                         <Separator className="bg-slate-300"/>
                         <div className="flex justify-between text-base font-bold text-[#1C4D8D]">
-                            <span>Sub Total</span>
+                            <span>Final Budget</span>
                             <span>LKR {financials.subTotal.toLocaleString()}</span>
                         </div>
                     </div>
                 </div>
 
-                {/* 4. OTHER INFO */}
                 <div className="space-y-2">
-                    <Label>Additional Information</Label>
-                    <Textarea placeholder="Any specific requirements or notes..." value={formData.notes} onChange={e => setFormData({...formData, notes: e.target.value})} className="bg-slate-50" />
+                    <Label>Additional Notes</Label>
+                    <Textarea placeholder="Specific requirements..." value={formData.notes} onChange={e => setFormData({...formData, notes: e.target.value})} className="bg-slate-50" />
                 </div>
-                
-                {/* Spacer to ensure content doesn't get hidden behind footer on small screens if needed */}
-                <div className="h-4"></div>
             </div>
 
-            {/* --- FIXED FOOTER --- */}
-            {/* [!code highlight] Fixed Footer implementation */}
+            {/* FIXED FOOTER */}
             <div className="p-4 border-t bg-white flex gap-3 shrink-0 mt-auto">
                 <Button variant="outline" className="flex-1" onClick={onCancel}>Cancel</Button>
                 <Button className="bg-[#1C4D8D] flex-1" onClick={handleSubmit} disabled={submitting}>

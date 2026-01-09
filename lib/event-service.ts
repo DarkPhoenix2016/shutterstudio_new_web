@@ -3,30 +3,38 @@ import { collection, getDocs, doc, getDoc, addDoc, serverTimestamp, query, order
 
 // --- TYPES ---
 
+export interface CustomItem {
+  name: string;
+  quantity: number;
+  unit?: string;
+  price: number;
+}
+
 export interface EventDayConfig {
   date: Date;
   type: 'package' | 'custom';
-  packageId?: string; // If package
-  customItems?: { name: string; value: string | number }[]; // If custom
+  packageId?: string; 
+  customItems?: CustomItem[]; 
   cost: number;
 }
 
 export interface EventData {
   id?: string;
-  // Customer
+  // Customer Info
   customerName: string;
   customerMobile: string;
   customerEmail?: string;
-  
-  // Meta
+  couplePhotoUrl?: string;
+
+  // Event Meta
   eventName: string;
-  eventType: string;
+  eventType: string; 
   status: string;
   inquiryDate: any;
   
-  // Schedule & Pricing
+  // Scheduling
   dayCount: number;
-  days: EventDayConfig[]; // Array of configs per day
+  days: EventDayConfig[]; 
   
   // Financials
   totalBudget: number;
@@ -62,7 +70,6 @@ export const fetchStudioSettingsList = async (studioId: string, settingType: 'EV
 // 2. Fetch Packages for Dropdown
 export const fetchPackagesList = async (studioId: string) => {
   try {
-    // A. Get List of IDs
     const listRef = doc(db, "Studios", studioId, "Packages", "package_list");
     const listSnap = await getDoc(listRef);
     if (!listSnap.exists()) return [];
@@ -70,7 +77,6 @@ export const fetchPackagesList = async (studioId: string) => {
     const idList: string[] = listSnap.data().LIST || [];
     if (idList.length === 0) return [];
 
-    // B. Fetch Details for each ID
     const packages = await Promise.all(idList.map(async (pkgId) => {
         const pkgSnap = await getDoc(doc(db, "Studios", studioId, "Packages", pkgId));
         return pkgSnap.exists() ? { id: pkgSnap.id, ...pkgSnap.data() } : null;
@@ -97,17 +103,47 @@ export const createEvent = async (studioId: string, event: EventData) => {
   }
 };
 
-// 4. Fetch Events (unchanged logic, just ensuring it matches new types)
+// 4. Fetch Events
 export const fetchEvents = async (studioId: string) => {
     const ref = collection(db, "Studios", studioId, "Events");
     const q = query(ref, orderBy("inquiryDate", "desc"));
     const snap = await getDocs(q);
+    
     return snap.docs.map(d => {
         const data = d.data();
+        
+        // [!code highlight] Fixed: Cast to unknown first to bypass strict property checks
         return { 
             id: d.id, 
             ...data, 
-            inquiryDate: data.inquiryDate instanceof Timestamp ? data.inquiryDate.toDate() : data.inquiryDate 
-        } as EventData;
+            inquiryDate: data.inquiryDate instanceof Timestamp ? data.inquiryDate.toDate() : data.inquiryDate,
+            dates: Array.isArray(data.dates) 
+              ? data.dates.map((day: any) => ({ ...day, date: day.date instanceof Timestamp ? day.date.toDate() : day.date })) 
+              : []
+        } as unknown as EventData;
     });
+};
+
+export const fetchEventById = async (studioId: string, eventId: string) => {
+  try {
+    const ref = doc(db, "Studios", studioId, "Events", eventId);
+    const snap = await getDoc(ref);
+    if (snap.exists()) {
+      const data = snap.data();
+      
+      // [!code highlight] Fixed: Cast to unknown first
+      return {
+        id: snap.id,
+        ...data,
+        inquiryDate: data.inquiryDate instanceof Timestamp ? data.inquiryDate.toDate() : data.inquiryDate,
+        dates: Array.isArray(data.dates) 
+          ? data.dates.map((day: any) => ({ ...day, date: day.date instanceof Timestamp ? day.date.toDate() : day.date })) 
+          : []
+      } as unknown as EventData;
+    }
+    return null;
+  } catch (error) {
+    console.error("Error fetching event:", error);
+    return null;
+  }
 };
