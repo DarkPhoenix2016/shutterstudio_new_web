@@ -13,9 +13,20 @@ export interface CustomItem {
   price: number;
 }
 
-export interface PackageFeature {
-  label: string;
-  value: string | number | boolean;
+// [!code highlight] Updated Interface to match your Firestore Data
+export interface PackageData {
+  id: string;
+  name: string;
+  price: number;
+  disabled: boolean;
+  discounted: boolean;
+  discountType: 'fixed' | 'percentage';
+  discountValue: number;
+  description?: string;
+  // parameters is a map in Firestore (e.g., { "Drone Cameras": 1, "Preshoot": true })
+  parameters?: Record<string, string | number | boolean>; 
+  // We will generate this array for the UI
+  featuresList?: string[]; 
 }
 
 export interface EventDayConfig {
@@ -50,7 +61,8 @@ export interface EventData {
   createdAt?: any;
 }
 
-export interface PackageParameter {
+// Interface for the Global Config (Studio/Settings/Packages/CONFIG)
+export interface PackageConfigParameter {
   name: string;
   unit?: string;
   defaultPrice?: number;
@@ -73,7 +85,7 @@ export const fetchStudioSettingsList = async (studioId: string, settingType: 'EV
   }
 };
 
-// 2. Fetch Packages
+// 2. Fetch Packages List
 export const fetchPackagesList = async (studioId: string) => {
   try {
     const listRef = doc(db, "Studios", studioId, "Packages", "package_list");
@@ -86,32 +98,43 @@ export const fetchPackagesList = async (studioId: string) => {
     const packages = await Promise.all(idList.map(async (pkgId) => {
         const pkgSnap = await getDoc(doc(db, "Studios", studioId, "Packages", pkgId));
         if (!pkgSnap.exists()) return null;
+        
         const data = pkgSnap.data();
         
+        // [!code highlight] Logic to transform 'parameters' map into a readable string array
+        const paramsMap = data.parameters || {};
+        const featuresList: string[] = Object.entries(paramsMap).map(([key, value]) => {
+            if (value === true) return key; // e.g. "Preshoot"
+            if (value === false) return null; // Skip false items
+            return `${key}: ${value}`; // e.g. "Drone Cameras: 1"
+        }).filter((f): f is string => f !== null);
+
         return { 
             id: pkgSnap.id, 
             ...data,
-            // Ensure features is a usable array
-            features: Array.isArray(data.features) ? data.features : [], 
+            parameters: paramsMap,
+            featuresList: featuresList, // Use this property in your UI to display tags
             description: data.description || ""
-        };
+        } as PackageData;
     }));
     
-    return packages.filter(p => p !== null);
+    return packages.filter((p): p is PackageData => p !== null);
   } catch (e) {
     console.error("Error fetching packages", e);
     return [];
   }
 };
 
-// 2.1 Fetch Package Configuration Parameters
+// 2.1 Fetch Package Configuration Parameters (For Custom Plans)
+// This fetches from /Studios/{id}/Packages/CONFIG (if that's where you store available params)
 export const fetchPackageConfig = async (studioId: string) => {
     try {
         const ref = doc(db, "Studios", studioId, "Packages", "CONFIG");
         const snap = await getDoc(ref);
-        // Supports both "parameters" (array of maps) or simple fields
+        
+        // Assuming the CONFIG doc has a 'parameters' array defining what CAN be added
         if (snap.exists() && Array.isArray(snap.data().parameters)) {
-            return snap.data().parameters as PackageParameter[];
+            return snap.data().parameters as PackageConfigParameter[];
         }
         return [];
     } catch (e) {

@@ -6,8 +6,8 @@ import { useRouter } from "next/navigation"
 import { 
     fetchEvents, createEvent, updateEvent, deleteEvent, 
     fetchStudioSettingsList, fetchPackagesList, fetchPackageConfig,
-    EventData, EventDayConfig, CustomItem, PackageParameter 
-} from "@/services/event-service"
+    EventData, EventDayConfig, CustomItem, PackageData, PackageConfigParameter 
+} from "@/lib/event-service"
 import { validateSubscriptionAction } from "@/services/subscription-service"
 import { useMediaQuery } from "@/hooks/use-media-query"
 
@@ -43,6 +43,7 @@ export default function EventsPage() {
   const [events, setEvents] = useState<EventData[]>([])
   const [searchTerm, setSearchTerm] = useState("")
   
+  // Form State
   const [isFormOpen, setIsFormOpen] = useState(false)
   const [editingEvent, setEditingEvent] = useState<EventData | null>(null) 
   const isDesktop = useMediaQuery("(min-width: 768px)")
@@ -242,11 +243,15 @@ function EventForm({ initialData, onSuccess, onCancel }: { initialData?: EventDa
     const [submitting, setSubmitting] = useState(false)
     const [loaded, setLoaded] = useState(false)
 
+    // Lists
     const [typeList, setTypeList] = useState<string[]>(DEFAULT_TYPES)
     const [statusList, setStatusList] = useState<string[]>(DEFAULT_STATUSES)
-    const [packages, setPackages] = useState<any[]>([])
-    const [configParams, setConfigParams] = useState<PackageParameter[]>([])
+    // [!code highlight] Updated Type: PackageData[]
+    const [packages, setPackages] = useState<PackageData[]>([])
+    // [!code highlight] Updated Type: PackageConfigParameter[]
+    const [configParams, setConfigParams] = useState<PackageConfigParameter[]>([])
 
+    // Form Data
     const [formData, setFormData] = useState<Partial<EventData>>({
         customerName: "", customerMobile: "", customerEmail: "",
         eventName: "", eventType: "", status: "Inquiry",
@@ -279,14 +284,15 @@ function EventForm({ initialData, onSuccess, onCancel }: { initialData?: EventDa
                 
                 if(types.length) setTypeList(types);
                 if(statuses.length) setStatusList(statuses);
-                setPackages(pkgs);
-                setConfigParams(params);
+                setPackages(pkgs as PackageData[]);
+                setConfigParams(params as PackageConfigParameter[]);
             } catch(e) { console.error(e) }
             setLoaded(true)
         }
         init()
     }, [userData])
 
+    // Financial Calculation
     const financials = useMemo(() => {
         const total = (formData.days || []).reduce((acc: number, day: EventDayConfig) => acc + (day.cost || 0), 0);
         let discountAmount = 0;
@@ -301,6 +307,7 @@ function EventForm({ initialData, onSuccess, onCancel }: { initialData?: EventDa
         return { total, discountAmount, subTotal };
     }, [formData.days, formData.discount, formData.discountType])
 
+    // Handlers
     const handleDayCountChange = (count: number) => {
         const newCount = Math.max(1, count);
         const currentDays = [...(formData.days || [])];
@@ -330,7 +337,7 @@ function EventForm({ initialData, onSuccess, onCancel }: { initialData?: EventDa
         setFormData({ ...formData, days: newDays });
     }
 
-    const addCustomItem = (dayIndex: number, param?: PackageParameter) => {
+    const addCustomItem = (dayIndex: number, param?: PackageConfigParameter) => {
         const day = formData.days![dayIndex];
         const newItem: CustomItem = param 
             ? { name: param.name, quantity: 1, unit: param.unit || "", price: param.defaultPrice || 0 }
@@ -404,25 +411,22 @@ function EventForm({ initialData, onSuccess, onCancel }: { initialData?: EventDa
                 <div className="space-y-4">
                     <div className="space-y-3">
                         <Input placeholder="Event Name *" value={formData.eventName} onChange={e => setFormData({...formData, eventName: e.target.value})} className="bg-slate-50 font-medium" />
-                        
-                        {/* [!code highlight] Updated: Full width grid for dropdowns matching text inputs */}
                         <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-1.5">
                                 <Label className="text-xs text-slate-500 uppercase tracking-wide">Event Type</Label>
                                 <Select value={formData.eventType} onValueChange={v => setFormData({...formData, eventType: v})}>
-                                    <SelectTrigger className="w-full bg-slate-50"><SelectValue placeholder="Select..."/></SelectTrigger>
+                                    <SelectTrigger className="bg-slate-50"><SelectValue placeholder="Select..."/></SelectTrigger>
                                     <SelectContent>{typeList.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
                                 </Select>
                             </div>
                             <div className="space-y-1.5">
                                 <Label className="text-xs text-slate-500 uppercase tracking-wide">Status</Label>
                                 <Select value={formData.status} onValueChange={(v:any) => setFormData({...formData, status: v})}>
-                                    <SelectTrigger className="w-full bg-slate-50"><SelectValue/></SelectTrigger>
+                                    <SelectTrigger className="bg-slate-50"><SelectValue/></SelectTrigger>
                                     <SelectContent>{statusList.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
                                 </Select>
                             </div>
                         </div>
-
                         <Input placeholder="Customer Name *" value={formData.customerName} onChange={e => setFormData({...formData, customerName: e.target.value})} className="bg-slate-50" />
                         <div className="grid grid-cols-2 gap-3">
                             <Input placeholder="Mobile" value={formData.customerMobile} onChange={e => setFormData({...formData, customerMobile: e.target.value})} className="bg-slate-50" />
@@ -495,7 +499,7 @@ function EventForm({ initialData, onSuccess, onCancel }: { initialData?: EventDa
                                             </SelectContent>
                                         </Select>
                                         
-                                        {/* [!code highlight] Package Features Display */}
+                                        {/* [!code highlight] Package Features & Details */}
                                         {day.packageId && (() => {
                                             const pkg = packages.find(p => p.id === day.packageId);
                                             if (!pkg) return null;
@@ -506,23 +510,14 @@ function EventForm({ initialData, onSuccess, onCancel }: { initialData?: EventDa
                                                         <span>LKR {Number(pkg.price).toLocaleString()}</span>
                                                     </div>
                                                     
-                                                    {pkg.features && pkg.features.length > 0 ? (
+                                                    {pkg.featuresList && pkg.featuresList.length > 0 ? (
                                                         <div className="space-y-1.5">
-                                                            {pkg.features.map((f: any, idx: number) => {
-                                                                const label = typeof f === 'object' ? f.label : f;
-                                                                const value = typeof f === 'object' ? f.value : true;
-                                                                
-                                                                return (
-                                                                    <div key={idx} className="flex justify-between items-center text-slate-600">
-                                                                        <span>{label}</span>
-                                                                        {value === true ? (
-                                                                            <Check className="h-4 w-4 text-green-500" />
-                                                                        ) : (
-                                                                            <span className="font-medium text-slate-800">{value}</span>
-                                                                        )}
-                                                                    </div>
-                                                                )
-                                                            })}
+                                                            {pkg.featuresList.map((f, idx) => (
+                                                                <div key={idx} className="flex items-center text-slate-600 text-xs">
+                                                                    <Check className="h-3 w-3 text-green-500 mr-2" />
+                                                                    <span>{f}</span>
+                                                                </div>
+                                                            ))}
                                                         </div>
                                                     ) : (
                                                         <p className="text-xs text-slate-400 italic">No features listed.</p>
@@ -565,7 +560,7 @@ function EventForm({ initialData, onSuccess, onCancel }: { initialData?: EventDa
                                                 </div>
                                             ))}
                                             
-                                            {/* [!code highlight] Add Parameter Dropdown */}
+                                            {/* Add Parameter Dropdown */}
                                             <div className="flex gap-2">
                                                 <Select onValueChange={(val) => {
                                                     if (val === 'custom_new') {
