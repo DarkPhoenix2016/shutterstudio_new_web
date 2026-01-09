@@ -12,8 +12,8 @@ export interface Member {
   role?: string;
   designation?: string;
   disabled?: boolean;
-  accountDisabled?: boolean; // Sometimes used interchangeably with disabled
-  status?: string; // "Active" | "Disabled"
+  accountDisabled?: boolean; 
+  status?: string; 
   studioID?: string;
   [key: string]: any;
 }
@@ -42,9 +42,6 @@ const API_URLS = {
 
 // --- READ OPERATIONS ---
 
-/**
- * Fetches the list of crew members for a specific studio.
- */
 export const fetchCrewMembers = async (studioId: string): Promise<Member[]> => {
   try {
     const memListRef = doc(db, "Studios", studioId, "Members", "MEM_LIST");
@@ -54,22 +51,18 @@ export const fetchCrewMembers = async (studioId: string): Promise<Member[]> => {
 
     const idList: string[] = memListSnap.data().ID_LIST || [];
     
-    // Fetch all user documents in parallel
     const userPromises = idList.map((uid) => getDoc(doc(db, "Users", uid)));
     const userSnaps = await Promise.all(userPromises);
 
     return userSnaps
       .map((snap) => ({ id: snap.id, ...snap.data() } as Member))
-      .filter((u) => u.id); // Filter out any failed fetches/empty IDs
+      .filter((u) => u.id); 
   } catch (error) {
     console.error("Error fetching crew members:", error);
     throw error;
   }
 };
 
-/**
- * Fetches system roles.
- */
 export const fetchRoles = async (): Promise<string[]> => {
   try {
     const platformRef = doc(db, "Platform", "ROLE_PERMISSIONS");
@@ -85,9 +78,6 @@ export const fetchRoles = async (): Promise<string[]> => {
   }
 };
 
-/**
- * Fetches studio-specific designations.
- */
 export const fetchDesignations = async (studioId: string): Promise<string[]> => {
   try {
     const studioDocSnap = await getDoc(doc(db, "Studios", studioId));
@@ -101,9 +91,6 @@ export const fetchDesignations = async (studioId: string): Promise<string[]> => 
   }
 };
 
-/**
- * Fetches Subscription Limits (Max Users).
- */
 export const fetchSubscriptionLimits = async (studioId: string): Promise<PackageLimits> => {
   try {
     const subConfigRef = doc(db, "Studios", studioId, "Subscription", "config");
@@ -135,9 +122,6 @@ export const fetchSubscriptionLimits = async (studioId: string): Promise<Package
 
 // --- WRITE OPERATIONS ---
 
-/**
- * Create a new user via API.
- */
 export const createCrewMember = async (data: NewMemberData) => {
   try {
     const response = await fetch(API_URLS.REGISTER, {
@@ -160,7 +144,6 @@ export const createCrewMember = async (data: NewMemberData) => {
     const result = await response.json();
     if (!response.ok) throw new Error(result.error?.message || "Registration failed");
 
-    // Update designation specifically if provided (as API might not handle custom fields)
     if (result.userID && data.designation) {
       await updateDoc(doc(db, "Users", result.userID), {
         designation: data.designation,
@@ -174,9 +157,6 @@ export const createCrewMember = async (data: NewMemberData) => {
   }
 };
 
-/**
- * Update an existing user in Firestore.
- */
 export const updateCrewMember = async (uid: string, updates: Partial<Member>) => {
   try {
     const userRef = doc(db, "Users", uid);
@@ -187,9 +167,6 @@ export const updateCrewMember = async (uid: string, updates: Partial<Member>) =>
   }
 };
 
-/**
- * Enable or Disable a user via API.
- */
 export const toggleCrewMemberStatus = async (uid: string, shouldDisable: boolean) => {
   const url = shouldDisable ? API_URLS.DISABLE : API_URLS.ENABLE;
   try {

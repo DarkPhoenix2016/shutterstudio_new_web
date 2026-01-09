@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { useAuth } from "@/context/AuthContext"
+// [!code highlight] Updated Import Path
 import { 
   fetchCrewMembers, fetchRoles, fetchDesignations, fetchSubscriptionLimits, 
   createCrewMember, updateCrewMember, toggleCrewMemberStatus,
@@ -20,11 +21,10 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { 
-    Loader2, Search, Mail, Phone, Ban, CheckCircle, UserPlus, AlertTriangle, Pencil 
+    Loader2, Search, Mail, Phone, Ban, CheckCircle, UserPlus, AlertTriangle, Pencil, MessageCircle 
 } from "lucide-react"
 import Swal from "sweetalert2"
 
-// Toast Configuration
 const Toast = Swal.mixin({
   toast: true,
   position: 'top-end',
@@ -85,7 +85,6 @@ export default function StudioManagersPage() {
             setMembers(fetchedMembers);
             setFilteredMembers(fetchedMembers);
 
-            // Calculate Active Usage
             const activeCount = fetchedMembers.filter(u => !(u.disabled || u.accountDisabled || u.status === "Disabled")).length;
             setActiveUsage(activeCount);
 
@@ -133,6 +132,12 @@ export default function StudioManagersPage() {
 
   // 3. ACTIONS
   const handleCreateUser = async () => {
+      // [!code highlight] Fixed: Validation Guard Clause
+      if (!userData?.studioID) {
+          Toast.fire({ icon: 'error', title: 'Studio ID is missing.' });
+          return;
+      }
+
       if(!newUser.email || !newUser.password || !newUser.displayName || !newUser.role) {
           Toast.fire({ icon: 'warning', title: 'Please fill all mandatory fields' });
           return;
@@ -141,16 +146,16 @@ export default function StudioManagersPage() {
       setIsSubmitting(true);
 
       try {
+          // [!code highlight] Safe to use studioID here because of the guard clause above
           await createCrewMember({
               ...newUser,
-              studioID: userData!.studioID
+              studioID: userData.studioID
           });
 
           Toast.fire({ icon: 'success', title: 'User created successfully' });
           setIsAddOpen(false);
           setNewUser({ displayName: "", email: "", phone: "", password: "", role: "", designation: "" });
           
-          // Ideally re-fetch or append to state, reloading for simplicity as per original logic
           window.location.reload(); 
 
       } catch (error: any) {
@@ -179,7 +184,6 @@ export default function StudioManagersPage() {
 
           await updateCrewMember(editingUser.id, updateData);
 
-          // Optimistic Update
           setMembers(prev => prev.map(m => m.id === editingUser.id ? { ...m, ...updateData } : m));
           
           Toast.fire({ icon: 'success', title: 'User details updated' });
@@ -267,14 +271,12 @@ export default function StudioManagersPage() {
                         {isLimitReached ? "Limit Reached" : "Add Member"}
                     </Button>
                 </DialogTrigger>
-                {/* ... Dialog Content (Same as before, simplified via imports) ... */}
                 <DialogContent>
                     <DialogHeader>
                         <DialogTitle>Add New Team Member</DialogTitle>
                         <DialogDescription>Create a new account. Active users count towards your plan limit.</DialogDescription>
                     </DialogHeader>
                     <div className="grid gap-4 py-4">
-                        {/* Fields ... */}
                         <div className="grid grid-cols-4 items-center gap-4"><Label className="text-right">Name *</Label><Input className="col-span-3" value={newUser.displayName} onChange={e => setNewUser({...newUser, displayName: e.target.value})}/></div>
                         <div className="grid grid-cols-4 items-center gap-4"><Label className="text-right">Email *</Label><Input type="email" className="col-span-3" value={newUser.email} onChange={e => setNewUser({...newUser, email: e.target.value})}/></div>
                         <div className="grid grid-cols-4 items-center gap-4"><Label className="text-right">Phone *</Label><Input className="col-span-3" placeholder="+1 555 0199" value={newUser.phone} onChange={e => setNewUser({...newUser, phone: e.target.value})} /></div>
@@ -312,13 +314,12 @@ export default function StudioManagersPage() {
         </div>
       </div>
 
-      {/* EDIT USER DIALOG - Same structure using state */}
+      {/* EDIT USER DIALOG */}
       <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
           <DialogContent>
               <DialogHeader><DialogTitle>Edit User</DialogTitle></DialogHeader>
               {editingUser && (
                   <div className="grid gap-4 py-4">
-                      {/* Inputs mapped to editingUser state... */}
                       <div className="grid grid-cols-4 items-center gap-4"><Label className="text-right">Name</Label><Input className="col-span-3" value={editingUser.displayName} onChange={e => setEditingUser({...editingUser, displayName: e.target.value})}/></div>
                       <div className="grid grid-cols-4 items-center gap-4"><Label className="text-right">Phone</Label><Input className="col-span-3" value={editingUser.phoneNumber} onChange={e => setEditingUser({...editingUser, phoneNumber: e.target.value})}/></div>
                       <div className="grid grid-cols-4 items-center gap-4">
