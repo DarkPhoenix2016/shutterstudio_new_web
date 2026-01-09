@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import { useAuth } from "@/context/AuthContext"
 import { useParams, useRouter } from "next/navigation"
 import { fetchEventById, EventData } from "@/lib/event-service"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
@@ -30,7 +30,7 @@ export default function EventDetailPage() {
   }, [userData, id])
 
   if (loading) return <div className="h-screen flex items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-[#1C4D8D]" /></div>
-  if (!event) return <div>Event not found</div>
+  if (!event) return <div className="p-8 text-center text-slate-500">Event not found</div>
 
   return (
     <div className="max-w-5xl mx-auto p-4 md:p-8 space-y-8 animate-in fade-in">
