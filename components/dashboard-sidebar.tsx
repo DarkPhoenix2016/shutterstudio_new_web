@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo } from "react"
+import { useMemo, useState, useEffect } from "react"
 import { useAuth } from "@/context/AuthContext"
 import { useRouter, usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
@@ -21,7 +21,7 @@ import {
   Collapsible, 
   CollapsibleContent, 
   CollapsibleTrigger 
-} from "@/components/ui/collapsible" // [!code highlight] Added for collapsing
+} from "@/components/ui/collapsible"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 
@@ -43,6 +43,9 @@ export function DashboardSidebar() {
   const { currentUser, userData, studioData, logout, globalSettings, rolePermissions } = useAuth()
   const router = useRouter()
   const pathname = usePathname()
+
+  // State for the single currently open group
+  const [openGroupLabel, setOpenGroupLabel] = useState<string | null>(null)
 
   const handleLogout = async () => {
     try {
@@ -82,6 +85,32 @@ export function DashboardSidebar() {
 
   }, [userData, rolePermissions, globalSettings])
 
+  // --- HELPER: Determine if an item is active ---
+  const isItemActive = (itemPath: string, currentPath: string) => {
+     // 1. Exact match always wins
+     if (currentPath === itemPath) return true;
+     
+     // 2. Sub-path match (e.g. /events/new matches /events), 
+     // BUT ignore root paths like "/app" or "/" to prevent them from matching everything.
+     if (itemPath !== '/app' && itemPath !== '/' && currentPath.startsWith(`${itemPath}/`)) {
+        return true;
+     }
+     return false;
+  }
+
+  // Logic: Only expand the group containing the current path
+  useEffect(() => {
+    if (navStructure.length > 0) {
+      const activeGroup = navStructure.find(group => 
+        group.items.some(item => isItemActive(item.path, pathname))
+      )
+      
+      if (activeGroup) {
+        setOpenGroupLabel(activeGroup.label)
+      }
+    }
+  }, [pathname, navStructure])
+
   // Display Variables
   const studioName = studioData?.name || "ShutterStudio"
   const studioLogo = studioData?.logo_url
@@ -91,15 +120,15 @@ export function DashboardSidebar() {
 
   return (
     <Sidebar className="border-r-0 bg-[#0F2854] text-white">
-      {/* --- HEADER: Studio Details (Compact) --- */}
-      <SidebarHeader className="p-4"> 
+      {/* --- HEADER --- */}
+      <SidebarHeader className="p-4 pb-2"> 
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2.5 overflow-hidden">
-            <div className="h-7 w-7 rounded bg-white/10 flex items-center justify-center shrink-0 overflow-hidden">
+            <div className="h-8 w-8 rounded bg-white/10 flex items-center justify-center shrink-0 overflow-hidden">
                {studioLogo ? (
                   <img src={studioLogo} alt="Studio Logo" className="h-full w-full object-cover" />
                ) : (
-                  <Camera className="h-4 w-4 text-[#BDE8F5]" />
+                  <Camera className="h-5 w-5 text-[#BDE8F5]" />
                )}
             </div>
             <div className="flex flex-col overflow-hidden">
@@ -120,24 +149,32 @@ export function DashboardSidebar() {
         </div>
       </SidebarHeader>
 
-      {/* --- CONTENT: Dynamic Navigation --- */}
-      <SidebarContent className="px-2 scrollbar-thin scrollbar-thumb-white/10">
-        {navStructure.map((group, groupIdx) => (
-            // [!code highlight] Collapsible Wrapper
-            <Collapsible key={group.id || group.label} defaultOpen className="group/collapsible">
-              <SidebarGroup className={cn(groupIdx !== 0 && "mt-1")}>
-                <SidebarGroupLabel asChild className="group/label text-[#4988C4] hover:text-white hover:bg-white/5 cursor-pointer text-[10px] font-bold tracking-widest px-2 mb-1 uppercase h-8">
+      {/* --- CONTENT --- */}
+      {/* Increased top padding (pt-6) to separate header from first category */}
+      <SidebarContent className="px-2 pt-6 scrollbar-thin scrollbar-thumb-white/10 gap-0">
+        {navStructure.map((group) => (
+            <Collapsible 
+              key={group.id || group.label} 
+              open={openGroupLabel === group.label} 
+              onOpenChange={(isOpen) => {
+                setOpenGroupLabel(isOpen ? group.label : null)
+              }}
+              className="group/collapsible"
+            >
+              <SidebarGroup className="py-0">
+                <SidebarGroupLabel asChild className="group/label text-[#4988C4] hover:text-white hover:bg-white/5 cursor-pointer text-[10px] font-bold tracking-widest px-2 h-8 mb-0.5 uppercase flex items-center">
                   <CollapsibleTrigger>
                     {group.label}
-                    <ChevronDown className="ml-auto h-3 w-3 transition-transform group-data-[state=open]/collapsible:rotate-180" />
+                    <ChevronDown className="ml-auto h-3 w-3 transition-transform duration-200 group-data-[state=open]/collapsible:rotate-180" />
                   </CollapsibleTrigger>
                 </SidebarGroupLabel>
                 
-                <CollapsibleContent>
+                <CollapsibleContent className="pb-1">
                   <SidebarGroupContent>
-                    <SidebarMenu>
+                    <SidebarMenu className="gap-0.5">
                       {group.items.map((item) => {
-                        const isActive = pathname === item.path || pathname.startsWith(`${item.path}/`)
+                        // [!code highlight] Use the stricter helper function
+                        const isActive = isItemActive(item.path, pathname);
                         const IconComponent = ICON_MAP[item.icon] || Camera 
 
                         return (
@@ -145,11 +182,10 @@ export function DashboardSidebar() {
                             <SidebarMenuButton
                               asChild
                               isActive={isActive}
-                              // [!code highlight] Compact sizing (h-8) and text
                               className={cn(
                                 "h-8 px-2.5 transition-all duration-200 group relative",
                                 isActive
-                                  ? "bg-[#1C4D8D] text-white font-medium"
+                                  ? "bg-[#1C4D8D] text-white font-medium shadow-sm"
                                   : "text-white/70 hover:text-white hover:bg-[#1e3a6e]",
                               )}
                             >
@@ -173,9 +209,9 @@ export function DashboardSidebar() {
         ))}
       </SidebarContent>
 
-      {/* --- FOOTER: User Profile (Compact) --- */}
+      {/* --- FOOTER: User Profile --- */}
       <SidebarFooter className="p-3 mt-auto">
-        <SidebarSeparator className="bg-white/10 mb-3" />
+        <SidebarSeparator className="bg-white/10 mb-2" />
         
         <div 
           onClick={() => router.push('/app/profile/user')} 
