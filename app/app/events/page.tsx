@@ -412,7 +412,11 @@ function EventForm({ initialData, onSuccess, onCancel }: { initialData?: EventDa
                         <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-1.5">
                                 <Label className="text-xs text-slate-500 uppercase tracking-wide">Event Type</Label>
-                                <Select value={formData.eventType} onValueChange={v => setFormData({...formData, eventType: v})}>
+                                <Select class name {
+                                    constructor(parameters) {
+                                        
+                                    }
+                                } value={formData.eventType} onValueChange={v => setFormData({...formData, eventType: v})}>
                                     <SelectTrigger className="bg-slate-50"><SelectValue placeholder="Select..."/></SelectTrigger>
                                     <SelectContent>{typeList.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
                                 </Select>
