@@ -1,5 +1,8 @@
 import { db } from "@/lib/firebase";
-import { collection, getDocs, doc, getDoc, addDoc, serverTimestamp, query, orderBy, Timestamp } from "firebase/firestore";
+import { 
+  collection, getDocs, doc, getDoc, addDoc, setDoc, deleteDoc, updateDoc, 
+  serverTimestamp, query, orderBy, Timestamp, runTransaction 
+} from "firebase/firestore";
 
 // --- TYPES ---
 
@@ -20,6 +23,7 @@ export interface EventDayConfig {
 
 export interface EventData {
   id?: string;
+  displayId?: string; // e.g. OMG00001
   // Customer Info
   customerName: string;
   customerMobile: string;
@@ -53,7 +57,7 @@ export interface EventData {
 
 // --- FUNCTIONS ---
 
-// 1. Fetch Dynamic Settings Lists (Event Types / Statuses)
+// 1. Fetch Dynamic Settings Lists
 export const fetchStudioSettingsList = async (studioId: string, settingType: 'EVENT_TYPES' | 'EVENT_STATUS') => {
   try {
     const ref = doc(db, "Studios", studioId, "Settings", settingType);
@@ -68,7 +72,7 @@ export const fetchStudioSettingsList = async (studioId: string, settingType: 'EV
   }
 };
 
-// 2. Fetch Packages List for Dropdown
+// 2. Fetch Packages
 export const fetchPackagesList = async (studioId: string) => {
   try {
     const listRef = doc(db, "Studios", studioId, "Packages", "package_list");
@@ -90,13 +94,46 @@ export const fetchPackagesList = async (studioId: string) => {
   }
 };
 
-// 3. Create Event
+// 3. Create Event with Custom ID Transaction
 export const createEvent = async (studioId: string, event: EventData) => {
   try {
-    const ref = collection(db, "Studios", studioId, "Events");
-    await addDoc(ref, {
-      ...event,
-      createdAt: serverTimestamp()
+    await runTransaction(db, async (transaction) => {
+      // A. Reference to Studio Document (for Invoice Counters)
+      const studioRef = doc(db, "Studios", studioId);
+      const studioDoc = await transaction.get(studioRef);
+      
+      if (!studioDoc.exists()) throw "Studio not found!";
+
+      const data = studioDoc.data();
+      const invoiceText = data.invoice_text || "EVT";
+      const nextStr = data.invoice_next || "00001";
+      const currentInt = data.invoice_current || 0;
+
+      // B. Generate New ID
+      const customId = `${invoiceText}${nextStr}`; // e.g., OMG00002
+
+      // C. Calculate Next Sequence
+      const nextInt = parseInt(nextStr, 10);
+      const newNextStr = String(nextInt + 1).padStart(5, '0');
+
+      // D. Create Event Reference (Using Custom ID as Doc ID or Auto ID? Using Custom ID is cleaner for URLs)
+      // Let's use Auto ID for Firestore Doc ID to prevent collisions if configs reset, but store customId as field.
+      const newEventRef = doc(collection(db, "Studios", studioId, "Events"));
+
+      // E. Write Event
+      transaction.set(newEventRef, {
+        ...event,
+        displayId: customId, // Store the readable ID
+        createdAt: serverTimestamp()
+      });
+
+      // F. Update Studio Counters
+      transaction.update(studioRef, {
+        invoice_last: currentInt, // Move current to last
+        invoice_current: nextInt, // Set new current
+        invoice_number: nextStr,  // Set string representation
+        invoice_next: newNextStr  // Prepare for next
+      });
     });
   } catch (error) {
     console.error("Error creating event:", error);
@@ -104,16 +141,36 @@ export const createEvent = async (studioId: string, event: EventData) => {
   }
 };
 
-// 4. Fetch All Events
+// 4. Update Event
+export const updateEvent = async (studioId: string, eventId: string, updates: Partial<EventData>) => {
+  try {
+    const ref = doc(db, "Studios", studioId, "Events", eventId);
+    await updateDoc(ref, updates);
+  } catch (error) {
+    console.error("Error updating event:", error);
+    throw error;
+  }
+};
+
+// 5. Delete Event
+export const deleteEvent = async (studioId: string, eventId: string) => {
+  try {
+    const ref = doc(db, "Studios", studioId, "Events", eventId);
+    await deleteDoc(ref);
+  } catch (error) {
+    console.error("Error deleting event:", error);
+    throw error;
+  }
+};
+
+// 6. Fetch All Events
 export const fetchEvents = async (studioId: string) => {
     const ref = collection(db, "Studios", studioId, "Events");
-    const q = query(ref, orderBy("inquiryDate", "desc"));
+    const q = query(ref, orderBy("createdAt", "desc")); // Changed to createdAt for consistency
     const snap = await getDocs(q);
     
     return snap.docs.map(d => {
         const data = d.data();
-        
-        // Convert Firestore Timestamps to JS Dates and cast to EventData
         return { 
             id: d.id, 
             ...data, 
@@ -121,7 +178,6 @@ export const fetchEvents = async (studioId: string) => {
             dates: Array.isArray(data.dates) 
               ? data.dates.map((day: any) => ({ ...day, date: day.date instanceof Timestamp ? day.date.toDate() : day.date })) 
               : [],
-            // Map legacy 'dates' to new 'days' structure if needed, or handle mapping in UI
             days: Array.isArray(data.days)
               ? data.days.map((day: any) => ({ ...day, date: day.date instanceof Timestamp ? day.date.toDate() : day.date }))
               : []
@@ -129,14 +185,12 @@ export const fetchEvents = async (studioId: string) => {
     });
 };
 
-// 5. Fetch Single Event by ID
 export const fetchEventById = async (studioId: string, eventId: string) => {
   try {
     const ref = doc(db, "Studios", studioId, "Events", eventId);
     const snap = await getDoc(ref);
     if (snap.exists()) {
       const data = snap.data();
-      
       return {
         id: snap.id,
         ...data,

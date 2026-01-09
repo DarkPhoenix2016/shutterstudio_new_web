@@ -4,7 +4,8 @@ import { useState, useEffect, useMemo } from "react"
 import { useAuth } from "@/context/AuthContext"
 import { useRouter } from "next/navigation"
 import { 
-    fetchEvents, createEvent, fetchStudioSettingsList, fetchPackagesList, 
+    fetchEvents, createEvent, updateEvent, deleteEvent, 
+    fetchStudioSettingsList, fetchPackagesList, 
     EventData, EventDayConfig, CustomItem 
 } from "@/services/event-service"
 import { validateSubscriptionAction } from "@/services/subscription-service"
@@ -24,9 +25,10 @@ import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Separator } from "@/components/ui/separator"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 
 // Icons
-import { Plus, Calendar as CalendarIcon, MapPin, Users, Search, Loader2, Package, AlertCircle, Trash2 } from "lucide-react"
+import { Plus, Calendar as CalendarIcon, MapPin, Users, Search, Loader2, Package, AlertCircle, Trash2, MoreVertical, Edit, Trash } from "lucide-react"
 import { format } from "date-fns"
 import { cn } from "@/lib/utils"
 import Swal from "sweetalert2"
@@ -41,7 +43,9 @@ export default function EventsPage() {
   const [events, setEvents] = useState<EventData[]>([])
   const [searchTerm, setSearchTerm] = useState("")
   
+  // Form State
   const [isFormOpen, setIsFormOpen] = useState(false)
+  const [editingEvent, setEditingEvent] = useState<EventData | null>(null) // [!code highlight] Track edit state
   const isDesktop = useMediaQuery("(min-width: 768px)")
 
   useEffect(() => {
@@ -65,7 +69,8 @@ export default function EventsPage() {
 
   const filteredEvents = events.filter(e => 
     e.eventName?.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    e.customerName?.toLowerCase().includes(searchTerm.toLowerCase())
+    e.customerName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    e.displayId?.toLowerCase().includes(searchTerm.toLowerCase())
   )
 
   const getStatusColor = (status: string) => {
@@ -75,6 +80,42 @@ export default function EventsPage() {
     if (s.includes('complet')) return 'bg-green-100 text-green-700'
     if (s.includes('cancel')) return 'bg-red-100 text-red-700'
     return 'bg-slate-100 text-slate-700'
+  }
+
+  // [!code highlight] Action Handlers
+  const handleAddNew = () => {
+      setEditingEvent(null);
+      setIsFormOpen(true);
+  }
+
+  const handleEdit = (e: React.MouseEvent, event: EventData) => {
+      e.stopPropagation(); // Prevent card click
+      setEditingEvent(event);
+      setIsFormOpen(true);
+  }
+
+  const handleDelete = async (e: React.MouseEvent, event: EventData) => {
+      e.stopPropagation();
+      if (!userData?.studioID || !event.id) return;
+
+      const result = await Swal.fire({
+          title: 'Delete Event?',
+          text: `Are you sure you want to delete ${event.displayId || event.eventName}? This cannot be undone.`,
+          icon: 'warning',
+          showCancelButton: true,
+          confirmButtonColor: '#d33',
+          confirmButtonText: 'Yes, delete it!'
+      });
+
+      if (result.isConfirmed) {
+          try {
+              await deleteEvent(userData.studioID, event.id);
+              Swal.fire('Deleted!', 'Event has been removed.', 'success');
+              loadData();
+          } catch (error) {
+              Swal.fire('Error', 'Failed to delete event.', 'error');
+          }
+      }
   }
 
   if (loading) return <div className="flex h-96 items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-[#1C4D8D]" /></div>
@@ -92,7 +133,7 @@ export default function EventsPage() {
                 <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-400" />
                 <Input placeholder="Search events..." className="pl-9 w-[200px] md:w-[300px]" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
             </div>
-            <Button className="bg-[#1C4D8D]" onClick={() => setIsFormOpen(true)}>
+            <Button className="bg-[#1C4D8D]" onClick={handleAddNew}>
                 <Plus className="mr-2 h-4 w-4" /> Add Event
             </Button>
         </div>
@@ -116,11 +157,32 @@ export default function EventsPage() {
                         <Badge className={cn("absolute top-2 right-2", getStatusColor(event.status))}>
                             {event.status}
                         </Badge>
+                        
+                        {/* [!code highlight] Card Actions Dropdown */}
+                        <div className="absolute top-2 left-2">
+                            <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                    <Button variant="secondary" size="icon" className="h-6 w-6 bg-white/80 hover:bg-white text-slate-700 rounded-full shadow-sm" onClick={(e) => e.stopPropagation()}>
+                                        <MoreVertical className="h-3 w-3" />
+                                    </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="start">
+                                    <DropdownMenuItem onClick={(e) => handleEdit(e, event)}>
+                                        <Edit className="mr-2 h-4 w-4 text-blue-600" /> Edit Details
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem onClick={(e) => handleDelete(e, event)} className="text-red-600 focus:text-red-600">
+                                        <Trash className="mr-2 h-4 w-4" /> Delete Event
+                                    </DropdownMenuItem>
+                                </DropdownMenuContent>
+                            </DropdownMenu>
+                        </div>
                     </div>
                     
                     <CardContent className="p-4 space-y-3 flex-1">
                         <div>
-                            <div className="text-xs text-slate-500 font-mono mb-1">{event.id?.substring(0,8).toUpperCase()}</div>
+                            <div className="text-xs text-slate-500 font-mono mb-1 flex justify-between">
+                                <span>{event.displayId || event.id?.substring(0,8).toUpperCase()}</span>
+                            </div>
                             <h3 className="font-bold text-[#0F2854] text-lg leading-tight group-hover:text-[#1C4D8D] transition-colors line-clamp-1">{event.eventName}</h3>
                             <p className="text-sm text-slate-500">{event.eventType}</p>
                         </div>
@@ -144,25 +206,33 @@ export default function EventsPage() {
         })}
       </div>
 
-      {/* CREATE EVENT FORM */}
+      {/* CREATE/EDIT EVENT FORM */}
       {isDesktop ? (
         <Sheet open={isFormOpen} onOpenChange={setIsFormOpen}>
             <SheetContent className="w-full sm:max-w-[800px] p-0 flex flex-col h-full border-l shadow-2xl">
                 <SheetHeader className="px-6 py-4 border-b bg-white shrink-0">
-                    <SheetTitle>New Event</SheetTitle>
-                    <SheetDescription>Create a new inquiry or schedule an event.</SheetDescription>
+                    <SheetTitle>{editingEvent ? "Edit Event" : "New Event"}</SheetTitle>
+                    <SheetDescription>{editingEvent ? "Update event details and budget." : "Create a new inquiry or schedule an event."}</SheetDescription>
                 </SheetHeader>
-                <EventForm onSuccess={() => { setIsFormOpen(false); loadData(); }} onCancel={() => setIsFormOpen(false)} />
+                <EventForm 
+                    initialData={editingEvent} // [!code highlight] Pass data
+                    onSuccess={() => { setIsFormOpen(false); loadData(); }} 
+                    onCancel={() => setIsFormOpen(false)} 
+                />
             </SheetContent>
         </Sheet>
       ) : (
         <Drawer open={isFormOpen} onOpenChange={setIsFormOpen}>
             <DrawerContent className="h-[95vh] flex flex-col p-0 rounded-t-xl">
                 <DrawerHeader className="px-6 py-4 border-b bg-white text-left shrink-0">
-                    <DrawerTitle>New Event</DrawerTitle>
-                    <DrawerDescription>Create a new inquiry or schedule an event.</DrawerDescription>
+                    <DrawerTitle>{editingEvent ? "Edit Event" : "New Event"}</DrawerTitle>
+                    <DrawerDescription>{editingEvent ? "Update event details and budget." : "Create a new inquiry or schedule an event."}</DrawerDescription>
                 </DrawerHeader>
-                <EventForm onSuccess={() => { setIsFormOpen(false); loadData(); }} onCancel={() => setIsFormOpen(false)} />
+                <EventForm 
+                    initialData={editingEvent} // [!code highlight] Pass data
+                    onSuccess={() => { setIsFormOpen(false); loadData(); }} 
+                    onCancel={() => setIsFormOpen(false)} 
+                />
             </DrawerContent>
         </Drawer>
       )}
@@ -170,7 +240,7 @@ export default function EventsPage() {
   )
 }
 
-function EventForm({ onSuccess, onCancel }: { onSuccess: () => void, onCancel: () => void }) {
+function EventForm({ initialData, onSuccess, onCancel }: { initialData?: EventData | null, onSuccess: () => void, onCancel: () => void }) {
     const { userData } = useAuth()
     const [submitting, setSubmitting] = useState(false)
     const [loaded, setLoaded] = useState(false)
@@ -191,6 +261,17 @@ function EventForm({ onSuccess, onCancel }: { onSuccess: () => void, onCancel: (
         notes: ""
     })
 
+    // [!code highlight] Load Initial Data for Edit
+    useEffect(() => {
+        if (initialData) {
+            setFormData({
+                ...initialData,
+                // Ensure dates are Dates (just in case)
+                days: initialData.days.map(d => ({ ...d, date: d.date instanceof Date ? d.date : new Date() }))
+            })
+        }
+    }, [initialData])
+
     useEffect(() => {
         const init = async () => {
             if(!userData?.studioID) return;
@@ -210,9 +291,8 @@ function EventForm({ onSuccess, onCancel }: { onSuccess: () => void, onCancel: (
         init()
     }, [userData])
 
-    // Financial Calculation with Explicit Types
+    // Financial Calculation
     const financials = useMemo(() => {
-        // [!code highlight] Added Types: (acc: number, day: EventDayConfig)
         const total = (formData.days || []).reduce((acc: number, day: EventDayConfig) => acc + (day.cost || 0), 0);
         let discountAmount = 0;
         
@@ -226,11 +306,10 @@ function EventForm({ onSuccess, onCancel }: { onSuccess: () => void, onCancel: (
         return { total, discountAmount, subTotal };
     }, [formData.days, formData.discount, formData.discountType])
 
-    // Handlers
+    // Handlers (Reduced code repetition - using same logic as before)
     const handleDayCountChange = (count: number) => {
         const newCount = Math.max(1, count);
         const currentDays = [...(formData.days || [])];
-        
         if (newCount > currentDays.length) {
             for(let i = currentDays.length; i < newCount; i++) {
                 const prevDate = new Date(currentDays[i-1].date);
@@ -246,22 +325,17 @@ function EventForm({ onSuccess, onCancel }: { onSuccess: () => void, onCancel: (
     const updateDayConfig = (index: number, updates: Partial<EventDayConfig>) => {
         const newDays = [...(formData.days || [])];
         const updatedDay = { ...newDays[index], ...updates };
-        
         if (updates.packageId && updatedDay.type === 'package') {
             const pkg = packages.find(p => p.id === updates.packageId);
             if (pkg) updatedDay.cost = Number(pkg.price || 0);
         }
-        
         if (updates.customItems && updatedDay.type === 'custom') {
-            // [!code highlight] Added Types: (sum: number, item: CustomItem)
             updatedDay.cost = updates.customItems.reduce((sum: number, item: CustomItem) => sum + (item.price || 0), 0);
         }
-
         newDays[index] = updatedDay;
         setFormData({ ...formData, days: newDays });
     }
 
-    // Custom Items Handlers
     const addCustomItem = (dayIndex: number) => {
         const day = formData.days![dayIndex];
         const newItems = [...(day.customItems || []), { name: "", quantity: 1, unit: "", price: 0 }];
@@ -277,7 +351,6 @@ function EventForm({ onSuccess, onCancel }: { onSuccess: () => void, onCancel: (
 
     const removeCustomItem = (dayIndex: number, itemIndex: number) => {
         const day = formData.days![dayIndex];
-        // [!code highlight] Added Types: (_: CustomItem, i: number)
         const newItems = (day.customItems || []).filter((_: CustomItem, i: number) => i !== itemIndex);
         updateDayConfig(dayIndex, { customItems: newItems });
     }
@@ -288,32 +361,39 @@ function EventForm({ onSuccess, onCancel }: { onSuccess: () => void, onCancel: (
 
         setSubmitting(true);
         
-        // Check Limits
-        const limitCheck = await validateSubscriptionAction(userData.studioID, 'create_event');
-        if (!limitCheck.allowed) {
-            setSubmitting(false);
-            return Swal.fire({ 
-                icon: 'error', 
-                title: 'Limit Reached', 
-                text: limitCheck.message || "You have reached your event limit." 
-            });
+        // Check Limits (Only if creating new)
+        if (!initialData) {
+            const limitCheck = await validateSubscriptionAction(userData.studioID, 'create_event');
+            if (!limitCheck.allowed) {
+                setSubmitting(false);
+                return Swal.fire({ icon: 'error', title: 'Limit Reached', text: limitCheck.message });
+            }
         }
 
         try {
-            await createEvent(userData.studioID, {
+            const eventPayload = {
                 ...formData,
-                inquiryDate: new Date(),
                 totalBudget: financials.total,
                 finalBudget: financials.subTotal,
-                advancePaid: 0,
-                assignedCrew: [], 
-                assignedEquipment: []
-            } as EventData);
+            } as EventData;
+
+            if (initialData && initialData.id) {
+                // Update
+                await updateEvent(userData.studioID, initialData.id, eventPayload);
+                Swal.fire({ icon: 'success', title: 'Event Updated', timer: 1500, showConfirmButton: false });
+            } else {
+                // Create
+                eventPayload.inquiryDate = new Date();
+                eventPayload.advancePaid = 0;
+                eventPayload.assignedCrew = [];
+                eventPayload.assignedEquipment = [];
+                await createEvent(userData.studioID, eventPayload);
+                Swal.fire({ icon: 'success', title: 'Event Created', timer: 1500, showConfirmButton: false });
+            }
             
-            Swal.fire({ icon: 'success', title: 'Event Created', timer: 1500, showConfirmButton: false });
             onSuccess();
         } catch (e) {
-            Swal.fire({ icon: 'error', title: 'Failed to create' });
+            Swal.fire({ icon: 'error', title: initialData ? 'Failed to update' : 'Failed to create' });
         } finally {
             setSubmitting(false);
         }
@@ -323,9 +403,8 @@ function EventForm({ onSuccess, onCancel }: { onSuccess: () => void, onCancel: (
 
     return (
         <div className="flex flex-col h-full overflow-hidden">
-            {/* SCROLLABLE CONTENT */}
+            {/* Same Scrollable Content Layout as before... */}
             <div className="flex-1 overflow-y-auto px-6 py-6 space-y-8 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-                
                 {/* 1. CUSTOMER & META */}
                 <div className="space-y-4">
                     <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Details</h3>
@@ -366,13 +445,11 @@ function EventForm({ onSuccess, onCancel }: { onSuccess: () => void, onCancel: (
 
                     <Tabs defaultValue="day-0" className="w-full">
                         <TabsList className="w-full justify-start overflow-x-auto h-auto p-1 bg-slate-100">
-                            {/* [!code highlight] Added Types: (_: EventDayConfig, i: number) */}
                             {formData.days?.map((_: EventDayConfig, i: number) => (
                                 <TabsTrigger key={i} value={`day-${i}`} className="px-4 py-1.5 text-xs">Day {i + 1}</TabsTrigger>
                             ))}
                         </TabsList>
                         
-                        {/* [!code highlight] Added Types: (day: EventDayConfig, i: number) */}
                         {formData.days?.map((day: EventDayConfig, i: number) => (
                             <TabsContent key={i} value={`day-${i}`} className="border rounded-md p-4 mt-2 space-y-4 bg-white">
                                 <div className="space-y-1">
@@ -422,7 +499,6 @@ function EventForm({ onSuccess, onCancel }: { onSuccess: () => void, onCancel: (
 
                                     <TabsContent value="custom" className="pt-2 space-y-3">
                                         <div className="space-y-2">
-                                            {/* [!code highlight] Added Types: (item: CustomItem, itemIdx: number) */}
                                             {day.customItems?.map((item: CustomItem, itemIdx: number) => (
                                                 <div key={itemIdx} className="grid grid-cols-10 gap-2 items-start">
                                                     <div className="col-span-4">
@@ -517,7 +593,7 @@ function EventForm({ onSuccess, onCancel }: { onSuccess: () => void, onCancel: (
             <div className="p-4 border-t bg-white flex gap-3 shrink-0 mt-auto">
                 <Button variant="outline" className="flex-1" onClick={onCancel}>Cancel</Button>
                 <Button className="bg-[#1C4D8D] flex-1" onClick={handleSubmit} disabled={submitting}>
-                    {submitting ? <Loader2 className="animate-spin h-4 w-4 mr-2"/> : "Create Event"}
+                    {submitting ? <Loader2 className="animate-spin h-4 w-4 mr-2"/> : (initialData ? "Save Changes" : "Create Event")}
                 </Button>
             </div>
         </div>
