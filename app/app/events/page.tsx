@@ -247,7 +247,6 @@ function EventForm({ initialData, onSuccess, onCancel }: { initialData?: EventDa
     const [typeList, setTypeList] = useState<string[]>(DEFAULT_TYPES)
     const [statusList, setStatusList] = useState<string[]>(DEFAULT_STATUSES)
     const [packages, setPackages] = useState<any[]>([])
-    // [!code highlight] Config Parameters List
     const [configParams, setConfigParams] = useState<PackageParameter[]>([])
 
     // Form Data
@@ -343,7 +342,7 @@ function EventForm({ initialData, onSuccess, onCancel }: { initialData?: EventDa
         const day = formData.days![dayIndex];
         const newItem: CustomItem = param 
             ? { name: param.name, quantity: 1, unit: param.unit || "", price: param.defaultPrice || 0 }
-            : { name: "", quantity: 1, unit: "", price: 0 }; // Blank item fallback
+            : { name: "", quantity: 1, unit: "", price: 0 };
 
         const newItems = [...(day.customItems || []), newItem];
         updateDayConfig(dayIndex, { customItems: newItems });
@@ -412,28 +411,43 @@ function EventForm({ initialData, onSuccess, onCancel }: { initialData?: EventDa
                 {/* 1. CUSTOMER & META */}
                 <div className="space-y-4">
                     <div className="space-y-3">
-                        <Input placeholder="Event Name *" value={formData.eventName} onChange={e => setFormData({...formData, eventName: e.target.value})} className="bg-slate-50 font-medium" />
-                        {/* [!code highlight] Updated: 50% width and labeled dropdowns */}
+                        <div className="space-y-1">
+                            <Label className="text-xs text-slate-500 uppercase tracking-wide">Event Name *</Label>
+                            <Input value={formData.eventName} onChange={e => setFormData({...formData, eventName: e.target.value})} className="bg-slate-50 font-medium" />
+                        </div>
+                        
+                        {/* [!code highlight] Updated: Full width dropdowns (50% split) */}
                         <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-1.5">
+                            <div className="space-y-1">
                                 <Label className="text-xs text-slate-500 uppercase tracking-wide">Event Type</Label>
                                 <Select value={formData.eventType} onValueChange={v => setFormData({...formData, eventType: v})}>
-                                    <SelectTrigger className="bg-slate-50"><SelectValue placeholder="Select..."/></SelectTrigger>
+                                    <SelectTrigger className="bg-slate-50 w-full"><SelectValue placeholder="Select..."/></SelectTrigger>
                                     <SelectContent>{typeList.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
                                 </Select>
                             </div>
-                            <div className="space-y-1.5">
+                            <div className="space-y-1">
                                 <Label className="text-xs text-slate-500 uppercase tracking-wide">Status</Label>
                                 <Select value={formData.status} onValueChange={(v:any) => setFormData({...formData, status: v})}>
-                                    <SelectTrigger className="bg-slate-50"><SelectValue/></SelectTrigger>
+                                    <SelectTrigger className="bg-slate-50 w-full"><SelectValue/></SelectTrigger>
                                     <SelectContent>{statusList.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
                                 </Select>
                             </div>
                         </div>
-                        <Input placeholder="Customer Name *" value={formData.customerName} onChange={e => setFormData({...formData, customerName: e.target.value})} className="bg-slate-50" />
-                        <div className="grid grid-cols-2 gap-3">
-                            <Input placeholder="Mobile" value={formData.customerMobile} onChange={e => setFormData({...formData, customerMobile: e.target.value})} className="bg-slate-50" />
-                            <Input placeholder="Email" value={formData.customerEmail} onChange={e => setFormData({...formData, customerEmail: e.target.value})} className="bg-slate-50" />
+
+                        <div className="space-y-1">
+                            <Label className="text-xs text-slate-500 uppercase tracking-wide">Customer Name *</Label>
+                            <Input value={formData.customerName} onChange={e => setFormData({...formData, customerName: e.target.value})} className="bg-slate-50" />
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-1">
+                                <Label className="text-xs text-slate-500 uppercase tracking-wide">Mobile</Label>
+                                <Input value={formData.customerMobile} onChange={e => setFormData({...formData, customerMobile: e.target.value})} className="bg-slate-50" />
+                            </div>
+                            <div className="space-y-1">
+                                <Label className="text-xs text-slate-500 uppercase tracking-wide">Email</Label>
+                                <Input value={formData.customerEmail} onChange={e => setFormData({...formData, customerEmail: e.target.value})} className="bg-slate-50" />
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -501,24 +515,54 @@ function EventForm({ initialData, onSuccess, onCancel }: { initialData?: EventDa
                                                 ))}
                                             </SelectContent>
                                         </Select>
-                                        {/* [!code highlight] Display Package Features */}
+                                        
+                                        {/* [!code highlight] DETAILED PACKAGE FEATURE VIEW */}
                                         {day.packageId && (() => {
                                             const pkg = packages.find(p => p.id === day.packageId);
                                             if (!pkg) return null;
                                             return (
-                                                <div className="bg-slate-50 p-3 rounded border text-xs text-slate-600 space-y-2">
-                                                    <div className="flex justify-between font-bold text-slate-800">
-                                                        <span>Price:</span>
-                                                        <span>LKR {Number(pkg.price).toLocaleString()}</span>
+                                                <div className="mt-4 border rounded-lg overflow-hidden border-slate-200">
+                                                    <div className="bg-slate-50 px-4 py-2 border-b flex justify-between items-center">
+                                                        <span className="text-xs font-semibold text-slate-700 uppercase tracking-wide">Included Features</span>
+                                                        <span className="text-sm font-bold text-[#1C4D8D]">LKR {Number(pkg.price).toLocaleString()}</span>
                                                     </div>
-                                                    {pkg.description && <p>{pkg.description}</p>}
-                                                    {pkg.features && pkg.features.length > 0 && (
-                                                        <div className="flex flex-wrap gap-1">
-                                                            {pkg.features.map((f: string, idx: number) => (
-                                                                <Badge key={idx} variant="secondary" className="text-[10px] bg-white border border-slate-200">{f}</Badge>
-                                                            ))}
+                                                    <div className="p-4 bg-white">
+                                                        <div className="grid gap-2 text-sm">
+                                                            {/* Render Features Grid */}
+                                                            {pkg.features ? (
+                                                                Array.isArray(pkg.features) ? (
+                                                                    // Case 1: Simple Array ["Item 1", "Item 2"]
+                                                                    pkg.features.map((f: any, idx: number) => (
+                                                                        <div key={idx} className="flex items-center justify-between py-1 border-b border-slate-50 last:border-0">
+                                                                            <span className="text-slate-600">{typeof f === 'string' ? f : JSON.stringify(f)}</span>
+                                                                            <Check className="h-4 w-4 text-green-500" />
+                                                                        </div>
+                                                                    ))
+                                                                ) : (
+                                                                    // Case 2: Object/Map { "Photography": true, "Cards": 100 }
+                                                                    Object.entries(pkg.features).map(([key, value], idx) => (
+                                                                        <div key={idx} className="flex items-center justify-between py-1 border-b border-slate-50 last:border-0">
+                                                                            <span className="text-slate-600">{key}</span>
+                                                                            <div className="flex items-center">
+                                                                                {value === true ? (
+                                                                                    <Check className="h-4 w-4 text-green-500" />
+                                                                                ) : (
+                                                                                    <span className="font-medium text-slate-800">{String(value)}</span>
+                                                                                )}
+                                                                            </div>
+                                                                        </div>
+                                                                    ))
+                                                                )
+                                                            ) : (
+                                                                <p className="text-xs text-slate-400 italic">No features listed.</p>
+                                                            )}
                                                         </div>
-                                                    )}
+                                                        {pkg.description && (
+                                                            <div className="mt-4 pt-3 border-t">
+                                                                <p className="text-xs text-slate-500 italic">{pkg.description}</p>
+                                                            </div>
+                                                        )}
+                                                    </div>
                                                 </div>
                                             )
                                         })()}
@@ -557,7 +601,6 @@ function EventForm({ initialData, onSuccess, onCancel }: { initialData?: EventDa
                                                 </div>
                                             ))}
                                             
-                                            {/* [!code highlight] Add Parameter via Dropdown */}
                                             <div className="flex gap-2">
                                                 <Select onValueChange={(val) => {
                                                     if (val === 'custom_new') {
