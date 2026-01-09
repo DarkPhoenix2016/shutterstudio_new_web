@@ -1,29 +1,16 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { db } from "@/lib/firebase"
-import { doc, getDoc } from "firebase/firestore"
 import { useAuth } from "@/context/AuthContext"
+import { fetchCrewMembers, Member } from "@/services/crew-service"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Input } from "@/components/ui/input"
 import { Phone, MessageCircle, Mail, Loader2, Users, UserCheck, UserX, Search } from "lucide-react"
 
-interface Member {
-  id: string;
-  uid?: string;
-  displayName: string;
-  email: string;
-  phoneNumber: string; 
-  photoURL?: string;
-  designation?: string;
-  role?: string;
-  disabled?: boolean;
-}
-
 export default function StudioOverviewPage() {
-  const { currentUser } = useAuth()
+  const { userData } = useAuth()
   const [loading, setLoading] = useState(true)
   const [members, setMembers] = useState<Member[]>([])
   const [stats, setStats] = useState({ total: 0, active: 0, disabled: 0 })
@@ -31,36 +18,19 @@ export default function StudioOverviewPage() {
 
   useEffect(() => {
     const fetchData = async () => {
-        if (!currentUser?.uid) return;
+        if (!userData?.studioID) return;
 
         try {
-            const userDoc = await getDoc(doc(db, "Users", currentUser.uid));
-            const studioId = userDoc.data()?.studioID;
+            const fetchedUsers = await fetchCrewMembers(userData.studioID);
+            
+            setMembers(fetchedUsers);
 
-            if (!studioId) return;
-
-            const memListRef = doc(db, "Studios", studioId, "Members", "MEM_LIST");
-            const memListSnap = await getDoc(memListRef);
-
-            if (memListSnap.exists()) {
-                const idList = memListSnap.data().ID_LIST || [];
-                
-                const userPromises = idList.map((uid: string) => getDoc(doc(db, "Users", uid)));
-                const userSnaps = await Promise.all(userPromises);
-
-                const fetchedUsers = userSnaps
-                    .map(snap => ({ id: snap.id, ...snap.data() } as Member))
-                    .filter(u => u.id);
-
-                setMembers(fetchedUsers);
-
-                const activeCount = fetchedUsers.filter(u => !u.disabled).length;
-                setStats({
-                    total: fetchedUsers.length,
-                    active: activeCount,
-                    disabled: fetchedUsers.length - activeCount
-                });
-            }
+            const activeCount = fetchedUsers.filter(u => !(u.disabled || u.accountDisabled || u.status === "Disabled")).length;
+            setStats({
+                total: fetchedUsers.length,
+                active: activeCount,
+                disabled: fetchedUsers.length - activeCount
+            });
         } catch (error) {
             console.error("Error fetching overview data:", error);
         } finally {
@@ -69,7 +39,7 @@ export default function StudioOverviewPage() {
     };
 
     fetchData();
-  }, [currentUser]);
+  }, [userData]);
 
   const filteredMembers = members.filter(member => 
       member.displayName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -181,7 +151,6 @@ export default function StudioOverviewPage() {
                         <Button variant="outline" size="icon" onClick={() => window.open(`sms:${member.phoneNumber}`)}>
                             <MessageCircle className="h-4 w-4 text-blue-600" />
                         </Button>
-                        {/* [!code highlight] WhatsApp Button */}
                         <Button 
                             variant="outline" 
                             size="icon" 

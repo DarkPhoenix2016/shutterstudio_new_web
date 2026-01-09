@@ -6,8 +6,8 @@ import { useRouter } from "next/navigation"
 import { 
     fetchEvents, createEvent, fetchStudioSettingsList, fetchPackagesList, 
     EventData, EventDayConfig, CustomItem 
-} from "@/lib/event-service"
-import { validateSubscriptionAction } from "@/lib/subscription-service"
+} from "@/services/event-service"
+import { validateSubscriptionAction } from "@/services/subscription-service"
 import { useMediaQuery } from "@/hooks/use-media-query"
 
 // UI

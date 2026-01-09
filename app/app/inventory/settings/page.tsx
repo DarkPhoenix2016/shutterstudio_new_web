@@ -7,7 +7,7 @@ import {
   fetchInventory, addInventoryItem, updateInventoryItem, deleteInventoryItem, adjustStock, 
   fetchCategories, addCategory, updateCategory, deleteCategory,
   InventoryItem, InventoryCategory 
-} from "@/lib/inventory-service"
+} from "@/services/inventory-service"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"

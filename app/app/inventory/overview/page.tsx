@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, ReactNode } from "react"
 import { useAuth } from "@/context/AuthContext"
-import { fetchInventory, fetchItemHistory, fetchCategories, InventoryItem, StockTransaction, InventoryCategory } from "@/lib/inventory-service"
+import { fetchInventory, fetchItemHistory, fetchCategories, InventoryItem, StockTransaction, InventoryCategory } from "@/services/inventory-service"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"

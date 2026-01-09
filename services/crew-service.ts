@@ -1,0 +1,208 @@
+import { db } from "@/lib/firebase";
+import { doc, getDoc, updateDoc } from "firebase/firestore";
+
+// --- TYPES ---
+export interface Member {
+  id: string;
+  uid?: string;
+  displayName: string;
+  email: string;
+  phoneNumber: string;
+  photoURL?: string;
+  role?: string;
+  designation?: string;
+  disabled?: boolean;
+  accountDisabled?: boolean; // Sometimes used interchangeably with disabled
+  status?: string; // "Active" | "Disabled"
+  studioID?: string;
+  [key: string]: any;
+}
+
+export interface PackageLimits {
+  maxUsers: number;
+  packageName: string;
+}
+
+export interface NewMemberData {
+  displayName: string;
+  email: string;
+  phone: string;
+  password: string;
+  role: string;
+  designation: string;
+  studioID: string;
+}
+
+// --- API CONFIG ---
+const API_URLS = {
+  REGISTER: "https://registeruser-g33n26zifq-uc.a.run.app",
+  ENABLE: "https://enableuser-g33n26zifq-uc.a.run.app",
+  DISABLE: "https://disableuser-g33n26zifq-uc.a.run.app"
+};
+
+// --- READ OPERATIONS ---
+
+/**
+ * Fetches the list of crew members for a specific studio.
+ */
+export const fetchCrewMembers = async (studioId: string): Promise<Member[]> => {
+  try {
+    const memListRef = doc(db, "Studios", studioId, "Members", "MEM_LIST");
+    const memListSnap = await getDoc(memListRef);
+
+    if (!memListSnap.exists()) return [];
+
+    const idList: string[] = memListSnap.data().ID_LIST || [];
+    
+    // Fetch all user documents in parallel
+    const userPromises = idList.map((uid) => getDoc(doc(db, "Users", uid)));
+    const userSnaps = await Promise.all(userPromises);
+
+    return userSnaps
+      .map((snap) => ({ id: snap.id, ...snap.data() } as Member))
+      .filter((u) => u.id); // Filter out any failed fetches/empty IDs
+  } catch (error) {
+    console.error("Error fetching crew members:", error);
+    throw error;
+  }
+};
+
+/**
+ * Fetches system roles.
+ */
+export const fetchRoles = async (): Promise<string[]> => {
+  try {
+    const platformRef = doc(db, "Platform", "ROLE_PERMISSIONS");
+    const platformSnap = await getDoc(platformRef);
+    if (platformSnap.exists()) {
+      const allRoles = Object.keys(platformSnap.data());
+      return allRoles.filter((r) => r.toLowerCase().startsWith("studio"));
+    }
+    return [];
+  } catch (error) {
+    console.error("Error fetching roles:", error);
+    return [];
+  }
+};
+
+/**
+ * Fetches studio-specific designations.
+ */
+export const fetchDesignations = async (studioId: string): Promise<string[]> => {
+  try {
+    const studioDocSnap = await getDoc(doc(db, "Studios", studioId));
+    if (studioDocSnap.exists()) {
+      return studioDocSnap.data().designations || [];
+    }
+    return [];
+  } catch (error) {
+    console.error("Error fetching designations:", error);
+    return [];
+  }
+};
+
+/**
+ * Fetches Subscription Limits (Max Users).
+ */
+export const fetchSubscriptionLimits = async (studioId: string): Promise<PackageLimits> => {
+  try {
+    const subConfigRef = doc(db, "Studios", studioId, "Subscription", "config");
+    const subConfigSnap = await getDoc(subConfigRef);
+
+    let maxUsers = 5;
+    let packageName = "Basic";
+
+    if (subConfigSnap.exists()) {
+      const { packageId, packageName: name } = subConfigSnap.data();
+      packageName = name || "Basic";
+
+      if (packageId) {
+        const packageSnap = await getDoc(doc(db, "Platform", "packages"));
+        if (packageSnap.exists()) {
+          const pkgData = packageSnap.data()[packageId];
+          if (pkgData) {
+            maxUsers = pkgData.users_limit || pkgData.maxUsers || 5;
+          }
+        }
+      }
+    }
+    return { maxUsers, packageName };
+  } catch (error) {
+    console.error("Error fetching limits:", error);
+    return { maxUsers: 5, packageName: "Error" };
+  }
+};
+
+// --- WRITE OPERATIONS ---
+
+/**
+ * Create a new user via API.
+ */
+export const createCrewMember = async (data: NewMemberData) => {
+  try {
+    const response = await fetch(API_URLS.REGISTER, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        data: {
+          email: data.email,
+          password: data.password,
+          displayName: data.displayName,
+          phoneNumber: data.phone,
+          role: data.role,
+          studioID: data.studioID,
+          photoURL: "",
+          coverURL: "",
+        },
+      }),
+    });
+
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error?.message || "Registration failed");
+
+    // Update designation specifically if provided (as API might not handle custom fields)
+    if (result.userID && data.designation) {
+      await updateDoc(doc(db, "Users", result.userID), {
+        designation: data.designation,
+      });
+    }
+
+    return result;
+  } catch (error) {
+    console.error("Error creating member:", error);
+    throw error;
+  }
+};
+
+/**
+ * Update an existing user in Firestore.
+ */
+export const updateCrewMember = async (uid: string, updates: Partial<Member>) => {
+  try {
+    const userRef = doc(db, "Users", uid);
+    await updateDoc(userRef, updates);
+  } catch (error) {
+    console.error("Error updating member:", error);
+    throw error;
+  }
+};
+
+/**
+ * Enable or Disable a user via API.
+ */
+export const toggleCrewMemberStatus = async (uid: string, shouldDisable: boolean) => {
+  const url = shouldDisable ? API_URLS.DISABLE : API_URLS.ENABLE;
+  try {
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ data: { uid } }),
+    });
+
+    if (!response.ok) throw new Error("Status update failed");
+    return true;
+  } catch (error) {
+    console.error("Error toggling status:", error);
+    throw error;
+  }
+};
