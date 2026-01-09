@@ -7,7 +7,6 @@ import {
     fetchEvents, createEvent, fetchStudioSettingsList, fetchPackagesList, 
     EventData, EventDayConfig, CustomItem 
 } from "@/lib/event-service"
-// [!code highlight] Import Validation Service
 import { validateSubscriptionAction } from "@/lib/subscription-service"
 import { useMediaQuery } from "@/hooks/use-media-query"
 
@@ -53,8 +52,10 @@ export default function EventsPage() {
 
   const loadData = async () => {
     try {
-      const data = await fetchEvents(userData!.studioID!)
-      setEvents(data)
+      if (userData?.studioID) {
+        const data = await fetchEvents(userData.studioID)
+        setEvents(data)
+      }
     } catch (e) {
       console.error(e)
     } finally {
@@ -143,9 +144,10 @@ export default function EventsPage() {
         })}
       </div>
 
+      {/* CREATE EVENT FORM */}
       {isDesktop ? (
         <Sheet open={isFormOpen} onOpenChange={setIsFormOpen}>
-            <SheetContent className="w-full sm:max-w-[800px] p-0 flex flex-col h-full border-l shadow-2xl">
+            <SheetContent className="w-full sm:max-w-[700px] p-0 flex flex-col h-full border-l shadow-2xl">
                 <SheetHeader className="px-6 py-4 border-b bg-white shrink-0">
                     <SheetTitle>New Event</SheetTitle>
                     <SheetDescription>Create a new inquiry or schedule an event.</SheetDescription>
@@ -208,6 +210,7 @@ function EventForm({ onSuccess, onCancel }: { onSuccess: () => void, onCancel: (
         init()
     }, [userData])
 
+    // Financial Calculation
     const financials = useMemo(() => {
         const total = (formData.days || []).reduce((acc, day) => acc + (day.cost || 0), 0);
         let discountAmount = 0;
@@ -222,11 +225,11 @@ function EventForm({ onSuccess, onCancel }: { onSuccess: () => void, onCancel: (
         return { total, discountAmount, subTotal };
     }, [formData.days, formData.discount, formData.discountType])
 
-    // ... (Handlers: handleDayCountChange, updateDayConfig, addCustomItem, etc. same as previous code) ...
-    // Keeping code concise, assuming these handler functions exist exactly as in the previous response
+    // Handlers
     const handleDayCountChange = (count: number) => {
         const newCount = Math.max(1, count);
         const currentDays = [...(formData.days || [])];
+        
         if (newCount > currentDays.length) {
             for(let i = currentDays.length; i < newCount; i++) {
                 const prevDate = new Date(currentDays[i-1].date);
@@ -242,17 +245,21 @@ function EventForm({ onSuccess, onCancel }: { onSuccess: () => void, onCancel: (
     const updateDayConfig = (index: number, updates: Partial<EventDayConfig>) => {
         const newDays = [...(formData.days || [])];
         const updatedDay = { ...newDays[index], ...updates };
+        
         if (updates.packageId && updatedDay.type === 'package') {
             const pkg = packages.find(p => p.id === updates.packageId);
             if (pkg) updatedDay.cost = Number(pkg.price || 0);
         }
+        
         if (updates.customItems && updatedDay.type === 'custom') {
             updatedDay.cost = updates.customItems.reduce((sum, item) => sum + (item.price || 0), 0);
         }
+
         newDays[index] = updatedDay;
         setFormData({ ...formData, days: newDays });
     }
 
+    // Custom Items Handlers
     const addCustomItem = (dayIndex: number) => {
         const day = formData.days![dayIndex];
         const newItems = [...(day.customItems || []), { name: "", quantity: 1, unit: "", price: 0 }];
@@ -278,7 +285,7 @@ function EventForm({ onSuccess, onCancel }: { onSuccess: () => void, onCancel: (
 
         setSubmitting(true);
         
-        // [!code highlight] 1. Check Subscription Limits
+        // Check Limits
         const limitCheck = await validateSubscriptionAction(userData.studioID, 'create_event');
         if (!limitCheck.allowed) {
             setSubmitting(false);
@@ -501,6 +508,7 @@ function EventForm({ onSuccess, onCancel }: { onSuccess: () => void, onCancel: (
                 </div>
             </div>
 
+            {/* FIXED FOOTER */}
             <div className="p-4 border-t bg-white flex gap-3 shrink-0 mt-auto">
                 <Button variant="outline" className="flex-1" onClick={onCancel}>Cancel</Button>
                 <Button className="bg-[#1C4D8D] flex-1" onClick={handleSubmit} disabled={submitting}>
