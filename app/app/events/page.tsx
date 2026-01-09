@@ -410,25 +410,53 @@ function EventForm({ initialData, onSuccess, onCancel }: { initialData?: EventDa
                         
                         {/* [!code highlight] Updated: 50/50 Layout with Labels */}
                         <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-1.5">
-                                <Label className="text-xs text-slate-500 uppercase tracking-wide">Event Type</Label>
-                                <Select class name {
-                                    constructor(parameters) {
-                                        
+                            <div className="space-y-1.5 max-w-sm">
+                                <Label className="text-xs text-slate-500 uppercase tracking-wide">
+                                    Event Type
+                                </Label>
+                                <Select
+                                    value={formData.eventType}
+                                    onValueChange={(v) =>
+                                        setFormData({ ...formData, eventType: v })
                                     }
-                                } value={formData.eventType} onValueChange={v => setFormData({...formData, eventType: v})}>
-                                    <SelectTrigger className="bg-slate-50"><SelectValue placeholder="Select..."/></SelectTrigger>
-                                    <SelectContent>{typeList.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
+                                >
+                                    <SelectTrigger className="bg-slate-50">
+                                        <SelectValue placeholder="Select..." />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {typeList.map((t) => (
+                                            <SelectItem key={t} value={t}>
+                                                {t}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
                                 </Select>
                             </div>
-                            <div className="space-y-1.5">
-                                <Label className="text-xs text-slate-500 uppercase tracking-wide">Status</Label>
-                                <Select value={formData.status} onValueChange={(v:any) => setFormData({...formData, status: v})}>
-                                    <SelectTrigger className="bg-slate-50"><SelectValue/></SelectTrigger>
-                                    <SelectContent>{statusList.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
+
+                            <div className="space-y-1.5 max-w-sm">
+                                <Label className="text-xs text-slate-500 uppercase tracking-wide">
+                                    Status
+                                </Label>
+                                <Select
+                                    value={formData.status}
+                                    onValueChange={(v: any) =>
+                                        setFormData({ ...formData, status: v })
+                                    }
+                                >
+                                    <SelectTrigger className="bg-slate-50">
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {statusList.map((s) => (
+                                            <SelectItem key={s} value={s}>
+                                                {s}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
                                 </Select>
                             </div>
                         </div>
+
 
                         <Input placeholder="Customer Name *" value={formData.customerName} onChange={e => setFormData({...formData, customerName: e.target.value})} className="bg-slate-50" />
                         <div className="grid grid-cols-2 gap-3">
