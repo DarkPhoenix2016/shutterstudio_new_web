@@ -1,12 +1,12 @@
 "use client"
 
-import { useState, useEffect, useMemo, useRef } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { useAuth } from "@/context/AuthContext"
 import { useParams, useRouter } from "next/navigation"
 import { 
     fetchEventById, updateEvent, fetchStudioSettingsList, 
-    checkResourceAvailability, EventData, EventContact, 
-    AdditionalService, EventLocation, TransactionRecord, fetchPackageConfig 
+    checkResourceAvailability, EventData, AdditionalService, 
+    fetchPackageConfig 
 } from "@/services/event-service"
 import { validateSubscriptionAction } from "@/services/subscription-service"
 import { uploadFileToStorage } from "@/lib/storage-utils"
@@ -22,13 +22,12 @@ import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
-import { Separator } from "@/components/ui/separator"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { Calendar } from "@/components/ui/calendar"
 import { 
     Loader2, ArrowLeft, Save, Upload, MapPin, Phone, Mail, 
-    Plus, Trash2, DollarSign, Users, Camera, Lock, CheckCircle 
+    Plus, Trash2, Camera, Lock, FileText, MessageSquare, 
+    User, Calendar, CheckCircle
 } from "lucide-react"
 import { format } from "date-fns"
 import Swal from "sweetalert2"
@@ -80,7 +79,6 @@ export default function EventDetailPage() {
 
   // --- CALCULATIONS ---
   const financials = useMemo(() => {
-    // [!code highlight] Fixed: Ensure fallback object has ALL properties to satisfy TS
     if (!event) return { 
         total: 0, 
         baseCost: 0, 
@@ -165,7 +163,6 @@ export default function EventDetailPage() {
       setSaving(true);
       try {
           // Path: Studios/[studioid]/Events/[event display id]/[filename]
-          // Name: 'cover' or '1', '2', etc.
           const fileName = isCover 
             ? 'cover' 
             : `${(event.galleryUrls?.length || 0) + 1}`;
@@ -232,6 +229,8 @@ export default function EventDetailPage() {
       }
   };
 
+  // Status mapping for the visual pills
+  const statusOptions = ["Quotation", "Scheduled", "In Progress", "Post Production", "Review", "Completed", "Handed Over"];
 
   if (loading || !event) return <div className="h-screen flex items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-[#1C4D8D]" /></div>
 
@@ -240,24 +239,11 @@ export default function EventDetailPage() {
   return (
     <div className="max-w-6xl mx-auto p-4 md:p-6 space-y-6 animate-in fade-in">
         
-        {/* HEADER */}
-        <div className="flex flex-col md:flex-row justify-between gap-4">
-            <div className="flex items-center gap-4">
-                <Button variant="ghost" size="icon" onClick={() => router.back()}><ArrowLeft className="h-5 w-5"/></Button>
-                <div>
-                    <div className="flex items-center gap-3">
-                        <h1 className="text-2xl font-bold text-[#0F2854]">{event.eventName}</h1>
-                        <Badge variant="outline" className="text-xs">{event.displayId}</Badge>
-                        {isLocked && <Badge className="bg-green-600"><Lock className="w-3 h-3 mr-1"/> Confirmed</Badge>}
-                    </div>
-                    <p className="text-sm text-slate-500 flex items-center gap-2 mt-1">
-                        <span className="bg-blue-50 text-blue-700 px-2 py-0.5 rounded text-xs font-medium">{event.eventType}</span>
-                        <span>•</span>
-                        <span>{event.days[0] ? format(event.days[0].date instanceof Date ? event.days[0].date : new Date(), 'MMM dd, yyyy') : 'Date TBD'}</span>
-                    </p>
-                </div>
-            </div>
-            
+        {/* HEADER ACTIONS */}
+        <div className="flex justify-between items-center mb-4">
+            <Button variant="ghost" onClick={() => router.back()} className="text-slate-500 hover:text-slate-800">
+                <ArrowLeft className="h-4 w-4 mr-2"/> Back to Calendar
+            </Button>
             <div className="flex gap-2">
                 <Button disabled={saving} onClick={() => handleUpdateEvent({})} className="bg-[#1C4D8D]">
                     {saving ? <Loader2 className="w-4 h-4 animate-spin"/> : <><Save className="w-4 h-4 mr-2"/> Save Changes</>}
@@ -276,106 +262,267 @@ export default function EventDetailPage() {
                 <TabsTrigger value="expenses" className="px-4 py-2">Expenses</TabsTrigger>
             </TabsList>
 
-            {/* --- 1. OVERVIEW TAB --- */}
-            <TabsContent value="overview" className="space-y-6">
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    {/* Main Details */}
-                    <div className="lg:col-span-2 space-y-6">
-                        {/* Cover Photo */}
-                        <div className="relative h-64 bg-slate-100 rounded-xl overflow-hidden group border-2 border-dashed border-slate-300 flex items-center justify-center">
-                            {event.couplePhotoUrl ? (
-                                <img src={event.couplePhotoUrl} className="w-full h-full object-cover" alt="Cover" />
-                            ) : (
-                                <div className="text-center text-slate-400">
-                                    <Camera className="w-12 h-12 mx-auto mb-2 opacity-50"/>
-                                    <p className="text-sm">No Cover Photo</p>
-                                </div>
-                            )}
-                            <label className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
-                                <span className="text-white font-medium flex items-center gap-2"><Upload className="w-4 h-4"/> Change Cover</span>
+            {/* --- 1. OVERVIEW TAB (UPDATED DESIGN) --- */}
+            <TabsContent value="overview" className="bg-gray-50 min-h-screen font-sans text-slate-800 -mx-4 -mt-4 p-4 md:p-6 rounded-lg">
+                <div className="max-w-5xl mx-auto bg-white rounded-xl shadow-sm overflow-hidden">
+                    
+                    {/* Top Hero: Image & Title */}
+                    <div className="flex flex-col md:flex-row p-6 gap-6 border-b border-gray-100">
+                        <div className="w-32 h-32 rounded-lg overflow-hidden flex-shrink-0 bg-slate-200 relative group cursor-pointer">
+                            <img 
+                              src={event.couplePhotoUrl || "/api/placeholder/150/150"} 
+                              alt="Couple" 
+                              className="w-full h-full object-cover"
+                            />
+                            <label className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer text-white">
+                                <Camera className="w-6 h-6"/>
                                 <input type="file" className="hidden" accept="image/*" onChange={(e) => e.target.files?.[0] && handleUploadImage(e.target.files[0], true)} />
                             </label>
                         </div>
-
-                        {/* Customer Info */}
-                        <Card>
-                            <CardHeader><CardTitle className="text-base">Primary Contact</CardTitle></CardHeader>
-                            <CardContent className="grid grid-cols-2 gap-4">
-                                <div className="space-y-1">
-                                    <Label className="text-xs text-slate-500">Name</Label>
-                                    <Input value={event.customerName} disabled={isLocked} onChange={e => setEvent({...event!, customerName: e.target.value})} />
-                                </div>
-                                <div className="space-y-1">
-                                    <Label className="text-xs text-slate-500">Mobile</Label>
-                                    <Input value={event.customerMobile} disabled={isLocked} onChange={e => setEvent({...event!, customerMobile: e.target.value})} />
-                                </div>
-                                <div className="space-y-1 col-span-2">
-                                    <Label className="text-xs text-slate-500">Email</Label>
-                                    <Input value={event.customerEmail} disabled={isLocked} onChange={e => setEvent({...event!, customerEmail: e.target.value})} />
-                                </div>
-                            </CardContent>
-                        </Card>
-
-                        {/* Gallery Upload (Only if Completed) */}
-                        {event.status === 'Completed' && (
-                            <Card>
-                                <CardHeader className="flex flex-row items-center justify-between">
-                                    <CardTitle className="text-base">Event Gallery</CardTitle>
-                                    <label className="cursor-pointer bg-slate-900 text-white px-3 py-1.5 rounded text-xs flex items-center gap-2 hover:bg-slate-800">
-                                        <Plus className="w-3 h-3"/> Add Photo
-                                        <input type="file" className="hidden" accept="image/*" onChange={(e) => e.target.files?.[0] && handleUploadImage(e.target.files[0], false)} />
-                                    </label>
-                                </CardHeader>
-                                <CardContent>
-                                    <div className="grid grid-cols-4 gap-2">
-                                        {event.galleryUrls?.map((url, idx) => (
-                                            <div key={idx} className="aspect-square rounded-md overflow-hidden bg-slate-100">
-                                                <img src={url} className="w-full h-full object-cover" alt={`Gallery ${idx}`} />
-                                            </div>
-                                        ))}
-                                        {(!event.galleryUrls || event.galleryUrls.length === 0) && <p className="text-sm text-slate-400 col-span-4 italic">No gallery images yet.</p>}
-                                    </div>
-                                </CardContent>
-                            </Card>
-                        )}
+                        <div className="flex-1 flex flex-col justify-center">
+                            <span className="text-blue-600 text-xs font-bold uppercase tracking-wider mb-1">
+                              Event Type: {event.eventType}
+                            </span>
+                            <div className="flex items-center gap-2">
+                                <h1 className="text-3xl font-bold text-slate-900">{event.eventName}</h1>
+                                {isLocked && <Lock className="w-5 h-5 text-green-600" title="Confirmed"/>}
+                            </div>
+                            <p className="text-slate-500">{event.days.length > 0 ? format(new Date(event.days[0].date), 'PPP') : 'Date TBD'}</p>
+                        </div>
                     </div>
 
-                    {/* Financial Summary Widget */}
-                    <div className="space-y-6">
-                        <Card className="bg-slate-50 border-slate-200">
-                            <CardHeader><CardTitle className="text-base">Financial Overview</CardTitle></CardHeader>
-                            <CardContent className="space-y-4">
-                                <div className="flex justify-between text-sm">
-                                    <span className="text-slate-600">Base Package</span>
-                                    <span>LKR {financials.baseCost.toLocaleString()}</span>
+                    {/* Invoice Banner */}
+                    <div className="bg-green-50 px-6 py-3 border-y border-green-100 flex items-center gap-2 text-green-700 text-sm font-medium">
+                        <FileText size={16} />
+                        <span>Invoice Number: {event.displayId}</span>
+                    </div>
+
+                    {/* --- EVENT ACTIONS & APPROVAL STATE --- */}
+                    <div className="p-6 border-b border-gray-100 space-y-6">
+                        {/* Action Buttons Row */}
+                        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                            <h2 className="text-lg font-semibold">Event Actions</h2>
+                            <div className="flex flex-wrap gap-2">
+                                <div className="flex gap-2 mr-4">
+                                    <button className="p-2 text-slate-400 hover:text-blue-600 bg-slate-50 rounded-full"><User size={18} /></button>
+                                    <button className="p-2 text-slate-400 hover:text-blue-600 bg-slate-50 rounded-full"><Calendar size={18} /></button>
                                 </div>
-                                <div className="flex justify-between text-sm">
-                                    <span className="text-slate-600">Additional Services</span>
-                                    <span>+ LKR {financials.servicesCost.toLocaleString()}</span>
-                                </div>
-                                {financials.discountAmount > 0 && (
-                                    <div className="flex justify-between text-sm text-green-600">
-                                        <span>Discount</span>
-                                        <span>- LKR {financials.discountAmount.toLocaleString()}</span>
-                                    </div>
+                                <a href={`tel:${event.customerMobile}`} className="flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-600 rounded-lg text-sm font-medium hover:bg-blue-100">
+                                    <Phone size={16} /> Call
+                                </a>
+                                <a href={`sms:${event.customerMobile}`} className="flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-600 rounded-lg text-sm font-medium hover:bg-blue-100">
+                                    <MessageSquare size={16} /> SMS
+                                </a>
+                                <a href={`mailto:${event.customerEmail}`} className="flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-600 rounded-lg text-sm font-medium hover:bg-blue-100">
+                                    <Mail size={16} /> Email
+                                </a>
+                            </div>
+                        </div>
+
+                        {/* APPROVAL DATA */}
+                        <div className="bg-slate-50 p-4 rounded-lg border border-slate-100">
+                            <div className="flex justify-between items-center mb-2">
+                                <span className="text-sm font-semibold text-slate-700">State of Customer Approval</span>
+                                {isLocked ? (
+                                    <span className="px-2 py-1 bg-green-100 text-green-700 text-xs rounded-full font-medium flex items-center gap-1">
+                                        <CheckCircle className="w-3 h-3"/> Approved
+                                    </span>
+                                ) : (
+                                    <span className="px-2 py-1 bg-yellow-100 text-yellow-700 text-xs rounded-full font-medium">Pending Review</span>
                                 )}
-                                <Separator className="bg-slate-200"/>
-                                <div className="flex justify-between font-bold text-lg text-[#0F2854]">
-                                    <span>Total</span>
-                                    <span>LKR {financials.finalBudget.toLocaleString()}</span>
-                                </div>
-                                <div className="p-3 bg-white rounded border border-slate-200 space-y-2">
-                                    <div className="flex justify-between text-xs">
-                                        <span className="text-slate-500">Paid</span>
-                                        <span className="font-medium text-green-600">LKR {financials.paid.toLocaleString()}</span>
+                            </div>
+                            <div className="w-full bg-gray-200 rounded-full h-2">
+                                <div className={`h-2 rounded-full ${isLocked ? 'bg-green-600 w-full' : 'bg-blue-600 w-[60%]'}`}></div>
+                            </div>
+                            <p className="text-xs text-slate-500 mt-2">
+                                {isLocked ? "Customer has signed off on the Quotation." : "Waiting for customer to sign off on the Quotation."}
+                            </p>
+                        </div>
+
+                        {/* State Pills */}
+                        <div className="flex flex-wrap gap-2">
+                            {statusOptions.map((status, idx) => {
+                                const isActive = event.status === status;
+                                return (
+                                    <button 
+                                        key={idx}
+                                        onClick={() => handleUpdateEvent({ status })}
+                                        className={`px-4 py-1.5 rounded-full text-xs font-medium border transition-colors
+                                            ${isActive 
+                                                ? "bg-blue-100 text-blue-700 border-blue-200" 
+                                                : "bg-white text-slate-500 border-slate-200 hover:border-blue-200 hover:text-blue-600"
+                                            }`}
+                                    >
+                                        {status}
+                                    </button>
+                                )
+                            })}
+                        </div>
+                    </div>
+
+                    {/* --- MAIN CONTENT GRID --- */}
+                    <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-10">
+                        {/* Left Column: Customer & Event Details */}
+                        <div className="space-y-8">
+                            <section>
+                                <h3 className="text-lg font-bold mb-4">Customer Details</h3>
+                                <div className="grid grid-cols-2 gap-4 text-sm">
+                                    <div>
+                                        <p className="text-slate-500 text-xs">Customer Name</p>
+                                        <p className="font-medium">{event.customerName}</p>
                                     </div>
-                                    <div className="flex justify-between text-xs">
-                                        <span className="text-slate-500">Due</span>
-                                        <span className="font-bold text-red-600">LKR {financials.due.toLocaleString()}</span>
+                                    <div>
+                                        <p className="text-slate-500 text-xs">Customer Mobile</p>
+                                        <p className="font-medium">{event.customerMobile}</p>
+                                    </div>
+                                    <div className="col-span-2">
+                                        <p className="text-slate-500 text-xs">Customer Email</p>
+                                        <p className="font-medium text-blue-600">{event.customerEmail}</p>
                                     </div>
                                 </div>
-                            </CardContent>
-                        </Card>
+                            </section>
+
+                            <section>
+                                <h3 className="text-lg font-bold mb-4">Event Details</h3>
+                                <div className="grid grid-cols-2 gap-4 text-sm">
+                                    <div>
+                                        <p className="text-slate-500 text-xs">Inquiry Date</p>
+                                        <p className="font-medium">{format(new Date(event.createdAt || new Date()), 'MM/dd/yyyy')}</p>
+                                    </div>
+                                    <div>
+                                        <p className="text-slate-500 text-xs">Event Date & Time</p>
+                                        <p className="font-medium">{event.days.length > 0 ? format(new Date(event.days[0].date), 'MM/dd/yyyy, h:mm a') : 'TBD'}</p>
+                                    </div>
+                                </div>
+                            </section>
+
+                            <section>
+                                <h3 className="text-lg font-bold mb-4">Package Details</h3>
+                                <div className="bg-slate-50 p-4 rounded-lg text-sm space-y-4">
+                                    {event.additionalServices && event.additionalServices.length > 0 ? (
+                                        event.additionalServices.map((svc) => (
+                                            <div key={svc.id} className="flex justify-between border-b border-slate-200 pb-2 last:border-0 last:pb-0">
+                                                <div>
+                                                    <p className="font-medium text-slate-800">{svc.name}</p>
+                                                    <p className="text-xs text-slate-500">Qty: {svc.quantity}</p>
+                                                </div>
+                                                <span className="text-slate-600">{svc.total.toLocaleString()}</span>
+                                            </div>
+                                        ))
+                                    ) : (
+                                        <p className="text-slate-400 italic">No services added yet.</p>
+                                    )}
+                                    
+                                    {financials.discountAmount > 0 && (
+                                        <div className="flex justify-between text-red-500 pt-2 border-t border-slate-200">
+                                            <span>Discount</span>
+                                            <span>- LKR {financials.discountAmount.toLocaleString()}</span>
+                                        </div>
+                                    )}
+                                </div>
+                            </section>
+                        </div>
+
+                        {/* Right Column: Financials & Equipments */}
+                        <div className="space-y-8">
+                            {/* Financial Split */}
+                            <div className="grid grid-cols-2 gap-8">
+                                <section>
+                                    <h3 className="text-lg font-bold mb-4">Payment Plan</h3>
+                                    <div className="space-y-2 text-sm">
+                                        <div className="flex justify-between"><span className="text-slate-500">Total Budget</span><span>{financials.total.toLocaleString()}</span></div>
+                                        <div className="flex justify-between font-bold pt-2 border-t"><span className="text-slate-800">Final</span><span>{financials.finalBudget.toLocaleString()}</span></div>
+                                        <div className="flex justify-between pt-4"><span className="text-slate-500">Total Paid</span><span>{financials.paid.toLocaleString()}</span></div>
+                                        <div className="flex justify-between font-bold text-red-600"><span className="">Due</span><span>{financials.due.toLocaleString()}</span></div>
+                                    </div>
+                                </section>
+
+                                <section>
+                                    <h3 className="text-lg font-bold mb-4">Expenses</h3>
+                                    <div className="space-y-2 text-sm">
+                                        {/* Placeholder for expense calculation if you track expenses separately */}
+                                        <div className="flex justify-between"><span className="text-slate-500">Est. Profit</span><span>{(financials.finalBudget).toLocaleString()}</span></div>
+                                    </div>
+                                </section>
+                            </div>
+
+                            <section>
+                                <h3 className="text-lg font-bold mb-4">Other Details</h3>
+                                <div className="text-sm text-slate-600 space-y-1">
+                                    <p>Primary Location: {event.locations && event.locations.length > 0 ? event.locations[0].name : "Not set"}</p>
+                                    <p>Days Count: {event.days.length}</p>
+                                </div>
+                            </section>
+
+                            <section>
+                                <h3 className="text-lg font-bold mb-4">Equipment</h3>
+                                <div className="text-sm text-slate-600 bg-slate-50 p-3 rounded">
+                                    {event.assignedEquipment && event.assignedEquipment.length > 0 ? (
+                                        event.assignedEquipment.map(id => {
+                                            const eq = equipmentList.find(e => e.id === id);
+                                            return <p key={id}>{eq?.name || "Unknown Equipment"}</p>;
+                                        })
+                                    ) : <p className="italic text-slate-400">No equipment assigned</p>}
+                                </div>
+                            </section>
+
+                            <section>
+                                <h3 className="text-lg font-bold mb-4">Crew</h3>
+                                <div className="flex flex-wrap gap-2">
+                                    {event.assignedCrew && event.assignedCrew.length > 0 ? (
+                                        event.assignedCrew.map(id => {
+                                            const crew = crewList.find(c => c.id === id);
+                                            return <span key={id} className="px-3 py-1 bg-gray-100 rounded-full text-xs text-slate-600">{crew?.displayName || "Unknown"}</span>;
+                                        })
+                                    ) : <p className="italic text-slate-400 text-sm">No crew assigned</p>}
+                                </div>
+                            </section>
+                        </div>
+                    </div>
+
+                    {/* --- BOTTOM LISTS --- */}
+                    <div className="p-6 border-t border-gray-100 bg-slate-50/50 space-y-6">
+                        {/* 1. Locations Row */}
+                        <div className="flex items-center justify-between py-3 border-b border-gray-200">
+                             <div className="w-full">
+                                <div className="flex justify-between items-center mb-2">
+                                   <h4 className="font-bold text-slate-800">Locations</h4>
+                                   <Button size="sm" variant="outline" className="h-6 text-xs" onClick={() => (document.querySelector('[value="locations"]') as HTMLElement)?.click()}>
+                                      <Plus size={12} className="mr-1"/> Add
+                                   </Button>
+                                </div>
+                                <div className="space-y-2">
+                                    {event.locations?.map((loc, i) => (
+                                        <div key={i} className="grid grid-cols-3 text-xs text-slate-500">
+                                            <div><p className="uppercase tracking-wider font-semibold mb-1">Location</p><p className="text-slate-800 font-medium">{loc.name}</p></div>
+                                            <div><p className="uppercase tracking-wider font-semibold mb-1">Date</p><p className="text-slate-800">{format(new Date(loc.date), 'MM/dd/yyyy')}</p></div>
+                                            <div><p className="uppercase tracking-wider font-semibold mb-1">Note</p><p className="text-slate-800">{loc.note || "--"}</p></div>
+                                        </div>
+                                    ))}
+                                </div>
+                             </div>
+                        </div>
+
+                        {/* 2. Payments Row */}
+                        <div className="flex items-center justify-between py-3 border-b border-gray-200">
+                             <div className="w-full">
+                                <div className="flex justify-between items-center mb-2">
+                                   <h4 className="font-bold text-slate-800">Payments</h4>
+                                   <Button size="sm" variant="outline" className="h-6 text-xs" onClick={() => (document.querySelector('[value="payments"]') as HTMLElement)?.click()}>
+                                      <Plus size={12} className="mr-1"/> Add
+                                   </Button>
+                                </div>
+                                <div className="space-y-2">
+                                    {event.transactions?.filter(t => t.type === 'income').slice(0,3).map((t, i) => (
+                                        <div key={i} className="grid grid-cols-3 text-xs text-slate-500">
+                                            <div><p className="uppercase tracking-wider font-semibold mb-1">Date</p><p className="text-slate-800">{format(new Date(t.date), 'MM/dd/yyyy')}</p></div>
+                                            <div><p className="uppercase tracking-wider font-semibold mb-1">Amount</p><p className="text-slate-800">LKR {t.amount.toLocaleString()}</p></div>
+                                            <div><p className="uppercase tracking-wider font-semibold mb-1">Remarks</p><p className="text-slate-800">{t.note || t.method}</p></div>
+                                        </div>
+                                    ))}
+                                </div>
+                             </div>
+                        </div>
                     </div>
                 </div>
             </TabsContent>
@@ -562,7 +709,7 @@ export default function EventDetailPage() {
                 </Card>
             </TabsContent>
 
-            {/* --- 5. PAYMENTS & EXPENSES (Reused Logic) --- */}
+            {/* --- 5. PAYMENTS & EXPENSES --- */}
             {['payments', 'expenses'].map(tab => (
                 <TabsContent key={tab} value={tab}>
                     <Card>
