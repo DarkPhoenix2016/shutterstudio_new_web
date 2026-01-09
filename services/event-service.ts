@@ -1,7 +1,7 @@
 import { db } from "@/lib/firebase";
 import { 
-  collection, getDocs, doc, getDoc, addDoc, setDoc, deleteDoc, updateDoc, 
-  serverTimestamp, query, orderBy, Timestamp, runTransaction 
+  collection, getDocs, doc, getDoc, addDoc, deleteDoc, updateDoc, 
+  serverTimestamp, query, orderBy, Timestamp, runTransaction, where 
 } from "firebase/firestore";
 
 // --- TYPES ---
@@ -13,7 +13,6 @@ export interface CustomItem {
   price: number;
 }
 
-// [!code highlight] Updated PackageData to match your Firestore Map structure
 export interface PackageData {
   id: string;
   name: string;
@@ -26,6 +25,58 @@ export interface PackageData {
   featuresList?: string[]; 
 }
 
+export interface PackageConfigParameter {
+  name: string;
+  unit?: string;
+  defaultPrice?: number;
+}
+
+// --- SUB-DATA TYPES (Tabs) ---
+
+export interface EventContact {
+  id: string;
+  name: string;
+  role: string; // e.g. "Band", "Makeup Artist"
+  phone: string;
+  note?: string;
+}
+
+export interface AdditionalService {
+  id: string;
+  name: string;
+  type: 'parameter' | 'custom';
+  quantity: number;
+  pricePerUnit: number;
+  total: number;
+}
+
+export interface EventLocation {
+  id: string;
+  name: string;
+  mapUrl?: string;
+  date: Date;
+  time?: string;
+  note?: string;
+}
+
+export interface TransactionRecord {
+  id: string;
+  date: Date;
+  type: 'income' | 'expense';
+  category?: string;
+  method?: string; // "Cash", "Bank Transfer"
+  amount: number;
+  note?: string;
+}
+
+export interface EventApproval {
+  customer_confirmed: boolean;
+  customer_email?: string;
+  customer_phone?: string;
+  customer_id?: string;
+  approved_date?: any;
+}
+
 export interface EventDayConfig {
   date: Date;
   type: 'package' | 'custom';
@@ -34,41 +85,63 @@ export interface EventDayConfig {
   cost: number;
 }
 
+// --- MAIN EVENT DATA TYPE ---
+
 export interface EventData {
   id?: string;
-  displayId?: string;
+  displayId?: string; // e.g. OMG00001
+  
+  // Customer Info
   customerName: string;
   customerMobile: string;
   customerEmail?: string;
-  couplePhotoUrl?: string;
+  couplePhotoUrl?: string; // Cover
+  galleryUrls?: string[]; // Gallery
+  
+  // Meta
   eventName: string;
   eventType: string; 
   status: string;
   inquiryDate: any;
+  
+  // Scheduling
   dayCount: number;
   days: EventDayConfig[]; 
-  totalBudget: number;
+  
+  // Financials
+  totalBudget: number; // Base Package Cost
+  servicesTotal?: number; // Additional Services Cost
   discountType: 'fixed' | 'percentage';
   discount: number;
-  finalBudget: number;
+  finalBudget: number; // (Base + Services) - Discount
   advancePaid: number;
+  
+  // Resources
   assignedCrew: string[];
   assignedEquipment: string[];
+  
+  // Tab Data
+  approval?: EventApproval;
+  contacts?: EventContact[];
+  additionalServices?: AdditionalService[];
+  locations?: EventLocation[];
+  transactions?: TransactionRecord[]; 
+
   notes?: string;
   createdAt?: any;
-}
-
-export interface PackageConfigParameter {
-  name: string;
-  unit?: string;
-  defaultPrice?: number;
 }
 
 // --- FUNCTIONS ---
 
 // 1. Fetch Dynamic Settings Lists
-export const fetchStudioSettingsList = async (studioId: string, settingType: 'EVENT_TYPES' | 'EVENT_STATUS') => {
+export const fetchStudioSettingsList = async (studioId: string, settingType: 'EVENT_TYPES' | 'EVENT_STATUS' | 'payment_methods') => {
   try {
+    // Payment methods might be on the main studio doc based on some patterns
+    if (settingType === 'payment_methods') {
+        const studioDoc = await getDoc(doc(db, "Studios", studioId));
+        if (studioDoc.exists()) return studioDoc.data().payment_methods || ["Cash", "Bank Transfer"];
+    }
+
     const ref = doc(db, "Studios", studioId, "Settings", settingType);
     const snap = await getDoc(ref);
     if (snap.exists() && Array.isArray(snap.data().LIST)) {
@@ -97,19 +170,19 @@ export const fetchPackagesList = async (studioId: string) => {
         
         const data = pkgSnap.data();
         
-        // [!code highlight] Transform 'parameters' map (Firestore) -> 'featuresList' array (UI)
+        // Transform 'parameters' map (Firestore) -> 'featuresList' array (UI)
         const paramsMap = data.parameters || {};
         const featuresList: string[] = Object.entries(paramsMap).map(([key, value]) => {
-            if (value === true) return key; // e.g. "Preshoot"
-            if (value === false) return null; // Skip false items
-            return `${key}: ${value}`; // e.g. "Drone Cameras: 1"
+            if (value === true) return key; 
+            if (value === false) return null; 
+            return `${key}: ${value}`; 
         }).filter((f): f is string => f !== null);
 
         return { 
             id: pkgSnap.id, 
             ...data,
             parameters: paramsMap,
-            featuresList: featuresList, // UI uses this
+            featuresList: featuresList, 
             description: data.description || ""
         } as PackageData;
     }));
@@ -136,7 +209,7 @@ export const fetchPackageConfig = async (studioId: string) => {
     }
 };
 
-// 3. Create Event
+// 3. Create Event (Transactional ID Generation)
 export const createEvent = async (studioId: string, event: EventData) => {
   try {
     await runTransaction(db, async (transaction) => {
@@ -217,6 +290,7 @@ export const fetchEvents = async (studioId: string) => {
     });
 };
 
+// 7. Fetch Single Event by ID (Deep Parsing for Dates)
 export const fetchEventById = async (studioId: string, eventId: string) => {
   try {
     const ref = doc(db, "Studios", studioId, "Events", eventId);
@@ -227,8 +301,17 @@ export const fetchEventById = async (studioId: string, eventId: string) => {
         id: snap.id,
         ...data,
         inquiryDate: data.inquiryDate instanceof Timestamp ? data.inquiryDate.toDate() : data.inquiryDate,
+        // Map Days
         days: Array.isArray(data.days)
           ? data.days.map((day: any) => ({ ...day, date: day.date instanceof Timestamp ? day.date.toDate() : day.date }))
+          : [],
+        // Map Locations
+        locations: Array.isArray(data.locations)
+          ? data.locations.map((loc: any) => ({ ...loc, date: loc.date instanceof Timestamp ? loc.date.toDate() : loc.date }))
+          : [],
+        // Map Transactions
+        transactions: Array.isArray(data.transactions)
+          ? data.transactions.map((t: any) => ({ ...t, date: t.date instanceof Timestamp ? t.date.toDate() : t.date }))
           : []
       } as unknown as EventData;
     }
@@ -237,4 +320,48 @@ export const fetchEventById = async (studioId: string, eventId: string) => {
     console.error("Error fetching event:", error);
     return null;
   }
+};
+
+// 8. Check Resource Availability
+export const checkResourceAvailability = async (
+    studioId: string, 
+    date: Date, 
+    resourceId: string, 
+    type: 'crew' | 'equipment'
+): Promise<boolean> => {
+    try {
+        const ref = collection(db, "Studios", studioId, "Events");
+        // We only care about active events that might use resources
+        const q = query(ref, where("status", "in", ["Scheduled", "Shooting"])); 
+        const snap = await getDocs(q);
+        
+        let isBusy = false;
+        const targetDateStr = date.toDateString();
+
+        for (const doc of snap.docs) {
+            const evt = doc.data();
+            
+            // Check if this event has the target date in its schedule
+            const hasDate = Array.isArray(evt.days) && evt.days.some((d: any) => {
+                const dDate = d.date instanceof Timestamp ? d.date.toDate() : d.date;
+                return dDate.toDateString() === targetDateStr;
+            });
+
+            if (hasDate) {
+                if (type === 'crew' && Array.isArray(evt.assignedCrew) && evt.assignedCrew.includes(resourceId)) {
+                    isBusy = true;
+                    break;
+                }
+                if (type === 'equipment' && Array.isArray(evt.assignedEquipment) && evt.assignedEquipment.includes(resourceId)) {
+                    isBusy = true;
+                    break;
+                }
+            }
+        }
+
+        return !isBusy;
+    } catch (e) {
+        console.error("Error checking availability:", e);
+        return true; // Fail open (allow assignment if check fails) or handle error
+    }
 };
