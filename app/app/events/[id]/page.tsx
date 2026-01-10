@@ -3,8 +3,8 @@
 import { useState, useEffect, useMemo } from "react"
 import { useAuth } from "@/context/AuthContext"
 import { useParams, useRouter } from "next/navigation"
-import { 
-    fetchEventById, updateEvent, fetchStudioSettingsList, 
+import {
+    fetchEventById, updateEvent, fetchStudioSettingsList,
     checkResourceAvailability, EventData, EventContact, EventLocation, TransactionRecord,
     fetchPackageConfig, fetchPackagesList, PackageData, AdditionalService,
     EventDayConfig, CustomItem, PackageConfigParameter
@@ -48,7 +48,7 @@ import {
     Plus, Trash2, Camera, Lock, FileText,
     Calendar as CalendarIcon, CheckCircle, RefreshCcw, ExternalLink,
     MessageCircle, LayoutGrid, Pencil, Check, DollarSign,
-    TrendingUp, Wallet, Search, Users, Briefcase, ChevronDown,ChevronLeft,ChevronRight,
+    TrendingUp, Wallet, Search, Users, Briefcase, ChevronDown, ChevronLeft, ChevronRight,
     ImageIcon, UploadCloud, X, Maximize2
 } from "lucide-react"
 import { format } from "date-fns"
@@ -192,6 +192,8 @@ export default function EventDetailPage() {
     const [packagesList, setPackagesList] = useState<PackageData[]>([])
     const [configParams, setConfigParams] = useState<PackageConfigParameter[]>([])
 
+    const jumpToGallery = () => setActiveTab("gallery");
+
     // Load Data
     useEffect(() => {
         const load = async () => {
@@ -233,9 +235,21 @@ export default function EventDetailPage() {
         load()
     }, [userData, id])
 
+    const overviewImages = useMemo(() => {
+        if (!event) return [];
+        const imgs = [];
+        // Add Cover Image first (tagged as isCover)
+        if (event.couplePhotoUrl) imgs.push({ url: event.couplePhotoUrl, isCover: true });
+        // Add Gallery Images
+        if (event.galleryUrls) {
+            imgs.push(...event.galleryUrls.map(url => ({ url, isCover: false })));
+        }
+        return imgs;
+    }, [event]);
+
     const handleGalleryUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         if (!event || !userData?.studioID || !e.target.files?.[0]) return;
-        
+
         const file = e.target.files[0];
         const currentCount = event.galleryUrls?.length || 0;
 
@@ -257,10 +271,10 @@ export default function EventDetailPage() {
             const url = await uploadFileToStorage(path, compressedFile);
 
             // 4. Update Firestore
-            await handleUpdateEvent({ 
-                galleryUrls: [...(event.galleryUrls || []), url] 
+            await handleUpdateEvent({
+                galleryUrls: [...(event.galleryUrls || []), url]
             });
-            
+
             Toast.fire({ icon: 'success', title: 'Photo uploaded' });
         } catch (err) {
             console.error(err);
@@ -293,7 +307,7 @@ export default function EventDetailPage() {
             try {
                 // Extract relative path from URL or reconstruct it if you follow strict naming
                 // Simple regex to extract path from Firebase Storage URL
-                const fileRef = ref(storage, url); 
+                const fileRef = ref(storage, url);
                 await deleteObject(fileRef);
             } catch (storageErr) {
                 console.warn("Storage file might already be gone", storageErr);
@@ -302,7 +316,7 @@ export default function EventDetailPage() {
             // 2. Remove from Firestore
             const newGallery = (event.galleryUrls || []).filter(u => u !== url);
             await handleUpdateEvent({ galleryUrls: newGallery });
-            
+
             Toast.fire({ icon: 'success', title: 'Image deleted' });
         } catch (err) {
             console.error(err);
@@ -821,6 +835,69 @@ export default function EventDetailPage() {
                                 <a href={`tel:${event.customerMobile}`} className="flex items-center justify-center gap-2 w-full py-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-md text-sm font-medium text-slate-700 transition-colors"><Phone className="w-4 h-4 text-blue-600" /> Call Customer</a>
                                 <a href={`sms:${event.customerMobile}`} className="flex items-center justify-center gap-2 w-full py-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-md text-sm font-medium text-slate-700 transition-colors"><MessageCircle className="w-4 h-4 text-green-600" /> Send SMS</a>
                                 <a href={`https://wa.me/${event.customerMobile}`} target="_blank" className="flex items-center justify-center gap-2 w-full py-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-md text-sm font-medium text-slate-700 transition-colors"><MessageCircle className="w-4 h-4 text-green-500" /> WhatsApp</a>
+                            </CardContent>
+                        </Card>
+
+                        <Card className=" lg:col-span-4 shadow-sm border-slate-200">
+                            <CardHeader className="bg-slate-50/50 border-b border-slate-100 py-3 flex flex-row justify-between items-center">
+                                <CardTitle className="text-sm font-bold text-slate-700 flex items-center gap-2">
+                                    <ImageIcon className="w-4 h-4" /> Event Gallery
+                                    <Badge variant="outline" className="text-xs font-normal text-slate-500">
+                                        {overviewImages.length} Images
+                                    </Badge>
+                                </CardTitle>
+                                <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={jumpToGallery} title="Manage Gallery">
+                                    <Pencil className="h-3 w-3 text-slate-500" />
+                                </Button>
+                            </CardHeader>
+                            <CardContent className="p-4">
+                                {overviewImages.length > 0 ? (
+                                    <div className="columns-2 md:columns-4 gap-3 space-y-3">
+                                        {overviewImages.map((imgObj, idx) => (
+                                            <div key={idx} className="relative group break-inside-avoid rounded-lg overflow-hidden bg-slate-100 shadow-sm border border-slate-200">
+
+                                                {/* Image */}
+                                                <img
+                                                    src={imgObj.url}
+                                                    alt={`Gallery ${idx}`}
+                                                    className="w-full h-auto object-cover transition-transform duration-500 group-hover:scale-105 cursor-zoom-in"
+                                                    onClick={() => setLightboxIndex(idx)}
+                                                />
+
+                                                {/* Badges & Actions Overlay */}
+                                                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors pointer-events-none">
+
+                                                    {/* Cover Badge */}
+                                                    {imgObj.isCover && (
+                                                        <div className="absolute top-2 left-2">
+                                                            <Badge className="bg-black/60 hover:bg-black/60 text-white border-0 text-[10px] px-1.5 h-5 backdrop-blur-sm">
+                                                                Cover
+                                                            </Badge>
+                                                        </div>
+                                                    )}
+
+                                                    {/* Delete Button (Hidden for Cover) */}
+                                                    {!imgObj.isCover && (
+                                                        <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-auto">
+                                                            <Button
+                                                                variant="destructive"
+                                                                size="icon"
+                                                                className="h-6 w-6 rounded-full shadow-sm"
+                                                                onClick={(e) => { e.stopPropagation(); handleGalleryDelete(imgObj.url); }}
+                                                            >
+                                                                <Trash2 className="w-3 h-3" />
+                                                            </Button>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <div className="text-center py-8 text-slate-400 italic text-sm border-2 border-dashed rounded-lg bg-slate-50/50">
+                                        No photos uploaded yet.
+                                    </div>
+                                )}
                             </CardContent>
                         </Card>
 
@@ -1705,97 +1782,97 @@ export default function EventDetailPage() {
                 </TabsContent>
 
                 <TabsContent value="gallery">
-                <Card>
-                    <CardHeader className="flex flex-row items-center justify-between border-b bg-slate-50/50 py-4">
-                        <div>
-                            <CardTitle>Event Gallery</CardTitle>
-                            <p className="text-sm text-slate-500 mt-1">
-                                {event.galleryUrls?.length || 0} Photos Uploaded
-                            </p>
-                        </div>
-                        <div className="flex gap-2">
-                            <label className={`cursor-pointer bg-[#1C4D8D] hover:bg-[#163b6b] text-white px-4 py-2 rounded-md text-sm font-medium flex items-center gap-2 transition-all ${uploading ? 'opacity-50 cursor-not-allowed' : ''}`}>
-                                {uploading ? <Loader2 className="w-4 h-4 animate-spin"/> : <UploadCloud className="w-4 h-4"/>}
-                                Upload Photo
-                                <input 
-                                    type="file" 
-                                    className="hidden" 
-                                    accept=".jpg, .jpeg, .png" 
-                                    disabled={uploading} 
-                                    onChange={handleGalleryUpload} 
-                                    multiple={false}
-                                />
-                            </label>
-                        </div>
-                    </CardHeader>
-                    <CardContent className="p-6">
-                        {event.galleryUrls && event.galleryUrls.length > 0 ? (
-                            <div className="columns-2 md:columns-4 gap-4 space-y-4">
-                                {event.galleryUrls.map((url, idx) => (
-                                    <div key={idx} className="relative group break-inside-avoid rounded-lg overflow-hidden shadow-sm border bg-slate-100">
-                                        <img 
-                                            src={url} 
-                                            alt={`Gallery ${idx}`} 
-                                            className="w-full h-auto object-cover transition-transform duration-500 group-hover:scale-105 cursor-zoom-in"
-                                            onClick={() => setLightboxIndex(idx)}
-                                        />
-                                        
-                                        {/* Overlay Actions */}
-                                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-start justify-end p-2 opacity-0 group-hover:opacity-100">
-                                            <Button 
-                                                variant="destructive" 
-                                                size="icon" 
-                                                className="h-7 w-7 rounded-full shadow-md"
-                                                onClick={(e) => { e.stopPropagation(); handleGalleryDelete(url); }}
-                                            >
-                                                <Trash2 className="w-3.5 h-3.5" />
-                                            </Button>
+                    <Card>
+                        <CardHeader className="flex flex-row items-center justify-between border-b bg-slate-50/50 py-4">
+                            <div>
+                                <CardTitle>Event Gallery</CardTitle>
+                                <p className="text-sm text-slate-500 mt-1">
+                                    {event.galleryUrls?.length || 0} Photos Uploaded
+                                </p>
+                            </div>
+                            <div className="flex gap-2">
+                                <label className={`cursor-pointer bg-[#1C4D8D] hover:bg-[#163b6b] text-white px-4 py-2 rounded-md text-sm font-medium flex items-center gap-2 transition-all ${uploading ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                                    {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <UploadCloud className="w-4 h-4" />}
+                                    Upload Photo
+                                    <input
+                                        type="file"
+                                        className="hidden"
+                                        accept=".jpg, .jpeg, .png"
+                                        disabled={uploading}
+                                        onChange={handleGalleryUpload}
+                                        multiple={false}
+                                    />
+                                </label>
+                            </div>
+                        </CardHeader>
+                        <CardContent className="p-6">
+                            {event.galleryUrls && event.galleryUrls.length > 0 ? (
+                                <div className="columns-2 md:columns-4 gap-4 space-y-4">
+                                    {event.galleryUrls.map((url, idx) => (
+                                        <div key={idx} className="relative group break-inside-avoid rounded-lg overflow-hidden shadow-sm border bg-slate-100">
+                                            <img
+                                                src={url}
+                                                alt={`Gallery ${idx}`}
+                                                className="w-full h-auto object-cover transition-transform duration-500 group-hover:scale-105 cursor-zoom-in"
+                                                onClick={() => setLightboxIndex(idx)}
+                                            />
+
+                                            {/* Overlay Actions */}
+                                            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-start justify-end p-2 opacity-0 group-hover:opacity-100">
+                                                <Button
+                                                    variant="destructive"
+                                                    size="icon"
+                                                    className="h-7 w-7 rounded-full shadow-md"
+                                                    onClick={(e) => { e.stopPropagation(); handleGalleryDelete(url); }}
+                                                >
+                                                    <Trash2 className="w-3.5 h-3.5" />
+                                                </Button>
+                                            </div>
                                         </div>
-                                    </div>
-                                ))}
-                            </div>
-                        ) : (
-                            <div className="flex flex-col items-center justify-center py-12 text-slate-400 border-2 border-dashed rounded-lg bg-slate-50">
-                                <ImageIcon className="w-10 h-10 mb-2 opacity-20" />
-                                <p>No photos uploaded yet.</p>
-                                <p className="text-xs">Upload images when the event is in progress.</p>
-                            </div>
-                        )}
-                    </CardContent>
-                </Card>
-            </TabsContent>
+                                    ))}
+                                </div>
+                            ) : (
+                                <div className="flex flex-col items-center justify-center py-12 text-slate-400 border-2 border-dashed rounded-lg bg-slate-50">
+                                    <ImageIcon className="w-10 h-10 mb-2 opacity-20" />
+                                    <p>No photos uploaded yet.</p>
+                                    <p className="text-xs">Upload images when the event is in progress.</p>
+                                </div>
+                            )}
+                        </CardContent>
+                    </Card>
+                </TabsContent>
 
             </Tabs>
 
             {lightboxIndex !== null && event.galleryUrls && (
-            <div className="fixed inset-0 z-50 bg-black/95 flex items-center justify-center animate-in fade-in duration-200">
-                <Button variant="ghost" size="icon" className="absolute top-4 right-4 text-white hover:bg-white/20 rounded-full" onClick={() => setLightboxIndex(null)}>
-                    <X className="w-6 h-6"/>
-                </Button>
-                
-                <img 
-                    src={event.galleryUrls[lightboxIndex]} 
-                    className="max-h-[90vh] max-w-[90vw] object-contain rounded-md shadow-2xl"
-                    alt="Lightbox View"
-                />
+                <div className="fixed inset-0 z-50 bg-black/95 flex items-center justify-center animate-in fade-in duration-200">
+                    <Button variant="ghost" size="icon" className="absolute top-4 right-4 text-white hover:bg-white/20 rounded-full" onClick={() => setLightboxIndex(null)}>
+                        <X className="w-6 h-6" />
+                    </Button>
 
-                {/* Navigation Buttons */}
-                {lightboxIndex > 0 && (
-                    <Button variant="ghost" size="icon" className="absolute left-4 top-1/2 -translate-y-1/2 text-white hover:bg-white/20 rounded-full" onClick={() => setLightboxIndex(i => i! - 1)}>
-                        <ChevronLeft className="w-8 h-8" />
-                    </Button>
-                )}
-                {lightboxIndex < (event.galleryUrls.length - 1) && (
-                    <Button variant="ghost" size="icon" className="absolute right-4 top-1/2 -translate-y-1/2 text-white hover:bg-white/20 rounded-full" onClick={() => setLightboxIndex(i => i! + 1)}>
-                        <ChevronRight className="w-8 h-8" />
-                    </Button>
-                )}
-                
-                <div className="absolute bottom-4 left-1/2 -translate-x-1/2 text-white/80 text-sm bg-black/50 px-3 py-1 rounded-full backdrop-blur-md">
-                    {lightboxIndex + 1} / {event.galleryUrls.length}
+                    <img
+                        src={event.galleryUrls[lightboxIndex]}
+                        className="max-h-[90vh] max-w-[90vw] object-contain rounded-md shadow-2xl"
+                        alt="Lightbox View"
+                    />
+
+                    {/* Navigation Buttons */}
+                    {lightboxIndex > 0 && (
+                        <Button variant="ghost" size="icon" className="absolute left-4 top-1/2 -translate-y-1/2 text-white hover:bg-white/20 rounded-full" onClick={() => setLightboxIndex(i => i! - 1)}>
+                            <ChevronLeft className="w-8 h-8" />
+                        </Button>
+                    )}
+                    {lightboxIndex < (event.galleryUrls.length - 1) && (
+                        <Button variant="ghost" size="icon" className="absolute right-4 top-1/2 -translate-y-1/2 text-white hover:bg-white/20 rounded-full" onClick={() => setLightboxIndex(i => i! + 1)}>
+                            <ChevronRight className="w-8 h-8" />
+                        </Button>
+                    )}
+
+                    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 text-white/80 text-sm bg-black/50 px-3 py-1 rounded-full backdrop-blur-md">
+                        {lightboxIndex + 1} / {event.galleryUrls.length}
+                    </div>
                 </div>
-            </div>
-        )}
+            )}
 
             {/* --- GLOBAL DIALOGS --- */}
             <Dialog open={isContactOpen} onOpenChange={setIsContactOpen}>
