@@ -3,8 +3,8 @@
 import { useState, useEffect, useMemo } from "react"
 import { useAuth } from "@/context/AuthContext"
 import { useParams, useRouter } from "next/navigation"
-import {
-    fetchEventById, updateEvent, fetchStudioSettingsList,
+import { 
+    fetchEventById, updateEvent, fetchStudioSettingsList, 
     checkResourceAvailability, EventData, EventContact, EventLocation, TransactionRecord,
     fetchPackageConfig, fetchPackagesList, PackageData, AdditionalService,
     EventDayConfig, CustomItem, PackageConfigParameter
@@ -15,6 +15,9 @@ import {
     fetchInventory, InventoryItem,
     assignInventorySchedule, removeInventorySchedule
 } from "@/services/inventory-service"
+import { ref, deleteObject } from "firebase/storage"
+import { storage } from "@/lib/firebase"
+import { arrayUnion, arrayRemove } from "firebase/firestore"
 import {
     fetchCrewMembers,
     assignCrewSchedule, removeCrewSchedule
@@ -44,7 +47,8 @@ import {
     Plus, Trash2, Camera, Lock, FileText,
     Calendar as CalendarIcon, CheckCircle, RefreshCcw, ExternalLink,
     MessageCircle, LayoutGrid, Pencil, Check, DollarSign,
-    TrendingUp, Wallet, Search, Users, Briefcase, ChevronDown
+    TrendingUp, Wallet, Search, Users, Briefcase, ChevronDown,ChevronLeft
+    ImageIcon, UploadCloud, X, Maximize2
 } from "lucide-react"
 import { format } from "date-fns"
 import Swal from "sweetalert2"
@@ -169,6 +173,7 @@ export default function EventDetailPage() {
     // --- ADDITIONALS (SERVICES) STATE ---
     const [editingService, setEditingService] = useState<AdditionalService | null>(null)
     const [isServiceOpen, setIsServiceOpen] = useState(false)
+
     // New state to control "Custom" vs "Preset" logic
     const [serviceNameInput, setServiceNameInput] = useState("")
     const [servicePriceInput, setServicePriceInput] = useState<number>(0)
@@ -180,6 +185,7 @@ export default function EventDetailPage() {
     const [equipmentList, setEquipmentList] = useState<InventoryItem[]>([])
     const [serviceParams, setServiceParams] = useState<any[]>([])
     const [activePackage, setActivePackage] = useState<PackageData | null>(null)
+    const [lightboxIndex, setLightboxIndex] = useState<number | null>(null)
 
     // --- NEW LISTS FOR PACKAGE EDITING ---
     const [packagesList, setPackagesList] = useState<PackageData[]>([])
@@ -225,6 +231,88 @@ export default function EventDetailPage() {
         }
         load()
     }, [userData, id])
+
+    const handleGalleryUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (!event || !userData?.studioID || !e.target.files?.[0]) return;
+        
+        const file = e.target.files[0];
+        const currentCount = event.galleryUrls?.length || 0;
+
+        // 1. Check Subscription Limit
+        const limitCheck = await validateSubscriptionAction(userData.studioID, 'check_photo_limit', currentCount + 1);
+        if (!limitCheck.allowed) {
+            return Swal.fire({ icon: 'error', title: 'Limit Reached', text: limitCheck.message });
+        }
+
+        setUploading(true);
+        try {
+            // 2. Compress & Prepare
+            const compressedFile = await compressImage(file);
+            const ext = file.name.split('.').pop() || 'jpg';
+            const fileName = `event_${event.displayId || event.id}_${Date.now()}.${ext}`;
+            const path = `Studios/${userData.studioID}/Events/${event.id}/${fileName}`;
+
+            // 3. Upload
+            const url = await uploadFileToStorage(path, compressedFile);
+
+            // 4. Update Firestore
+            await handleUpdateEvent({ 
+                galleryUrls: [...(event.galleryUrls || []), url] 
+            });
+            
+            Toast.fire({ icon: 'success', title: 'Photo uploaded' });
+        } catch (err) {
+            console.error(err);
+            Toast.fire({ icon: 'error', title: 'Upload failed' });
+        } finally {
+            setUploading(false);
+            // Reset input
+            e.target.value = "";
+        }
+    };
+
+    // [!code ++] NEW: Gallery Delete Handler
+    const handleGalleryDelete = async (url: string) => {
+        if (!event || !userData?.studioID) return;
+
+        const result = await Swal.fire({
+            title: 'Delete Image?',
+            text: "This cannot be undone.",
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#d33',
+            confirmButtonText: 'Yes, delete it'
+        });
+
+        if (!result.isConfirmed) return;
+
+        setSaving(true); // Reuse saving state for UI feedback
+        try {
+            // 1. Delete from Storage (Try/Catch in case file is missing but link exists)
+            try {
+                // Extract relative path from URL or reconstruct it if you follow strict naming
+                // Simple regex to extract path from Firebase Storage URL
+                const fileRef = ref(storage, url); 
+                await deleteObject(fileRef);
+            } catch (storageErr) {
+                console.warn("Storage file might already be gone", storageErr);
+            }
+
+            // 2. Remove from Firestore
+            const newGallery = (event.galleryUrls || []).filter(u => u !== url);
+            await handleUpdateEvent({ galleryUrls: newGallery });
+            
+            Toast.fire({ icon: 'success', title: 'Image deleted' });
+        } catch (err) {
+            console.error(err);
+            Toast.fire({ icon: 'error', title: 'Delete failed' });
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    // Helper to check if gallery is active
+    const isGalleryEnabled = ["In Progress", "Post Production", "Review", "Completed", "Handed Over"].includes(event?.status || "");
 
     // --- CALCULATIONS ---
     const financials = useMemo(() => {
@@ -633,6 +721,7 @@ export default function EventDetailPage() {
                 <TabsList className="w-full justify-start overflow-x-auto h-auto p-1 bg-white border border-gray-200 rounded-lg mb-6 shadow-sm">
                     <TabsTrigger value="overview" className="px-6 py-2">Overview</TabsTrigger>
                     <TabsTrigger value="package_edit" className="px-6 py-2">Package & Notes</TabsTrigger>
+                    {isGalleryEnabled && <TabsTrigger value="gallery" className="px-6 py-2">Gallery</TabsTrigger>}
                     <TabsTrigger value="contacts" className="px-6 py-2">Contacts</TabsTrigger>
                     <TabsTrigger value="additionals" className="px-6 py-2">Additionals</TabsTrigger>
                     <TabsTrigger value="locations" className="px-6 py-2">Locations</TabsTrigger>
@@ -1045,6 +1134,8 @@ export default function EventDetailPage() {
 
 
                 </TabsContent>
+
+
 
                 {/* --- 2. PACKAGE & NOTES TAB (EDITABLE) --- */}
                 <TabsContent value="package_edit">
@@ -1612,7 +1703,98 @@ export default function EventDetailPage() {
                     </Dialog>
                 </TabsContent>
 
+                <TabsContent value="gallery">
+                <Card>
+                    <CardHeader className="flex flex-row items-center justify-between border-b bg-slate-50/50 py-4">
+                        <div>
+                            <CardTitle>Event Gallery</CardTitle>
+                            <p className="text-sm text-slate-500 mt-1">
+                                {event.galleryUrls?.length || 0} Photos Uploaded
+                            </p>
+                        </div>
+                        <div className="flex gap-2">
+                            <label className={`cursor-pointer bg-[#1C4D8D] hover:bg-[#163b6b] text-white px-4 py-2 rounded-md text-sm font-medium flex items-center gap-2 transition-all ${uploading ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                                {uploading ? <Loader2 className="w-4 h-4 animate-spin"/> : <UploadCloud className="w-4 h-4"/>}
+                                Upload Photo
+                                <input 
+                                    type="file" 
+                                    className="hidden" 
+                                    accept=".jpg, .jpeg, .png" 
+                                    disabled={uploading} 
+                                    onChange={handleGalleryUpload} 
+                                    multiple={false}
+                                />
+                            </label>
+                        </div>
+                    </CardHeader>
+                    <CardContent className="p-6">
+                        {event.galleryUrls && event.galleryUrls.length > 0 ? (
+                            <div className="columns-2 md:columns-4 gap-4 space-y-4">
+                                {event.galleryUrls.map((url, idx) => (
+                                    <div key={idx} className="relative group break-inside-avoid rounded-lg overflow-hidden shadow-sm border bg-slate-100">
+                                        <img 
+                                            src={url} 
+                                            alt={`Gallery ${idx}`} 
+                                            className="w-full h-auto object-cover transition-transform duration-500 group-hover:scale-105 cursor-zoom-in"
+                                            onClick={() => setLightboxIndex(idx)}
+                                        />
+                                        
+                                        {/* Overlay Actions */}
+                                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-start justify-end p-2 opacity-0 group-hover:opacity-100">
+                                            <Button 
+                                                variant="destructive" 
+                                                size="icon" 
+                                                className="h-7 w-7 rounded-full shadow-md"
+                                                onClick={(e) => { e.stopPropagation(); handleGalleryDelete(url); }}
+                                            >
+                                                <Trash2 className="w-3.5 h-3.5" />
+                                            </Button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="flex flex-col items-center justify-center py-12 text-slate-400 border-2 border-dashed rounded-lg bg-slate-50">
+                                <ImageIcon className="w-10 h-10 mb-2 opacity-20" />
+                                <p>No photos uploaded yet.</p>
+                                <p className="text-xs">Upload images when the event is in progress.</p>
+                            </div>
+                        )}
+                    </CardContent>
+                </Card>
+            </TabsContent>
+
             </Tabs>
+
+            {lightboxIndex !== null && event.galleryUrls && (
+            <div className="fixed inset-0 z-50 bg-black/95 flex items-center justify-center animate-in fade-in duration-200">
+                <Button variant="ghost" size="icon" className="absolute top-4 right-4 text-white hover:bg-white/20 rounded-full" onClick={() => setLightboxIndex(null)}>
+                    <X className="w-6 h-6"/>
+                </Button>
+                
+                <img 
+                    src={event.galleryUrls[lightboxIndex]} 
+                    className="max-h-[90vh] max-w-[90vw] object-contain rounded-md shadow-2xl"
+                    alt="Lightbox View"
+                />
+
+                {/* Navigation Buttons */}
+                {lightboxIndex > 0 && (
+                    <Button variant="ghost" size="icon" className="absolute left-4 top-1/2 -translate-y-1/2 text-white hover:bg-white/20 rounded-full" onClick={() => setLightboxIndex(i => i! - 1)}>
+                        <ChevronLeft className="w-8 h-8" />
+                    </Button>
+                )}
+                {lightboxIndex < (event.galleryUrls.length - 1) && (
+                    <Button variant="ghost" size="icon" className="absolute right-4 top-1/2 -translate-y-1/2 text-white hover:bg-white/20 rounded-full" onClick={() => setLightboxIndex(i => i! + 1)}>
+                        <ChevronRight className="w-8 h-8" />
+                    </Button>
+                )}
+                
+                <div className="absolute bottom-4 left-1/2 -translate-x-1/2 text-white/80 text-sm bg-black/50 px-3 py-1 rounded-full backdrop-blur-md">
+                    {lightboxIndex + 1} / {event.galleryUrls.length}
+                </div>
+            </div>
+        )}
 
             {/* --- GLOBAL DIALOGS --- */}
             <Dialog open={isContactOpen} onOpenChange={setIsContactOpen}>
