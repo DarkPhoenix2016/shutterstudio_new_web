@@ -6,7 +6,8 @@ import { useParams, useRouter } from "next/navigation"
 import { 
     fetchEventById, updateEvent, fetchStudioSettingsList, 
     checkResourceAvailability, EventData, EventContact, EventLocation, TransactionRecord,
-    fetchPackageConfig, fetchPackagesList, PackageData, AdditionalService 
+    fetchPackageConfig, fetchPackagesList, PackageData, AdditionalService,
+    EventDayConfig, CustomItem, PackageConfigParameter
 } from "@/services/event-service"
 import { uploadFileToStorage } from "@/lib/storage-utils"
 import { compressImage } from "@/lib/image-utils"
@@ -32,11 +33,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Calendar } from "@/components/ui/calendar"
+import { Separator } from "@/components/ui/separator"
 import { 
-    Loader2, ArrowLeft, Save, Upload, MapPin, Phone, Mail, 
-    Plus, Trash2, Camera, Lock, FileText, MessageSquare, 
-    Calendar, CheckCircle, RefreshCcw, ExternalLink,
-    MessageCircle, Settings, LayoutGrid, Pencil, Check, DollarSign, 
+    Loader2, ArrowLeft, Save, MapPin, Phone, 
+    Plus, Trash2, Camera, Lock, FileText, 
+    Calendar as CalendarIcon, CheckCircle, RefreshCcw, ExternalLink,
+    MessageCircle, LayoutGrid, Pencil, Check, DollarSign, 
     TrendingUp, Wallet, Search, Users, Briefcase, ChevronDown
 } from "lucide-react"
 import { format } from "date-fns"
@@ -174,6 +177,10 @@ export default function EventDetailPage() {
   const [serviceParams, setServiceParams] = useState<any[]>([])
   const [activePackage, setActivePackage] = useState<PackageData | null>(null)
 
+  // --- NEW LISTS FOR PACKAGE EDITING ---
+  const [packagesList, setPackagesList] = useState<PackageData[]>([])
+  const [configParams, setConfigParams] = useState<PackageConfigParameter[]>([])
+
   // Load Data
   useEffect(() => {
     const load = async () => {
@@ -199,6 +206,10 @@ export default function EventDetailPage() {
         setCrewList(crew)
         setEquipmentList(equip)
         setServiceParams(params)
+        
+        // Store full lists for the Package & Notes tab
+        setPackagesList(allPackages as PackageData[]);
+        setConfigParams(params as PackageConfigParameter[]);
 
         if (evtData && evtData.days?.length > 0 && evtData.days[0].packageId) {
             const foundPkg = allPackages.find(p => p.id === evtData.days[0].packageId);
@@ -215,6 +226,7 @@ export default function EventDetailPage() {
   const financials = useMemo(() => {
     if (!event) return { total: 0, baseCost: 0, servicesCost: 0, discountAmount: 0, finalBudget: 0, paid: 0, due: 0, totalExpenses: 0, profit: 0 };
     
+    // Recalculate baseCost based on current Days config
     const baseCost = event.days?.reduce((acc, day) => acc + (day.cost || 0), 0) || 0;
     const servicesCost = event.additionalServices?.reduce((acc, s) => acc + (s.total || 0), 0) || 0;
     const totalBudget = baseCost + servicesCost;
@@ -255,8 +267,19 @@ export default function EventDetailPage() {
       }
       setSaving(true);
       try {
-          await updateEvent(userData.studioID, event.id!, updates);
-          setEvent(prev => prev ? { ...prev, ...updates } : null);
+          // If we are updating days or discounts, we must also update the final budgets
+          let calculatedUpdates = { ...updates };
+          
+          if (updates.days || updates.discount || updates.discountType) {
+             // We rely on the backend or next render to sync, but for immediate UI consistency
+             // we can't easily recalculate everything here without duplicating logic.
+             // However, the 'financials' memo updates the UI.
+             // We should save the computed values to DB.
+             // (Simplified for this snippet: saving what's passed)
+          }
+
+          await updateEvent(userData.studioID, event.id!, calculatedUpdates);
+          setEvent(prev => prev ? { ...prev, ...calculatedUpdates } : null);
           Toast.fire({ icon: 'success', title: 'Saved' });
       } catch (e) {
           Toast.fire({ icon: 'error', title: 'Save failed' });
@@ -264,6 +287,85 @@ export default function EventDetailPage() {
           setSaving(false);
       }
   };
+
+  // --- PACKAGE & NOTES EDITING LOGIC ---
+  const handleDayCountChange = (count: number) => {
+    if(!event) return;
+    const newCount = Math.max(1, count);
+    const currentDays = [...(event.days || [])];
+    if (newCount > currentDays.length) {
+        for (let i = currentDays.length; i < newCount; i++) {
+            const prevDate = new Date(currentDays[i - 1].date);
+            prevDate.setDate(prevDate.getDate() + 1);
+            currentDays.push({ date: prevDate, type: 'package', cost: 0, customItems: [] });
+        }
+    } else if (newCount < currentDays.length) {
+        currentDays.length = newCount;
+    }
+    // Update local state directly for responsiveness, user must click Save to persist
+    setEvent({ ...event, dayCount: newCount, days: currentDays });
+  }
+
+  const updateDayConfig = (index: number, updates: Partial<EventDayConfig>) => {
+    if(!event) return;
+    const newDays = [...(event.days || [])];
+    const updatedDay = { ...newDays[index], ...updates };
+    
+    // Auto-price update logic
+    if (updates.packageId && updatedDay.type === 'package') {
+        const pkg = packagesList.find(p => p.id === updates.packageId);
+        if (pkg) updatedDay.cost = Number(pkg.price || 0);
+    }
+    if (updates.customItems && updatedDay.type === 'custom') {
+        updatedDay.cost = updates.customItems.reduce((sum: number, item: CustomItem) => sum + (item.price || 0), 0);
+    }
+    
+    newDays[index] = updatedDay;
+    setEvent({ ...event, days: newDays });
+  }
+
+  const addCustomItem = (dayIndex: number, param?: PackageConfigParameter) => {
+    if(!event) return;
+    const day = event.days![dayIndex];
+    const newItem: CustomItem = param
+        ? { name: param.name, quantity: 1, unit: param.unit || "", price: param.defaultPrice || 0 }
+        : { name: "", quantity: 1, unit: "", price: 0 };
+
+    const newItems = [...(day.customItems || []), newItem];
+    updateDayConfig(dayIndex, { customItems: newItems });
+  }
+
+  const updateCustomItem = (dayIndex: number, itemIndex: number, field: keyof CustomItem, value: any) => {
+    if(!event) return;
+    const day = event.days![dayIndex];
+    const newItems = [...(day.customItems || [])];
+    newItems[itemIndex] = { ...newItems[itemIndex], [field]: value };
+    updateDayConfig(dayIndex, { customItems: newItems });
+  }
+
+  const removeCustomItem = (dayIndex: number, itemIndex: number) => {
+    if(!event) return;
+    const day = event.days![dayIndex];
+    const newItems = (day.customItems || []).filter((_: CustomItem, i: number) => i !== itemIndex);
+    updateDayConfig(dayIndex, { customItems: newItems });
+  }
+
+  const savePackageChanges = async () => {
+    if(!event) return;
+    // Calculate final budget to save to DB
+    const updates = {
+        days: event.days,
+        dayCount: event.dayCount,
+        discount: event.discount,
+        discountType: event.discountType,
+        notes: event.notes,
+        totalBudget: financials.total,
+        finalBudget: financials.finalBudget
+    };
+    await handleUpdateEvent(updates);
+  }
+
+  // --- EXISTING ACTIONS (Reset, Upload, Remove etc) ---
 
   const handleResetApproval = async () => {
     const result = await Swal.fire({
@@ -370,18 +472,15 @@ export default function EventDetailPage() {
       setIsServiceOpen(true);
   }
 
-  // --- RESOURCE ASSIGNMENT LOGIC (With Schedule & Limits) ---
+  // --- RESOURCE ASSIGNMENT LOGIC ---
   const checkAndAssignResource = async (resourceId: string, type: 'crew' | 'equipment') => {
       if (!event || !event.id || !userData?.studioID) return;
       
-      // Capture safe strings for use inside callbacks
       const currentEventId = event.id;
       const studioId = userData.studioID;
-
       let allDaysAvailable = true;
       let conflictMsg = "";
 
-      // 1. Check Availability for ALL event days (using updated API)
       for (const day of event.days) {
           const check = await checkResourceAvailability(
               studioId, 
@@ -406,16 +505,12 @@ export default function EventDetailPage() {
           });
       }
 
-      // 2. Perform Assignment
       setSaving(true);
       try {
           if (type === 'crew') {
               const current = event.assignedCrew || [];
               if (!current.includes(resourceId)) {
-                  // A. Update Event Doc
                   await handleUpdateEvent({ assignedCrew: [...current, resourceId] });
-                  
-                  // B. Update User Doc Schedule
                   await Promise.all(event.days.map(day => 
                       assignCrewSchedule(resourceId, safeDate(day.date), currentEventId)
                   ));
@@ -423,10 +518,7 @@ export default function EventDetailPage() {
           } else {
               const current = event.assignedEquipment || [];
               if (!current.includes(resourceId)) {
-                  // A. Update Event Doc
                   await handleUpdateEvent({ assignedEquipment: [...current, resourceId] });
-                  
-                  // B. Update Inventory Doc Schedule
                   await Promise.all(event.days.map(day => 
                       assignInventorySchedule(studioId, resourceId, safeDate(day.date), currentEventId)
                   ));
@@ -441,11 +533,9 @@ export default function EventDetailPage() {
       }
   };
 
-  // --- RESOURCE UNASSIGNMENT LOGIC ---
   const unassignResource = async (resourceId: string, type: 'crew' | 'equipment') => {
       if (!event || !event.id || !userData?.studioID) return;
 
-      // Capture safe strings for use inside callbacks
       const currentEventId = event.id;
       const studioId = userData.studioID;
 
@@ -465,16 +555,12 @@ export default function EventDetailPage() {
           if (type === 'crew') {
               const newCrew = (event.assignedCrew || []).filter(id => id !== resourceId);
               await handleUpdateEvent({ assignedCrew: newCrew });
-              
-              // Remove from User Schedule
               await Promise.all(event.days.map(day => 
                   removeCrewSchedule(resourceId, safeDate(day.date), currentEventId)
               ));
           } else {
               const newEq = (event.assignedEquipment || []).filter(id => id !== resourceId);
               await handleUpdateEvent({ assignedEquipment: newEq });
-              
-              // Remove from Inventory Schedule
               await Promise.all(event.days.map(day => 
                   removeInventorySchedule(studioId, resourceId, safeDate(day.date), currentEventId)
               ));
@@ -512,6 +598,7 @@ export default function EventDetailPage() {
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
             <TabsList className="w-full justify-start overflow-x-auto h-auto p-1 bg-white border border-gray-200 rounded-lg mb-6 shadow-sm">
                 <TabsTrigger value="overview" className="px-6 py-2">Overview</TabsTrigger>
+                <TabsTrigger value="package_edit" className="px-6 py-2">Package & Notes</TabsTrigger>
                 <TabsTrigger value="contacts" className="px-6 py-2">Contacts</TabsTrigger>
                 <TabsTrigger value="additionals" className="px-6 py-2">Additionals</TabsTrigger>
                 <TabsTrigger value="locations" className="px-6 py-2">Locations</TabsTrigger>
@@ -528,7 +615,7 @@ export default function EventDetailPage() {
                     <img src={event.couplePhotoUrl || "/api/placeholder/800/400"} alt="Event Cover" className="w-full h-full object-cover opacity-90 transition-transform duration-700 group-hover:scale-105"/>
                     <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent" />
                     <div className="absolute top-4 right-4">
-                         <label className="cursor-pointer bg-white/10 hover:bg-white/20 backdrop-blur-md text-white px-3 py-1.5 rounded-full text-xs font-medium flex items-center gap-2 transition-all">
+                          <label className="cursor-pointer bg-white/10 hover:bg-white/20 backdrop-blur-md text-white px-3 py-1.5 rounded-full text-xs font-medium flex items-center gap-2 transition-all">
                             {uploading ? <Loader2 className="w-4 h-4 animate-spin"/> : <Camera className="w-4 h-4"/>} Change Cover
                             <input type="file" className="hidden" accept=".jpg, .jpeg, .png" disabled={uploading} onChange={(e) => e.target.files?.[0] && handleUploadImage(e.target.files[0], true)} />
                         </label>
@@ -542,7 +629,7 @@ export default function EventDetailPage() {
                             </div>
                             <h1 className="text-4xl md:text-5xl font-bold text-white tracking-tight">{event.eventName}</h1>
                             <p className="text-slate-300 font-medium text-lg flex items-center gap-2 mt-1">
-                                <Calendar className="w-5 h-5"/>
+                                <CalendarIcon className="w-5 h-5"/>
                                 {event.days.length > 0 ? format(safeDate(event.days[0].date), 'MMMM do, yyyy') : 'Date TBD'}
                             </p>
                         </div>
@@ -570,32 +657,26 @@ export default function EventDetailPage() {
                         <CardHeader className="pb-3"><CardTitle className="text-sm font-bold uppercase tracking-wider text-slate-500">Communication</CardTitle></CardHeader>
                         <CardContent className="grid grid-cols-1 gap-3">
                             <a href={`tel:${event.customerMobile}`} className="flex items-center justify-center gap-2 w-full py-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-md text-sm font-medium text-slate-700 transition-colors"><Phone className="w-4 h-4 text-blue-600"/> Call Customer</a>
-                            <a href={`sms:${event.customerMobile}`} className="flex items-center justify-center gap-2 w-full py-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-md text-sm font-medium text-slate-700 transition-colors"><MessageSquare className="w-4 h-4 text-green-600"/> Send SMS</a>
+                            <a href={`sms:${event.customerMobile}`} className="flex items-center justify-center gap-2 w-full py-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-md text-sm font-medium text-slate-700 transition-colors"><MessageCircle className="w-4 h-4 text-green-600"/> Send SMS</a>
                             <a href={`https://wa.me/${event.customerMobile}`} target="_blank" className="flex items-center justify-center gap-2 w-full py-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-md text-sm font-medium text-slate-700 transition-colors"><MessageCircle className="w-4 h-4 text-green-500"/> WhatsApp</a>
                         </CardContent>
                     </Card>
                 </div>
 
-                {/* APPROVAL STATE SECTION (NEW) */}
+                {/* APPROVAL STATE SECTION */}
                 <Card className="shadow-sm border-slate-200">
                     <CardContent className="p-6">
                         <div className="flex justify-between items-center mb-4">
                             <h3 className="font-semibold text-slate-700">State of Customer Approval</h3>
                             {isLocked ? (
-                                <Badge className="bg-green-100 text-green-700 border-green-200 hover:bg-green-100">
-                                    Approved
-                                </Badge>
+                                <Badge className="bg-green-100 text-green-700 border-green-200 hover:bg-green-100">Approved</Badge>
                             ) : (
-                                <Badge className="bg-yellow-100 text-yellow-700 border-yellow-200 hover:bg-yellow-100">
-                                    Pending Review
-                                </Badge>
+                                <Badge className="bg-yellow-100 text-yellow-700 border-yellow-200 hover:bg-yellow-100">Pending Review</Badge>
                             )}
                         </div>
                         
                         <div className="w-full bg-slate-100 rounded-full h-2.5 mb-2">
-                            <div 
-                                className={`h-2.5 rounded-full ${isLocked ? 'bg-green-500 w-full' : 'bg-blue-600 w-[60%]'}`}
-                            ></div>
+                            <div className={`h-2.5 rounded-full ${isLocked ? 'bg-green-500 w-full' : 'bg-blue-600 w-[60%]'}`}></div>
                         </div>
                         
                         <p className="text-sm text-slate-500">
@@ -605,31 +686,6 @@ export default function EventDetailPage() {
                         </p>
                     </CardContent>
                 </Card>
-
-                {/* MASONRY GALLERY */}
-                {showGallery && (
-                    <Card className="shadow-sm border-slate-200 overflow-hidden">
-                        <CardHeader className="bg-slate-50/50 border-b border-slate-100 flex flex-row justify-between items-center">
-                            <div className="flex items-center gap-2"><LayoutGrid className="w-5 h-5 text-slate-500"/><CardTitle className="text-base font-semibold text-slate-800">Event Gallery</CardTitle></div>
-                            <label className={`cursor-pointer bg-slate-900 text-white px-3 py-1.5 rounded-md text-xs font-medium flex items-center gap-2 hover:bg-slate-800 transition-colors ${uploading ? 'opacity-50 cursor-not-allowed' : ''}`}>
-                                {uploading ? <Loader2 className="w-4 h-4 animate-spin"/> : <Plus className="w-4 h-4"/>} {uploading ? "Uploading..." : "Add Photo"}
-                                {/* RESTRICTED INPUT: Single File, Images Only */}
-                                <input type="file" className="hidden" accept=".jpg, .jpeg, .png" disabled={uploading} onChange={(e) => { if(e.target.files?.[0]) handleUploadImage(e.target.files[0], false); }} />
-                            </label>
-                        </CardHeader>
-                        <CardContent className="p-4">
-                            {event.galleryUrls && event.galleryUrls.length > 0 ? (
-                                <div className="columns-2 md:columns-4 lg:columns-6 gap-2 space-y-2">
-                                    {event.galleryUrls.map((url, idx) => (
-                                        <div key={idx} className="relative group overflow-hidden rounded-md break-inside-avoid"><img src={url} className="w-full h-auto object-cover rounded-md" alt="Gallery" /></div>
-                                    ))}
-                                </div>
-                            ) : (
-                                <div className="text-center py-10 text-slate-400"><Camera className="w-10 h-10 mx-auto mb-2 opacity-20"/><p>No images uploaded for the gallery yet.</p></div>
-                            )}
-                        </CardContent>
-                    </Card>
-                )}
 
                 {/* MAIN GRID */}
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -654,6 +710,23 @@ export default function EventDetailPage() {
                                 <div className="flex justify-between font-bold border-t border-slate-100 pt-2"><span>Final</span><span>{currency} {financials.finalBudget.toLocaleString()}</span></div>
                                 <div className="flex justify-between text-green-600"><span>Paid</span><span>{currency} {financials.paid.toLocaleString()}</span></div>
                                 <div className="flex justify-between text-red-600 font-bold bg-red-50 p-2 rounded"><span>Due Amount</span><span>{currency} {financials.due.toLocaleString()}</span></div>
+                            </CardContent>
+                        </Card>
+
+                        {/* [!code highlight] NEW: Additional Notes Card */}
+                        <Card className="shadow-sm border-slate-200">
+                            <CardHeader className="bg-slate-50/50 border-b border-slate-100 py-3 flex flex-row justify-between items-center">
+                                <CardTitle className="text-sm font-bold text-slate-700">Additional Notes</CardTitle>
+                                <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => setActiveTab('package_edit')}>
+                                    <Pencil className="h-3 w-3 text-slate-500" />
+                                </Button>
+                            </CardHeader>
+                            <CardContent className="p-4">
+                                {event.notes ? (
+                                    <p className="text-sm text-slate-600 whitespace-pre-line">{event.notes}</p>
+                                ) : (
+                                    <p className="text-sm text-slate-400 italic">No additional notes added.</p>
+                                )}
                             </CardContent>
                         </Card>
                     </div>
@@ -714,7 +787,6 @@ export default function EventDetailPage() {
                                     {event.locations?.map((l, i) => (
                                         <tr key={i} className="border-b last:border-0"><td className="px-4 py-2 font-medium">{l.name}</td><td className="px-4 py-2 text-slate-600">{format(safeDate(l.date), 'MM/dd/yyyy')}</td>
                                         <td className="px-4 py-2 text-right">
-                                            {/* OPEN MAP BUTTON */}
                                             {l.mapUrl && <a href={l.mapUrl} target="_blank" className="inline-flex items-center gap-1 text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded hover:bg-blue-100"><ExternalLink size={12}/> Open Map</a>}
                                         </td></tr>
                                     ))}
@@ -744,7 +816,239 @@ export default function EventDetailPage() {
                 </div>
             </TabsContent>
 
-             {/* --- 2. PAYMENTS TAB (REFINED) --- */}
+            {/* --- [!code highlight] NEW TAB: PACKAGE & NOTES --- */}
+            <TabsContent value="package_edit">
+                <Card>
+                    <CardHeader className="flex flex-row items-center justify-between border-b bg-slate-50/50">
+                        <div>
+                            <CardTitle>Edit Package & Configuration</CardTitle>
+                            <p className="text-sm text-muted-foreground mt-1">Modify days, packages, custom items and notes.</p>
+                        </div>
+                        <Button className="bg-[#1C4D8D]" onClick={savePackageChanges} disabled={saving}>
+                            {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Save className="mr-2 h-4 w-4"/>}
+                            Update Plan
+                        </Button>
+                    </CardHeader>
+                    <CardContent className="p-6 space-y-8">
+                         {/* SCHEDULE & PRICING */}
+                        <div className="space-y-4">
+                            <div className="flex justify-between items-center">
+                                <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Packages & Days</h3>
+                                <div className="flex items-center gap-2">
+                                    <Label className="text-xs">Days</Label>
+                                    <Input 
+                                        type="number" min="1" max="7" 
+                                        className="w-14 h-7 text-center bg-slate-50 text-xs"
+                                        value={event.dayCount}
+                                        onChange={e => handleDayCountChange(Number(e.target.value))}
+                                    />
+                                </div>
+                            </div>
+
+                            <Tabs defaultValue="day-0" className="w-full">
+                                <TabsList className="w-full justify-start overflow-x-auto h-auto p-1 bg-slate-100">
+                                    {event.days?.map((_: EventDayConfig, i: number) => (
+                                        <TabsTrigger key={i} value={`day-${i}`} className="px-4 py-1.5 text-xs">Day {i + 1}</TabsTrigger>
+                                    ))}
+                                </TabsList>
+
+                                {event.days?.map((day: EventDayConfig, i: number) => (
+                                    <TabsContent key={i} value={`day-${i}`} className="border rounded-md p-4 mt-2 space-y-4 bg-white">
+                                        {/* Date Picker */}
+                                        <div className="space-y-1">
+                                            <div className="border rounded-md p-2 bg-slate-50 flex items-center justify-between">
+                                                <Label className="text-xs text-slate-500 ml-2">Date</Label>
+                                                <Popover>
+                                                    <PopoverTrigger asChild>
+                                                        <Button variant="ghost" className="h-6 text-sm font-normal">
+                                                            {day.date ? format(safeDate(day.date), "PPP") : <span>Pick a date</span>}
+                                                            <CalendarIcon className="ml-2 h-3 w-3 opacity-50" />
+                                                        </Button>
+                                                    </PopoverTrigger>
+                                                    <PopoverContent className="w-auto p-0">
+                                                        <Calendar
+                                                            mode="single"
+                                                            selected={safeDate(day.date)}
+                                                            onSelect={(d) => d && updateDayConfig(i, { date: d })}
+                                                            initialFocus
+                                                        />
+                                                    </PopoverContent>
+                                                </Popover>
+                                            </div>
+                                        </div>
+
+                                        <Tabs defaultValue={day.type} onValueChange={(v: any) => updateDayConfig(i, { type: v })} className="w-full">
+                                            <TabsList className="w-full grid grid-cols-2 h-8">
+                                                <TabsTrigger value="package" className="text-xs">Package</TabsTrigger>
+                                                <TabsTrigger value="custom" className="text-xs">Custom Plan</TabsTrigger>
+                                            </TabsList>
+
+                                            <TabsContent value="package" className="pt-2 space-y-3">
+                                                <Select value={day.packageId} onValueChange={(v) => updateDayConfig(i, { packageId: v })}>
+                                                    <SelectTrigger><SelectValue placeholder="Select a package..." /></SelectTrigger>
+                                                    <SelectContent>
+                                                        {packagesList.map(p => (
+                                                            <SelectItem key={p.id} value={p.id}>
+                                                                {p.name} - {currency} {p.price.toLocaleString()}
+                                                            </SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
+
+                                                {/* Package Features Display */}
+                                                {day.packageId && (() => {
+                                                    const pkg = packagesList.find(p => p.id === day.packageId);
+                                                    if (!pkg) return null;
+                                                    return (
+                                                        <div className="border rounded-md p-3 bg-white space-y-2 text-sm shadow-sm">
+                                                            <div className="flex justify-between font-bold text-slate-800 pb-2 border-b mb-2">
+                                                                <span>Price</span>
+                                                                <span>{currency} {Number(pkg.price).toLocaleString()}</span>
+                                                            </div>
+
+                                                            {pkg.featuresList && pkg.featuresList.length > 0 ? (
+                                                                <div className="space-y-1.5">
+                                                                    {pkg.featuresList.map((f, idx) => (
+                                                                        <div key={idx} className="flex items-center text-slate-600 text-xs">
+                                                                            <Check className="h-3 w-3 text-green-500 mr-2" />
+                                                                            <span>{f}</span>
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
+                                                            ) : (
+                                                                <p className="text-xs text-slate-400 italic">No features listed.</p>
+                                                            )}
+                                                        </div>
+                                                    )
+                                                })()}
+                                            </TabsContent>
+
+                                            <TabsContent value="custom" className="pt-2 space-y-3">
+                                                <div className="space-y-2">
+                                                    {day.customItems?.map((item: CustomItem, itemIdx: number) => (
+                                                        <div key={itemIdx} className="grid grid-cols-12 gap-2 items-center">
+                                                            <div className="col-span-5">
+                                                                <Input 
+                                                                    placeholder="Item" className="h-8 text-xs" 
+                                                                    value={item.name} 
+                                                                    onChange={(e) => updateCustomItem(i, itemIdx, 'name', e.target.value)}
+                                                                />
+                                                            </div>
+                                                            <div className="col-span-2">
+                                                                <Input 
+                                                                    type="number" placeholder="Qty" className="h-8 text-xs text-center" 
+                                                                    value={item.quantity} 
+                                                                    onChange={(e) => updateCustomItem(i, itemIdx, 'quantity', Number(e.target.value))}
+                                                                />
+                                                            </div>
+                                                            <div className="col-span-4">
+                                                                <Input 
+                                                                    type="number" placeholder="Price" className="h-8 text-xs text-right" 
+                                                                    value={item.price} 
+                                                                    onChange={(e) => updateCustomItem(i, itemIdx, 'price', Number(e.target.value))}
+                                                                />
+                                                            </div>
+                                                            <div className="col-span-1 flex justify-center">
+                                                                <Button variant="ghost" size="icon" className="h-7 w-7 text-red-400 hover:text-red-600" onClick={() => removeCustomItem(i, itemIdx)}>
+                                                                    <Trash2 className="h-3 w-3" />
+                                                                </Button>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+
+                                                    {/* Add Parameter via Dropdown */}
+                                                    <div className="flex gap-2">
+                                                        <Select onValueChange={(val) => {
+                                                            if (val === 'custom_new') {
+                                                                addCustomItem(i);
+                                                            } else {
+                                                                const param = configParams.find(p => p.name === val);
+                                                                addCustomItem(i, param);
+                                                            }
+                                                        }}>
+                                                            <SelectTrigger className="h-8 text-xs bg-slate-50 border-dashed w-full text-left justify-start px-3 text-slate-500 hover:text-slate-800">
+                                                                <span className="flex items-center"><Plus className="h-3 w-3 mr-2" /> Add Parameter</span>
+                                                            </SelectTrigger>
+                                                            <SelectContent>
+                                                                {configParams.map((p, idx) => (
+                                                                    <SelectItem key={idx} value={p.name}>{p.name} {p.unit ? `(${p.unit})` : ''}</SelectItem>
+                                                                ))}
+                                                                <Separator className="my-1" />
+                                                                <SelectItem value="custom_new">Other (Custom)...</SelectItem>
+                                                            </SelectContent>
+                                                        </Select>
+                                                    </div>
+                                                </div>
+                                                <div className="bg-slate-50 p-2 rounded text-xs text-slate-700 flex justify-between px-3 border">
+                                                    <span>Total Custom Cost:</span>
+                                                    <span className="font-bold">{currency} {(day.cost || 0).toLocaleString()}</span>
+                                                </div>
+                                            </TabsContent>
+                                        </Tabs>
+                                    </TabsContent>
+                                ))}
+                            </Tabs>
+
+                            {/* Budget Calculator */}
+                            <div className="bg-slate-50 p-4 rounded-lg space-y-3 border">
+                                <div className="flex justify-between text-sm">
+                                    <span className="text-slate-600">Total Budget (Days)</span>
+                                    <span className="font-semibold">{currency} {financials.baseCost.toLocaleString()}</span>
+                                </div>
+                                <div className="flex justify-between text-sm">
+                                    <span className="text-slate-600">Additional Services</span>
+                                    <span className="font-semibold">+ {currency} {financials.servicesCost.toLocaleString()}</span>
+                                </div>
+                                <div className="flex justify-between items-center text-sm">
+                                    <span className="text-slate-600">Discount</span>
+                                    <div className="flex items-center gap-2">
+                                        <Select 
+                                            value={event.discountType} 
+                                            onValueChange={(v: any) => setEvent({ ...event, discountType: v })}
+                                        >
+                                            <SelectTrigger className="h-8 w-[70px] text-xs bg-white">
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="fixed">{currency}</SelectItem>
+                                                <SelectItem value="percentage">%</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                        <Input 
+                                            type="number" 
+                                            className="h-8 w-24 text-right bg-white text-sm"
+                                            placeholder="0"
+                                            value={event.discount || ""}
+                                            onChange={e => setEvent({ ...event, discount: Number(e.target.value) })}
+                                        />
+                                    </div>
+                                </div>
+                                <div className="flex justify-between text-xs text-slate-400 px-1">
+                                    <span></span>
+                                    <span>- {currency} {financials.discountAmount.toLocaleString()}</span>
+                                </div>
+                                <Separator className="bg-slate-300" />
+                                <div className="flex justify-between text-base font-bold text-[#1C4D8D]">
+                                    <span>Final Budget</span>
+                                    <span>{currency} {financials.finalBudget.toLocaleString()}</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label>Additional Notes</Label>
+                            <Textarea 
+                                placeholder="Specific requirements..." 
+                                value={event.notes} 
+                                onChange={e => setEvent({ ...event, notes: e.target.value })} 
+                                className="bg-slate-50 min-h-[100px]" 
+                            />
+                        </div>
+                    </CardContent>
+                </Card>
+            </TabsContent>
+
+            {/* --- 2. PAYMENTS TAB (REFINED) --- */}
              <TabsContent value="payments">
                 {/* FINANCIAL SUMMARY BAR */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
