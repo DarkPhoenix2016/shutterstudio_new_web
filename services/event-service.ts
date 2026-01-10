@@ -1,7 +1,7 @@
 import { db } from "@/lib/firebase";
 import { 
   collection, getDocs, doc, getDoc, addDoc, deleteDoc, updateDoc, 
-  serverTimestamp, query, orderBy, Timestamp, runTransaction, where, arrayUnion, arrayRemove 
+  serverTimestamp, query, orderBy, Timestamp, runTransaction, where, arrayRemove 
 } from "firebase/firestore";
 
 // --- TYPES ---
@@ -19,9 +19,7 @@ export interface PackageData {
   price: number;
   disabled: boolean;
   description?: string;
-  // parameters is a map in Firestore (e.g., { "Drone Cameras": 1 })
   parameters?: Record<string, string | number | boolean>; 
-  // We generate this list for the UI
   featuresList?: string[]; 
 }
 
@@ -36,7 +34,7 @@ export interface PackageConfigParameter {
 export interface EventContact {
   id: string;
   name: string;
-  role: string; // e.g. "Band", "Makeup Artist"
+  role: string;
   phone: string;
   note?: string;
 }
@@ -64,7 +62,7 @@ export interface TransactionRecord {
   date: Date;
   type: 'income' | 'expense';
   category?: string;
-  method?: string; // "Cash", "Bank Transfer"
+  method?: string; 
   amount: number;
   note?: string;
 }
@@ -89,14 +87,14 @@ export interface EventDayConfig {
 
 export interface EventData {
   id?: string;
-  displayId?: string; // e.g. OMG00001
+  displayId?: string; 
   
   // Customer Info
   customerName: string;
   customerMobile: string;
   customerEmail?: string;
-  couplePhotoUrl?: string; // Cover
-  galleryUrls?: string[]; // Gallery
+  couplePhotoUrl?: string; 
+  galleryUrls?: string[]; 
   
   // Meta
   eventName: string;
@@ -109,11 +107,11 @@ export interface EventData {
   days: EventDayConfig[]; 
   
   // Financials
-  totalBudget: number; // Base Package Cost
-  servicesTotal?: number; // Additional Services Cost
+  totalBudget: number; 
+  servicesTotal?: number; 
   discountType: 'fixed' | 'percentage';
   discount: number;
-  finalBudget: number; // (Base + Services) - Discount
+  finalBudget: number; 
   advancePaid: number;
   
   // Resources
@@ -136,7 +134,6 @@ export interface EventData {
 // 1. Fetch Dynamic Settings Lists
 export const fetchStudioSettingsList = async (studioId: string, settingType: 'EVENT_TYPES' | 'EVENT_STATUS' | 'payment_methods') => {
   try {
-    // Payment methods might be on the main studio doc based on some patterns
     if (settingType === 'payment_methods') {
         const studioDoc = await getDoc(doc(db, "Studios", studioId));
         if (studioDoc.exists()) return studioDoc.data().payment_methods || ["Cash", "Bank Transfer"];
@@ -154,7 +151,7 @@ export const fetchStudioSettingsList = async (studioId: string, settingType: 'EV
   }
 };
 
-// 2. Fetch Packages List (with Map to Array conversion)
+// 2. Fetch Packages List
 export const fetchPackagesList = async (studioId: string) => {
   try {
     const listRef = doc(db, "Studios", studioId, "Packages", "package_list");
@@ -170,7 +167,6 @@ export const fetchPackagesList = async (studioId: string) => {
         
         const data = pkgSnap.data();
         
-        // Transform 'parameters' map (Firestore) -> 'featuresList' array (UI)
         const paramsMap = data.parameters || {};
         const featuresList: string[] = Object.entries(paramsMap).map(([key, value]) => {
             if (value === true) return key; 
@@ -194,7 +190,7 @@ export const fetchPackagesList = async (studioId: string) => {
   }
 };
 
-// 2.1 Fetch Package Config Parameters (for Custom Plans)
+// 2.1 Fetch Package Config Parameters
 export const fetchPackageConfig = async (studioId: string) => {
     try {
         const ref = doc(db, "Studios", studioId, "Packages", "CONFIG");
@@ -223,7 +219,6 @@ export const createEvent = async (studioId: string, event: EventData) => {
       const nextStr = data.invoice_next || "00001";
       const currentInt = data.invoice_current || 0;
 
-      // Generate ID: OMG00002
       const customId = `${invoiceText}${nextStr}`; 
       const nextInt = parseInt(nextStr, 10);
       const newNextStr = String(nextInt + 1).padStart(5, '0');
@@ -260,11 +255,66 @@ export const updateEvent = async (studioId: string, eventId: string, updates: Pa
   }
 };
 
-// 5. Delete Event
+// 5. Delete Event (With Resource Cleanup)
 export const deleteEvent = async (studioId: string, eventId: string) => {
   try {
-    const ref = doc(db, "Studios", studioId, "Events", eventId);
-    await deleteDoc(ref);
+    const eventRef = doc(db, "Studios", studioId, "Events", eventId);
+    
+    // 1. Fetch event first to find assignments
+    const eventSnap = await getDoc(eventRef);
+    if (!eventSnap.exists()) return;
+
+    const data = eventSnap.data();
+    const assignedCrew: string[] = data.assignedCrew || [];
+    const assignedEquipment: string[] = data.assignedEquipment || [];
+    const days: any[] = data.days || [];
+
+    // 2. Prepare Cleanup Promises
+    const cleanupPromises = [];
+
+    // Cleanup Users (Crew)
+    if (assignedCrew.length > 0 && days.length > 0) {
+        for (const uid of assignedCrew) {
+            const userRef = doc(db, "Users", uid);
+            // Remove eventID from every day in the schedule
+            for (const day of days) {
+                const dateKey = day.date instanceof Timestamp 
+                    ? day.date.toDate().toISOString().split('T')[0] 
+                    : new Date(day.date).toISOString().split('T')[0];
+                
+                cleanupPromises.push(
+                    updateDoc(userRef, {
+                        [`schedules.${dateKey}`]: arrayRemove(eventId)
+                    }).catch(e => console.warn(`Failed to cleanup user ${uid} schedule`, e))
+                );
+            }
+        }
+    }
+
+    // Cleanup Inventory (Equipment)
+    if (assignedEquipment.length > 0 && days.length > 0) {
+        for (const eqId of assignedEquipment) {
+            const itemRef = doc(db, "Studios", studioId, "Inventory", eqId);
+            for (const day of days) {
+                const dateKey = day.date instanceof Timestamp 
+                    ? day.date.toDate().toISOString().split('T')[0] 
+                    : new Date(day.date).toISOString().split('T')[0];
+
+                cleanupPromises.push(
+                    updateDoc(itemRef, {
+                        [`schedules.${dateKey}`]: arrayRemove(eventId)
+                    }).catch(e => console.warn(`Failed to cleanup inventory ${eqId} schedule`, e))
+                );
+            }
+        }
+    }
+
+    // Wait for cleanup (best effort)
+    await Promise.all(cleanupPromises);
+
+    // 3. Delete the actual event document
+    await deleteDoc(eventRef);
+
   } catch (error) {
     console.error("Error deleting event:", error);
     throw error;
@@ -290,7 +340,7 @@ export const fetchEvents = async (studioId: string) => {
     });
 };
 
-// 7. Fetch Single Event by ID (Deep Parsing for Dates)
+// 7. Fetch Single Event by ID
 export const fetchEventById = async (studioId: string, eventId: string) => {
   try {
     const ref = doc(db, "Studios", studioId, "Events", eventId);
@@ -301,15 +351,12 @@ export const fetchEventById = async (studioId: string, eventId: string) => {
         id: snap.id,
         ...data,
         inquiryDate: data.inquiryDate instanceof Timestamp ? data.inquiryDate.toDate() : data.inquiryDate,
-        // Map Days
         days: Array.isArray(data.days)
           ? data.days.map((day: any) => ({ ...day, date: day.date instanceof Timestamp ? day.date.toDate() : day.date }))
           : [],
-        // Map Locations
         locations: Array.isArray(data.locations)
           ? data.locations.map((loc: any) => ({ ...loc, date: loc.date instanceof Timestamp ? loc.date.toDate() : loc.date }))
           : [],
-        // Map Transactions
         transactions: Array.isArray(data.transactions)
           ? data.transactions.map((t: any) => ({ ...t, date: t.date instanceof Timestamp ? t.date.toDate() : t.date }))
           : []
@@ -322,46 +369,58 @@ export const fetchEventById = async (studioId: string, eventId: string) => {
   }
 };
 
-// 8. Check Resource Availability
+// 8. Check Resource Availability (Updated for Schedule Limits)
 export const checkResourceAvailability = async (
     studioId: string, 
     date: Date, 
     resourceId: string, 
-    type: 'crew' | 'equipment'
-): Promise<boolean> => {
+    type: 'crew' | 'equipment',
+    eventId?: string // The ID of the current event (to exclude self)
+): Promise<{ available: boolean; message?: string }> => {
     try {
-        const ref = collection(db, "Studios", studioId, "Events");
-        // We only care about active events that might use resources
-        const q = query(ref, where("status", "in", ["Scheduled", "Shooting"])); 
-        const snap = await getDocs(q);
+        const dateKey = date.toISOString().split('T')[0]; // YYYY-MM-DD
         
-        let isBusy = false;
-        const targetDateStr = date.toDateString();
+        // 1. Get Limits from Studio Config
+        const studioSnap = await getDoc(doc(db, "Studios", studioId));
+        const studioData = studioSnap.exists() ? studioSnap.data() : {};
+        
+        // Default to 4 if not set in DB
+        const limit = type === 'crew' 
+            ? (studioData.max_event_perday_peruser || 4) 
+            : (studioData.time_slots_perday || 4);
 
-        for (const doc of snap.docs) {
-            const evt = doc.data();
-            
-            // Check if this event has the target date in its schedule
-            const hasDate = Array.isArray(evt.days) && evt.days.some((d: any) => {
-                const dDate = d.date instanceof Timestamp ? d.date.toDate() : d.date;
-                return dDate.toDateString() === targetDateStr;
-            });
-
-            if (hasDate) {
-                if (type === 'crew' && Array.isArray(evt.assignedCrew) && evt.assignedCrew.includes(resourceId)) {
-                    isBusy = true;
-                    break;
-                }
-                if (type === 'equipment' && Array.isArray(evt.assignedEquipment) && evt.assignedEquipment.includes(resourceId)) {
-                    isBusy = true;
-                    break;
-                }
-            }
+        // 2. Fetch Resource Document (User or Inventory)
+        let resourceRef;
+        if (type === 'crew') {
+            resourceRef = doc(db, "Users", resourceId);
+        } else {
+            resourceRef = doc(db, "Studios", studioId, "Inventory", resourceId);
         }
 
-        return !isBusy;
+        const resSnap = await getDoc(resourceRef);
+        if (!resSnap.exists()) return { available: false, message: "Resource not found" };
+
+        const data = resSnap.data();
+        
+        // 3. Check Schedule Map
+        // Expected structure: schedules: { "2025-10-20": ["evtId1", "evtId2"] }
+        const schedules = data.schedules || {};
+        const dayEvents: string[] = schedules[dateKey] || [];
+
+        // Filter out current event ID if we are editing/checking existing assignment
+        const activeCount = dayEvents.filter((id) => id !== eventId).length;
+
+        if (activeCount >= limit) {
+            return { 
+                available: false, 
+                message: `${type === 'crew' ? 'Crew Member' : 'Item'} is fully booked on this day (Limit: ${limit}).` 
+            };
+        }
+
+        return { available: true };
     } catch (e) {
         console.error("Error checking availability:", e);
-        return true; // Fail open (allow assignment if check fails) or handle error
+        // Fail safe: if error, assume not available to prevent double booking bugs, or return error message
+        return { available: false, message: "Error checking schedule availability." };
     }
 };

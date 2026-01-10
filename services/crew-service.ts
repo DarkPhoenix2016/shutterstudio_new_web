@@ -1,5 +1,5 @@
 import { db } from "@/lib/firebase";
-import { doc, getDoc, updateDoc } from "firebase/firestore";
+import { doc, getDoc, updateDoc, arrayUnion, arrayRemove } from "firebase/firestore";
 
 // --- TYPES ---
 export interface Member {
@@ -15,6 +15,7 @@ export interface Member {
   accountDisabled?: boolean; 
   status?: string; 
   studioID?: string;
+  schedules?: Record<string, string[]>; // Date (YYYY-MM-DD) -> EventIDs[]
   [key: string]: any;
 }
 
@@ -180,6 +181,38 @@ export const toggleCrewMemberStatus = async (uid: string, shouldDisable: boolean
     return true;
   } catch (error) {
     console.error("Error toggling status:", error);
+    throw error;
+  }
+};
+
+// --- SCHEDULE MANAGEMENT ---
+
+export const assignCrewSchedule = async (userId: string, date: Date, eventId: string) => {
+  try {
+    const dateKey = date.toISOString().split('T')[0];
+    const userRef = doc(db, "Users", userId);
+    
+    // Add eventId to the specific date array in the 'schedules' map
+    await updateDoc(userRef, {
+      [`schedules.${dateKey}`]: arrayUnion(eventId)
+    });
+  } catch (error) {
+    console.error("Error assigning crew schedule:", error);
+    throw error;
+  }
+};
+
+export const removeCrewSchedule = async (userId: string, date: Date, eventId: string) => {
+  try {
+    const dateKey = date.toISOString().split('T')[0];
+    const userRef = doc(db, "Users", userId);
+    
+    // Remove eventId from the specific date array
+    await updateDoc(userRef, {
+      [`schedules.${dateKey}`]: arrayRemove(eventId)
+    });
+  } catch (error) {
+    console.error("Error removing crew schedule:", error);
     throw error;
   }
 };

@@ -1,7 +1,7 @@
 import { db } from "@/lib/firebase";
 import { 
   collection, doc, getDocs, getDoc, addDoc, updateDoc, deleteDoc,
-  query, where, orderBy, serverTimestamp, runTransaction 
+  query, where, orderBy, serverTimestamp, runTransaction, arrayUnion, arrayRemove 
 } from "firebase/firestore";
 
 // --- TYPES ---
@@ -45,6 +45,10 @@ export interface InventoryItem {
   
   // Status
   status: 'active' | 'maintenance' | 'retired';
+  
+  // Schedule Tracking
+  schedules?: Record<string, string[]>; // Date (YYYY-MM-DD) -> EventIDs[]
+  
   createdAt?: any;
 }
 
@@ -113,7 +117,7 @@ export const deleteInventoryItem = async (studioId: string, itemId: string) => {
 };
 
 // 3. Category Management
-// [!code highlight] UPDATED PATH: Studios/{id}/Settings/Inventory/Categories
+// Path: Studios/{id}/Settings/Inventory/Categories
 export const fetchCategories = async (studioId: string) => {
   try {
     const ref = collection(db, "Studios", studioId, "Settings", "Inventory", "Categories");
@@ -236,4 +240,36 @@ export const calculateInventoryStats = (items: InventoryItem[]) => {
   const lowStock = items.filter(i => i.quantityAvailable < 2).length;
   const rentedCount = items.filter(i => i.type === 'rented').length;
   return { totalItems, totalValue, lowStock, rentedCount };
+};
+
+// --- SCHEDULE MANAGEMENT ---
+
+export const assignInventorySchedule = async (studioId: string, itemId: string, date: Date, eventId: string) => {
+  try {
+    const dateKey = date.toISOString().split('T')[0]; // Format: YYYY-MM-DD
+    const itemRef = doc(db, "Studios", studioId, "Inventory", itemId);
+    
+    // Add eventId to the specific date array in the 'schedules' map
+    await updateDoc(itemRef, {
+      [`schedules.${dateKey}`]: arrayUnion(eventId)
+    });
+  } catch (error) {
+    console.error("Error assigning inventory schedule:", error);
+    throw error;
+  }
+};
+
+export const removeInventorySchedule = async (studioId: string, itemId: string, date: Date, eventId: string) => {
+  try {
+    const dateKey = date.toISOString().split('T')[0]; // Format: YYYY-MM-DD
+    const itemRef = doc(db, "Studios", studioId, "Inventory", itemId);
+    
+    // Remove eventId from the specific date array
+    await updateDoc(itemRef, {
+      [`schedules.${dateKey}`]: arrayRemove(eventId)
+    });
+  } catch (error) {
+    console.error("Error removing inventory schedule:", error);
+    throw error;
+  }
 };
