@@ -25,7 +25,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Separator } from "@/components/ui/separator"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 
-// --- TYPES (Expanded to support visual rendering) ---
+// --- TYPES ---
 interface PublicEventData {
     id: string;
     displayId?: string;
@@ -37,7 +37,6 @@ interface PublicEventData {
     customerEmail: string;
     customerMobile: string;
     couplePhotoUrl?: string;
-    // Expanded day config for visual replica
     dayCount: number;
     days: {
         date: any;
@@ -114,7 +113,7 @@ export default function CustomerEventApprovalPage() {
     const [isAuthenticated, setIsAuthenticated] = useState(false)
     const [event, setEvent] = useState<PublicEventData | null>(null)
     const [studioInfo, setStudioInfo] = useState<StudioInfo | null>(null)
-    const [packagesList, setPackagesList] = useState<PackageData[]>([]) // To render package names
+    const [packagesList, setPackagesList] = useState<PackageData[]>([]) 
 
     // Approval Form State
     const [verifType, setVerifType] = useState<string>("id")
@@ -129,7 +128,6 @@ export default function CustomerEventApprovalPage() {
         try {
             const eventsRef = collectionGroup(db, 'Events');
             
-            // Try finding by ID or Display ID
             let q = query(eventsRef, where('id', '==', id));
             let querySnapshot = await getDocs(q);
 
@@ -150,14 +148,12 @@ export default function CustomerEventApprovalPage() {
 
             if (!studioId) throw new Error("Invalid Data Structure");
 
-            // Verify Email
             if (eventData.customerEmail?.toLowerCase().trim() !== authEmail.toLowerCase().trim()) {
                 Swal.fire("Access Denied", "The email provided does not match our records.", "error");
                 setLoading(false);
                 return;
             }
 
-            // Fetch Studio Info & Packages (for visual rendering)
             const [studioSnap, packagesSnap] = await Promise.all([
                 getDoc(doc(db, "Studios", studioId)),
                 getDocs(collection(db, "Studios", studioId, "Packages"))
@@ -241,7 +237,7 @@ export default function CustomerEventApprovalPage() {
 
     // --- CALCULATIONS ---
     const financials = useMemo(() => {
-        // [FIXED]: Added explicit default values for all used properties to prevent TS errors
+        // Default safe values to avoid Typescript errors
         if (!event) return { 
             baseCost: 0, 
             servicesCost: 0, 
@@ -253,10 +249,8 @@ export default function CustomerEventApprovalPage() {
             currency: "LKR" 
         }; 
         
-        // Ensure calculations use the logic from provided snippet (Income transactions vs Final Budget)
         const paid = event.transactions?.filter(t => t.type === 'income').reduce((acc, t) => acc + (Number(t.amount) || 0), 0) || 0;
         
-        // Re-calculate discounts for display accuracy
         const baseCost = event.days?.reduce((acc, day) => acc + (day.cost || 0), 0) || 0;
         const servicesCost = event.additionalServices?.reduce((acc, s) => acc + (s.total || 0), 0) || 0;
         const totalBudget = baseCost + servicesCost;
@@ -282,7 +276,7 @@ export default function CustomerEventApprovalPage() {
         };
     }, [event]);
 
-    // --- VIEW: LOGIN GATE ---
+    // --- LOGIN SCREEN ---
     if (!isAuthenticated) {
         return (
             <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4">
@@ -322,7 +316,7 @@ export default function CustomerEventApprovalPage() {
     if (!event) return null;
     const isApproved = event.approval?.customer_confirmed;
 
-    // --- VIEW: MAIN DASHBOARD ---
+    // --- MAIN DASHBOARD (Screenshot Layout) ---
     return (
         <div className="min-h-screen bg-slate-50 font-sans text-slate-800 pb-20">
             
@@ -344,209 +338,59 @@ export default function CustomerEventApprovalPage() {
 
             <div className="max-w-7xl mx-auto p-4 md:p-6 space-y-6 animate-in fade-in">
                 
-                {/* 1. HERO SECTION (Visual Replica of Overview Tab) */}
-                <div className="relative w-full h-80 rounded-2xl overflow-hidden group shadow-md border border-slate-200 bg-slate-900">
-                    <img src={event.couplePhotoUrl || "/api/placeholder/800/400"} alt="Event Cover" className="w-full h-full object-cover opacity-90" />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent" />
-                    <div className="absolute bottom-0 left-0 p-8 w-full">
-                        <div className="flex flex-col gap-2">
-                            <div className="flex items-center gap-3 mb-1">
-                                <Badge className="bg-blue-600 hover:bg-blue-700 text-white border-0 uppercase tracking-wider text-[10px]">{event.eventType}</Badge>
-                                <Badge variant="outline" className="text-white border-white/30 backdrop-blur-md">{event.status}</Badge>
-                            </div>
-                            <h1 className="text-4xl md:text-5xl font-bold text-white tracking-tight">{event.eventName}</h1>
-                            <p className="text-slate-300 font-medium text-lg flex items-center gap-2 mt-1">
-                                <CalendarIcon className="w-5 h-5" />
-                                {event.days.length > 0 ? format(safeDate(event.days[0].date), 'MMMM do, yyyy') : 'Date TBD'}
-                            </p>
-                        </div>
-                    </div>
-                </div>
-
-                {/* 2. APPROVAL STATE CARD */}
-                <Card className="shadow-sm border-slate-200">
-                    <CardContent className="p-6">
-                        <div className="flex justify-between items-center mb-4">
-                            <h3 className="font-semibold text-slate-700">State of Customer Approval</h3>
-                            {isApproved ? (
-                                <Badge className="bg-green-100 text-green-700 border-green-200 hover:bg-green-100">Approved</Badge>
-                            ) : (
-                                <Badge className="bg-yellow-100 text-yellow-700 border-yellow-200 hover:bg-yellow-100">Pending Review</Badge>
-                            )}
-                        </div>
-                        <div className="w-full bg-slate-100 rounded-full h-2.5 mb-2">
-                            <div className={`h-2.5 rounded-full ${isApproved ? 'bg-green-500 w-full' : 'bg-blue-600 w-[60%]'}`}></div>
-                        </div>
-                        <p className="text-sm text-slate-500">
-                            {isApproved
-                                ? `Confirmed on ${event.approval?.confirmedAt ? format(safeDate(event.approval.confirmedAt), "PPP p") : "Unknown date"}`
-                                : "Waiting for customer to sign off on the Quotation."}
-                        </p>
-                    </CardContent>
-                </Card>
-
-                {/* 3. MAIN GRID */}
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                {/* GRID LAYOUT: 1/3 Left (Financials) | 2/3 Right (Details & Approval) */}
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
                     
-                    {/* LEFT COLUMN: Details & Finances */}
-                    <div className="space-y-6">
-                        {/* Customer Details */}
+                    {/* --- LEFT COLUMN --- */}
+                    <div className="space-y-6 lg:col-span-1">
+                        
+                        {/* Financial Summary Card */}
                         <Card className="shadow-sm border-slate-200">
-                            <CardHeader className="bg-slate-50/50 border-b border-slate-100 py-3"><CardTitle className="text-sm font-bold text-slate-700">Customer Details</CardTitle></CardHeader>
-                            <CardContent className="p-4 space-y-4">
-                                <div className="space-y-1">
-                                    <Label className="text-xs text-slate-400 uppercase">Full Name</Label>
-                                    <div className="flex items-center gap-2 text-sm font-medium text-slate-800"><User className="w-4 h-4 text-slate-400"/> {event.customerName}</div>
+                            <CardContent className="p-4 space-y-3 text-sm pt-6">
+                                <div className="flex justify-between">
+                                    <span className="text-slate-500">Packages Cost</span>
+                                    <span className="font-medium text-slate-900">{financials.currency} {financials.baseCost.toLocaleString()}</span>
                                 </div>
-                                <div className="grid grid-cols-1 gap-3">
-                                    <div className="space-y-1">
-                                        <Label className="text-xs text-slate-400 uppercase">Mobile</Label>
-                                        <div className="flex items-center gap-2 text-sm text-slate-700"><Phone className="w-3 h-3"/> {event.customerMobile}</div>
-                                    </div>
-                                    <div className="space-y-1">
-                                        <Label className="text-xs text-slate-400 uppercase">Email</Label>
-                                        <div className="flex items-center gap-2 text-sm text-slate-700"><Mail className="w-3 h-3"/> {event.customerEmail}</div>
-                                    </div>
+                                <div className="flex justify-between">
+                                    <span className="text-slate-500">Additional Services</span>
+                                    <span className="font-medium text-slate-900">+ {financials.currency} {financials.servicesCost.toLocaleString()}</span>
                                 </div>
-                            </CardContent>
-                        </Card>
-
-                        {/* Financial Summary */}
-                        <Card className="shadow-sm border-slate-200">
-                            <CardHeader className="bg-slate-50/50 border-b border-slate-100 py-3"><CardTitle className="text-sm font-bold text-slate-700">Financial Summary</CardTitle></CardHeader>
-                            <CardContent className="p-4 space-y-3 text-sm">
-                                <div className="flex justify-between"><span className="text-slate-500">Packages (Days)</span><span className="font-medium text-slate-900">{financials.currency} {financials.baseCost.toLocaleString()}</span></div>
-                                <div className="flex justify-between"><span className="text-slate-500">Additional Services</span><span className="font-medium text-slate-900">+ {financials.currency} {financials.servicesCost.toLocaleString()}</span></div>
                                 {financials.discountAmount > 0 && (
                                     <div className="flex justify-between text-red-500">
-                                        <span>Discount {event.discountType === 'percentage' ? `(${event.discount}%)` : ''}</span>
+                                        <span>Discount</span>
                                         <span>- {financials.currency} {financials.discountAmount.toLocaleString()}</span>
                                     </div>
                                 )}
                                 <Separator />
-                                <div className="flex justify-between font-bold text-slate-900"><span>Final Total</span><span>{financials.currency} {financials.finalBudget.toLocaleString()}</span></div>
-                                <div className="flex justify-between text-green-600"><span>Paid to Date</span><span>{financials.currency} {financials.paid.toLocaleString()}</span></div>
-                                <div className="flex justify-between text-red-600 font-bold bg-red-50 p-2 rounded"><span>Due Amount</span><span>{financials.currency} {financials.due.toLocaleString()}</span></div>
+                                <div className="flex justify-between font-bold text-slate-900 text-base">
+                                    <span>Final Total</span>
+                                    <span>{financials.currency} {financials.finalBudget.toLocaleString()}</span>
+                                </div>
+                                <div className="flex justify-between text-green-600 font-medium">
+                                    <span>Paid to Date</span>
+                                    <span>{financials.currency} {financials.paid.toLocaleString()}</span>
+                                </div>
+                                <div className="flex justify-between text-red-600 font-bold bg-red-50 p-2 rounded">
+                                    <span>Due Amount</span>
+                                    <span>{financials.currency} {financials.due.toLocaleString()}</span>
+                                </div>
                             </CardContent>
                         </Card>
 
-                        {/* Notes */}
+                        {/* Additional Notes Card */}
                         <Card className="shadow-sm border-slate-200">
-                            <CardHeader className="bg-slate-50/50 border-b border-slate-100 py-3"><CardTitle className="text-sm font-bold text-slate-700">Additional Notes</CardTitle></CardHeader>
-                            <CardContent className="p-4">
+                            <CardHeader className="py-4 pb-2"><CardTitle className="text-sm font-bold text-slate-700">Additional Notes</CardTitle></CardHeader>
+                            <CardContent className="p-4 pt-2">
                                 {event.notes ? <p className="text-sm text-slate-600 whitespace-pre-line">{event.notes}</p> : <p className="text-sm text-slate-400 italic">No notes.</p>}
                             </CardContent>
                         </Card>
-                    </div>
 
-                    {/* RIGHT COLUMN: Package & Locations */}
-                    <div className="lg:col-span-2 space-y-6">
-                        
-                        {/* Package Details (Visual Replica logic) */}
-                        <Card className="shadow-sm border-slate-200 h-full">
-                            <CardHeader className="bg-slate-50/50 border-b border-slate-100 py-3"><CardTitle className="text-sm font-bold text-slate-700">Package Details</CardTitle></CardHeader>
-                            <CardContent className="p-6">
-                                {event.days?.map((day, idx) => {
-                                    const pkg = day.type === 'package' && day.packageId ? packagesList.find(p => p.id === day.packageId) : null;
-                                    return (
-                                        <div key={idx} className="mb-6 last:mb-0">
-                                            <h4 className="text-sm font-bold uppercase text-slate-400 tracking-wider mb-3">Day {idx + 1} - {format(safeDate(day.date), 'MMM dd')}</h4>
-                                            
-                                            {/* Package View */}
-                                            {day.type === 'package' && pkg && (
-                                                <div className="border rounded-lg p-4 bg-white mb-4">
-                                                    <div className="flex justify-between items-start mb-2">
-                                                        <h3 className="text-lg font-bold text-slate-800">{pkg.name}</h3>
-                                                        <span className="font-semibold text-slate-600">{financials.currency} {Number(pkg.price).toLocaleString()}</span>
-                                                    </div>
-                                                    {pkg.featuresList && (
-                                                        <ul className="space-y-2 mt-3">
-                                                            {pkg.featuresList.map((f, i) => (
-                                                                <li key={i} className="flex items-center gap-2 text-sm text-slate-700"><Check className="w-4 h-4 text-green-500 flex-shrink-0" /><span>{f}</span></li>
-                                                            ))}
-                                                        </ul>
-                                                    )}
-                                                </div>
-                                            )}
-
-                                            {/* Custom View */}
-                                            {day.type === 'custom' && (
-                                                <div className="border rounded-lg overflow-hidden mb-4">
-                                                    <div className="bg-amber-50 px-4 py-2 text-sm font-medium text-amber-800 border-b border-amber-100">Custom Plan Items</div>
-                                                    <div className="p-0">
-                                                        {day.customItems?.map((item, i) => (
-                                                            <div key={i} className="flex justify-between px-4 py-2 text-sm border-b last:border-0 hover:bg-slate-50">
-                                                                <span>{item.name} <span className="text-slate-400 text-xs">x{item.quantity}</span></span>
-                                                                <span>{financials.currency} {(item.price * item.quantity).toLocaleString()}</span>
-                                                            </div>
-                                                        ))}
-                                                        {!day.customItems?.length && <div className="p-4 text-sm text-slate-400 italic">No items listed.</div>}
-                                                    </div>
-                                                </div>
-                                            )}
-                                        </div>
-                                    )
-                                })}
-
-                                {/* Additional Services Table */}
-                                {event.additionalServices && event.additionalServices.length > 0 && (
-                                    <div className="mt-8 pt-6 border-t">
-                                        <h4 className="text-sm font-bold uppercase text-slate-400 tracking-wider mb-3">Additional Services</h4>
-                                        <div className="border rounded-lg overflow-hidden">
-                                            <table className="w-full text-sm text-left">
-                                                <thead className="bg-slate-50 text-slate-500 font-medium border-b"><tr><th className="px-4 py-2">Item</th><th className="px-4 py-2 text-center">Qty</th><th className="px-4 py-2 text-right">Total</th></tr></thead>
-                                                <tbody className="divide-y divide-slate-100">
-                                                    {event.additionalServices.map((svc, i) => (
-                                                        <tr key={i}>
-                                                            <td className="px-4 py-2 font-medium text-slate-700">{svc.name}</td>
-                                                            <td className="px-4 py-2 text-center text-slate-500">{svc.quantity}</td>
-                                                            <td className="px-4 py-2 text-right text-slate-700 font-medium">{financials.currency} {svc.total.toLocaleString()}</td>
-                                                        </tr>
-                                                    ))}
-                                                </tbody>
-                                            </table>
-                                        </div>
-                                    </div>
-                                )}
-                            </CardContent>
-                        </Card>
-
-                        {/* Locations List */}
-                        <Card className="shadow-sm border-slate-200">
-                            <CardHeader className="bg-slate-50/50 border-b border-slate-100 py-3"><CardTitle className="text-sm font-bold text-slate-700">Locations</CardTitle></CardHeader>
-                            <div className="overflow-x-auto p-0">
-                                <table className="w-full text-sm text-left">
-                                    <thead className="bg-slate-50 text-slate-500 font-medium border-b"><tr><th className="px-4 py-2">Name</th><th className="px-4 py-2">Date</th><th className="px-4 py-2 text-right">Map</th></tr></thead>
-                                    <tbody>
-                                        {event.locations?.map((l, i) => (
-                                            <tr key={i} className="border-b last:border-0">
-                                                <td className="px-4 py-2 font-medium">{l.name}</td>
-                                                <td className="px-4 py-2 text-slate-600">{format(safeDate(l.date), 'MM/dd/yyyy')} {l.time && `@ ${l.time}`}</td>
-                                                <td className="px-4 py-2 text-right">
-                                                    {l.mapUrl && <a href={l.mapUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded hover:bg-blue-100"><ExternalLink size={12}/> Map</a>}
-                                                </td>
-                                            </tr>
-                                        ))}
-                                        {(!event.locations?.length) && <tr><td colSpan={3} className="px-4 py-4 text-center text-slate-400 italic">No locations set.</td></tr>}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </Card>
-                    </div>
-                </div>
-
-                <Separator className="my-8"/>
-
-                {/* 4. INFO & APPROVAL SECTION */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-5xl mx-auto">
-                    
-                    {/* LEFT: Banking & Privacy */}
-                    <div className="space-y-6">
+                        {/* Payment Details Card (Blue Style) */}
                         {studioInfo?.banking_details && (
                             <Card className="bg-slate-50 border-slate-200 shadow-sm">
-                                <CardHeader className="py-3 pb-0"><CardTitle className="text-sm font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2"><CreditCard className="w-4 h-4"/> Payment Details</CardTitle></CardHeader>
-                                <CardContent className="p-5">
-                                    <div className="bg-white border rounded-md p-4 text-sm space-y-2 text-slate-600 shadow-sm">
+                                <CardHeader className="py-4 pb-2"><CardTitle className="text-sm font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2"><CreditCard className="w-4 h-4"/> Payment Details</CardTitle></CardHeader>
+                                <CardContent className="p-4 pt-2">
+                                    <div className="bg-white border rounded-md p-4 text-sm space-y-2 text-slate-600 shadow-sm border-blue-100">
                                         <div className="grid grid-cols-3 gap-2"><span className="font-medium text-slate-400">Bank:</span><span className="col-span-2 font-semibold text-slate-800">{studioInfo.banking_details.bank_name}</span></div>
                                         <div className="grid grid-cols-3 gap-2"><span className="font-medium text-slate-400">Branch:</span><span className="col-span-2">{studioInfo.banking_details.branch}</span></div>
                                         <div className="grid grid-cols-3 gap-2"><span className="font-medium text-slate-400">Name:</span><span className="col-span-2">{studioInfo.banking_details.account_name}</span></div>
@@ -557,10 +401,11 @@ export default function CustomerEventApprovalPage() {
                             </Card>
                         )}
 
+                        {/* Privacy & Terms */}
                         {studioInfo?.privacy_policy_notice && (
                             <Card className="border-slate-200 shadow-sm">
-                                <CardHeader className="py-3 pb-0"><CardTitle className="text-sm font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2"><ShieldCheck className="w-4 h-4"/> Privacy & Terms</CardTitle></CardHeader>
-                                <CardContent className="p-5">
+                                <CardHeader className="py-4 pb-2"><CardTitle className="text-sm font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2"><ShieldCheck className="w-4 h-4"/> Privacy & Terms</CardTitle></CardHeader>
+                                <CardContent className="p-4 pt-2">
                                     <p className="text-xs text-slate-500 leading-relaxed text-justify whitespace-pre-line">
                                         {studioInfo.privacy_policy_notice}
                                     </p>
@@ -569,10 +414,70 @@ export default function CustomerEventApprovalPage() {
                         )}
                     </div>
 
-                    {/* RIGHT: Approval Action */}
-                    <div>
+                    {/* --- RIGHT COLUMN --- */}
+                    <div className="lg:col-span-2 space-y-6">
+                        
+                        {/* Itemized Breakdown Table */}
+                        <Card className="shadow-sm border-slate-200 h-fit">
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-sm text-left">
+                                    <thead className="bg-slate-50 text-slate-500 font-medium border-b">
+                                        <tr>
+                                            <th className="px-4 py-3">Item</th>
+                                            <th className="px-4 py-3 text-center w-20">Qty</th>
+                                            <th className="px-4 py-3 text-right w-32">Total</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-100">
+                                        {/* Render Packages as Rows */}
+                                        {event.days?.map((day, idx) => {
+                                            const pkg = day.type === 'package' && day.packageId ? packagesList.find(p => p.id === day.packageId) : null;
+                                            if (day.type === 'package' && pkg) {
+                                                return (
+                                                    <tr key={`pkg-${idx}`}>
+                                                        <td className="px-4 py-3 font-medium text-slate-700">
+                                                            {pkg.name} <Badge variant="outline" className="ml-2 text-[10px] font-normal">Day {idx + 1}</Badge>
+                                                        </td>
+                                                        <td className="px-4 py-3 text-center text-slate-500">1</td>
+                                                        <td className="px-4 py-3 text-right text-slate-700">{financials.currency} {Number(pkg.price).toLocaleString()}</td>
+                                                    </tr>
+                                                )
+                                            }
+                                            return null;
+                                        })}
+
+                                        {/* Render Additional Services */}
+                                        {event.additionalServices?.map((svc, i) => (
+                                            <tr key={`svc-${i}`}>
+                                                <td className="px-4 py-3 font-medium text-slate-700">{svc.name}</td>
+                                                <td className="px-4 py-3 text-center text-slate-500">{svc.quantity}</td>
+                                                <td className="px-4 py-3 text-right text-slate-700">{financials.currency} {svc.total.toLocaleString()}</td>
+                                            </tr>
+                                        ))}
+
+                                        {/* Render Custom Items */}
+                                        {event.days?.map((day) => 
+                                            day.customItems?.map((item, i) => (
+                                                <tr key={`custom-${i}`}>
+                                                    <td className="px-4 py-3 font-medium text-slate-700">{item.name} <span className="text-xs text-slate-400">(Custom)</span></td>
+                                                    <td className="px-4 py-3 text-center text-slate-500">{item.quantity}</td>
+                                                    <td className="px-4 py-3 text-right text-slate-700">{financials.currency} {(item.price * item.quantity).toLocaleString()}</td>
+                                                </tr>
+                                            ))
+                                        )}
+                                        
+                                        {/* Fallback if empty */}
+                                        {((!event.days?.length && !event.additionalServices?.length)) && (
+                                            <tr><td colSpan={3} className="px-4 py-6 text-center text-slate-400 italic">No items found.</td></tr>
+                                        )}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </Card>
+
+                        {/* Approval Section */}
                         {isApproved ? (
-                            <Card className="bg-green-50 border-green-200 shadow-sm text-center h-full flex flex-col justify-center">
+                            <Card className="bg-green-50 border-green-200 shadow-sm text-center">
                                 <CardContent className="p-8 space-y-4">
                                     <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-2">
                                         <CheckCircle className="w-8 h-8 text-green-600" />
@@ -595,16 +500,12 @@ export default function CustomerEventApprovalPage() {
                                     <CardDescription>Verify your identity to electronically sign this quotation.</CardDescription>
                                 </CardHeader>
                                 <CardContent className="space-y-4">
-                                    <div className="grid grid-cols-1 gap-4">
-                                        <div className="space-y-2">
-                                            <Label>Full Name (Read Only)</Label>
-                                            <Input value={event.customerName} disabled className="bg-slate-50"/>
-                                        </div>
+                                    <div className="space-y-2">
+                                        <Label>Full Name (Read Only)</Label>
+                                        <Input value={event.customerName} disabled className="bg-slate-50"/>
                                     </div>
 
-                                    <Separator />
-
-                                    <div className="space-y-4">
+                                    <div className="grid grid-cols-1 gap-4">
                                         <div className="space-y-2">
                                             <Label>Verification Document Type <span className="text-red-500">*</span></Label>
                                             <Select value={verifType} onValueChange={setVerifType}>
@@ -649,7 +550,6 @@ export default function CustomerEventApprovalPage() {
                         )}
                     </div>
                 </div>
-
             </div>
         </div>
     )
