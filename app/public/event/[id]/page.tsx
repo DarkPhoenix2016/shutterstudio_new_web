@@ -5,12 +5,12 @@ import { useParams } from "next/navigation"
 import { db } from "@/lib/firebase"
 import { 
     doc, getDoc, updateDoc, collectionGroup, query, where, getDocs, 
-    Timestamp, serverTimestamp 
+    serverTimestamp 
 } from "firebase/firestore"
 import { 
     Loader2, Calendar, MapPin, Phone, Mail, 
     CheckCircle, FileText, Lock, ShieldCheck, 
-    CreditCard, Globe, AlertCircle, Info 
+    CreditCard, AlertCircle, Info 
 } from "lucide-react"
 import { format } from "date-fns"
 import Swal from "sweetalert2"
@@ -27,7 +27,8 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 
 // --- TYPES ---
 interface PublicEventData {
-    id: string;
+    id: string; // The internal doc ID
+    displayId?: string; // The visible ID (e.g. EVT0001)
     studioId: string;
     eventName: string;
     eventType: string;
@@ -74,7 +75,7 @@ const validateNIC = (nic: string): boolean => {
 }
 
 const validatePassport = (passport: string): boolean => {
-    // General International Passport: alphanumeric, 6-9 characters usually, no special chars
+    // Alphanumeric, 6-15 chars
     const passportRegex = /^[A-Z0-9]{6,15}$/i;
     return passportRegex.test(passport);
 }
@@ -96,7 +97,7 @@ export default function CustomerEventApprovalPage() {
     const { id } = useParams()
     
     // States
-    const [loading, setLoading] = useState(false) // Initial load is fast, explicit loading for actions
+    const [loading, setLoading] = useState(false)
     const [authEmail, setAuthEmail] = useState("")
     const [isAuthenticated, setIsAuthenticated] = useState(false)
     const [event, setEvent] = useState<PublicEventData | null>(null)
@@ -113,14 +114,25 @@ export default function CustomerEventApprovalPage() {
         setLoading(true);
 
         try {
-            // Find event by ID across all studios (Collection Group Query)
-            // Note: This assumes event IDs are unique or we take the first match.
+            // [FIXED QUERY]: Use collectionGroup but filter by a field, not __name__
+            // NOTE: Ensure your Event documents have an 'id' field stored in them. 
+            // If searching by Display ID (e.g. EVT001), change 'id' to 'displayId'.
             const eventsRef = collectionGroup(db, 'Events');
-            const q = query(eventsRef, where('__name__', '==', id));
-            const querySnapshot = await getDocs(q);
+            
+            // Try to find by internal ID field first (assuming you save doc ID as 'id' in data)
+            // If you don't save 'id' in the doc, this will be empty. 
+            // Fallback: If your URL uses displayId (e.g. EVT005), change this to 'displayId'
+            let q = query(eventsRef, where('id', '==', id)); 
+            let querySnapshot = await getDocs(q);
+
+            // Fallback: Try searching by displayId if regular ID failed
+            if (querySnapshot.empty) {
+                 q = query(eventsRef, where('displayId', '==', id));
+                 querySnapshot = await getDocs(q);
+            }
 
             if (querySnapshot.empty) {
-                Swal.fire("Error", "Event not found. Please check the link.", "error");
+                Swal.fire("Error", "Event not found. Please check the link or ensure the Event ID is correct.", "error");
                 setLoading(false);
                 return;
             }
@@ -132,7 +144,7 @@ export default function CustomerEventApprovalPage() {
             if (!studioId) throw new Error("Invalid Data Structure");
 
             // Verify Email
-            if (eventData.customerEmail.toLowerCase().trim() !== authEmail.toLowerCase().trim()) {
+            if (eventData.customerEmail?.toLowerCase().trim() !== authEmail.toLowerCase().trim()) {
                 Swal.fire("Access Denied", "The email provided does not match our records for this event.", "error");
                 setLoading(false);
                 return;
@@ -167,7 +179,7 @@ export default function CustomerEventApprovalPage() {
         }
 
         if (verifType === "id" && !validateNIC(verifDocNum)) {
-            return Swal.fire("Invalid ID", "Please enter a valid Sri Lankan NIC number (Old: 9 digits+V, New: 12 digits).", "warning");
+            return Swal.fire("Invalid ID", "Please enter a valid Sri Lankan NIC number.", "warning");
         }
 
         if (verifType === "passport" && !validatePassport(verifDocNum)) {
@@ -203,7 +215,12 @@ export default function CustomerEventApprovalPage() {
                 }
             }) : null);
 
-            Swal.fire("Success", "You have successfully approved the event quotation.", "success");
+            Swal.fire({
+                title: "Success",
+                text: "Event approved and scheduled successfully!",
+                icon: "success",
+                confirmButtonColor: "#1C4D8D"
+            });
 
         } catch (error) {
             console.error(error);
