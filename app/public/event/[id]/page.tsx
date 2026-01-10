@@ -10,7 +10,7 @@ import {
 import {
     Loader2, Calendar as CalendarIcon, MapPin, Phone,
     CheckCircle, Lock, ShieldCheck,
-    CreditCard, AlertCircle, Info, Mail, User, Check, ExternalLink, Briefcase
+    CreditCard, AlertCircle, Info, Mail, User, Check, ExternalLink, Plus
 } from "lucide-react"
 import { format } from "date-fns"
 import Swal from "sweetalert2"
@@ -323,38 +323,22 @@ export default function CustomerEventApprovalPage() {
 
             <div className="max-w-3xl mx-auto p-4 md:p-6 space-y-8 animate-in fade-in">
                 
-                {/* 1. HERO SECTION */}
-                <div className="relative w-full h-72 rounded-2xl overflow-hidden group shadow-md border border-slate-200 bg-slate-900">
-                    <img src={event.couplePhotoUrl || "/api/placeholder/800/400"} alt="Event Cover" className="w-full h-full object-cover opacity-90" />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent" />
-                    <div className="absolute bottom-0 left-0 p-8 w-full">
-                        <div className="flex flex-col gap-2">
-                            <div className="flex items-center gap-3 mb-1">
-                                <Badge className="bg-blue-600 hover:bg-blue-700 text-white border-0 uppercase tracking-wider text-[10px]">{event.eventType}</Badge>
-                                <Badge variant="outline" className="text-white border-white/30 backdrop-blur-md">{event.status}</Badge>
-                            </div>
-                            <h1 className="text-3xl md:text-4xl font-bold text-white tracking-tight">{event.eventName}</h1>
-                            <p className="text-slate-300 font-medium text-lg flex items-center gap-2 mt-1">
-                                <CalendarIcon className="w-5 h-5" />
-                                {event.days.length > 0 ? format(safeDate(event.days[0].date), 'MMMM do, yyyy') : 'Date TBD'}
-                            </p>
-                        </div>
-                    </div>
-                </div>
-
-                {/* 2. CUSTOMER DETAILS */}
+                {/* 1. CUSTOMER DETAILS CARD */}
                 <Card className="shadow-sm border-slate-200">
                     <CardHeader className="bg-slate-50/50 border-b border-slate-100 py-4"><CardTitle className="text-sm font-bold text-slate-700">Customer Details</CardTitle></CardHeader>
                     <CardContent className="p-6">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="grid grid-cols-1 gap-4">
                             <div className="space-y-1">
                                 <Label className="text-xs text-slate-400 uppercase">Full Name</Label>
                                 <div className="flex items-center gap-2 text-sm font-medium text-slate-800"><User className="w-4 h-4 text-slate-400"/> {event.customerName}</div>
                             </div>
-                            <div className="space-y-1">
-                                <Label className="text-xs text-slate-400 uppercase">Contact</Label>
-                                <div className="flex items-center gap-4">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="space-y-1">
+                                    <Label className="text-xs text-slate-400 uppercase">Mobile</Label>
                                     <div className="flex items-center gap-2 text-sm text-slate-700"><Phone className="w-3 h-3"/> {event.customerMobile}</div>
+                                </div>
+                                <div className="space-y-1">
+                                    <Label className="text-xs text-slate-400 uppercase">Email</Label>
                                     <div className="flex items-center gap-2 text-sm text-slate-700"><Mail className="w-3 h-3"/> {event.customerEmail}</div>
                                 </div>
                             </div>
@@ -362,104 +346,121 @@ export default function CustomerEventApprovalPage() {
                     </CardContent>
                 </Card>
 
-                {/* 3. EVENT ITINERARY & PACKAGE DETAILS */}
-                <Card className="shadow-sm border-slate-200">
-                    <CardHeader className="bg-slate-50/50 border-b border-slate-100 py-4"><CardTitle className="text-sm font-bold text-slate-700">Itinerary & Package Breakdown</CardTitle></CardHeader>
-                    <CardContent className="p-6 space-y-8">
-                        {/* Days Loop */}
-                        {event.days?.map((day, idx) => {
-                            const pkg = day.type === 'package' && day.packageId ? packagesList.find(p => p.id === day.packageId) : null;
-                            return (
-                                <div key={idx} className="border rounded-lg bg-white overflow-hidden shadow-sm">
-                                    <div className="bg-slate-100 px-4 py-3 flex justify-between items-center border-b">
-                                        <div className="flex items-center gap-2">
-                                            <CalendarIcon className="w-4 h-4 text-slate-500" />
-                                            <span className="font-semibold text-slate-800">Day {idx + 1}</span>
-                                            <span className="text-slate-500 text-sm">- {format(safeDate(day.date), 'MMMM do, yyyy')}</span>
+                {/* 2. EVENT ITINERARY & PACKAGE DETAILS (Redesigned to match image_8b4a2d.png) */}
+                <div className="space-y-6">
+                    {/* Days Loop */}
+                    {event.days?.map((day, idx) => {
+                        const pkg = day.type === 'package' && day.packageId ? packagesList.find(p => p.id === day.packageId) : null;
+                        
+                        return (
+                            <div key={idx} className="border rounded-xl bg-white overflow-hidden shadow-sm border-slate-200">
+                                {/* Card Header Area */}
+                                <div className="p-6 pb-2">
+                                    <div className="flex justify-between items-start">
+                                        <div>
+                                            <h3 className="font-bold text-lg text-slate-900">Day {idx + 1}</h3>
+                                            <p className="text-slate-500 text-sm mt-0.5">
+                                                {day.date ? format(safeDate(day.date), 'MMMM do, yyyy') : "Date TBD"}
+                                            </p>
                                         </div>
-                                        <Badge variant="outline" className={day.type === 'package' ? "bg-blue-50 text-blue-700" : "bg-amber-50 text-amber-700"}>
+                                        <Badge 
+                                            variant="outline" 
+                                            className={day.type === 'package' 
+                                                ? "text-blue-600 border-blue-200 bg-blue-50/50" 
+                                                : "text-amber-600 border-amber-200 bg-amber-50/50"
+                                            }
+                                        >
                                             {day.type === 'package' ? 'Package' : 'Custom Plan'}
                                         </Badge>
                                     </div>
-                                    
-                                    <div className="p-4">
-                                        {/* Package View */}
-                                        {day.type === 'package' && pkg && (
-                                            <div className="space-y-4">
-                                                <div className="flex justify-between items-start">
-                                                    <div>
-                                                        <h3 className="text-lg font-bold text-slate-800">{pkg.name}</h3>
-                                                        <p className="text-xs text-slate-500 mt-1">Standard Package Configuration</p>
+                                </div>
+
+                                {/* Content Body */}
+                                <div className="px-6 py-4">
+                                    {/* Package Type View */}
+                                    {day.type === 'package' && pkg && (
+                                        <div className="bg-blue-50/40 border border-blue-100 rounded-lg p-5">
+                                            <div className="flex justify-between items-center mb-4">
+                                                <span className="font-bold text-slate-800 text-base">{pkg.name}</span>
+                                                <span className="font-semibold text-slate-700">{financials.currency} {Number(pkg.price).toLocaleString()}</span>
+                                            </div>
+                                            
+                                            {pkg.featuresList && pkg.featuresList.length > 0 && (
+                                                <ul className="space-y-2.5">
+                                                    {pkg.featuresList.map((f, i) => (
+                                                        <li key={i} className="flex items-start gap-2.5 text-sm text-slate-600">
+                                                            <Check className="w-4 h-4 text-green-500 shrink-0 mt-0.5" />
+                                                            <span>{f}</span>
+                                                        </li>
+                                                    ))}
+                                                </ul>
+                                            )}
+                                        </div>
+                                    )}
+
+                                    {/* Custom Plan Type View */}
+                                    {day.type === 'custom' && (
+                                        <div className="bg-amber-50/40 border border-amber-100 rounded-lg p-5">
+                                            <div className="space-y-3">
+                                                {day.customItems?.map((item, i) => (
+                                                    <div key={i} className="flex justify-between items-center text-sm text-slate-700">
+                                                        <span>{item.name} <span className="text-slate-400 text-xs ml-1">× {item.quantity}</span></span>
+                                                        <span className="font-medium">{financials.currency} {(item.price * item.quantity).toLocaleString()}</span>
                                                     </div>
-                                                    <span className="font-bold text-[#1C4D8D] text-lg">{financials.currency} {Number(pkg.price).toLocaleString()}</span>
-                                                </div>
-                                                
-                                                {pkg.featuresList && pkg.featuresList.length > 0 && (
-                                                    <div className="bg-slate-50 rounded-md p-3 border border-slate-100">
-                                                        <p className="text-xs font-semibold text-slate-500 uppercase mb-2">Includes:</p>
-                                                        <ul className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                                                            {pkg.featuresList.map((f, i) => (
-                                                                <li key={i} className="flex items-center gap-2 text-sm text-slate-700">
-                                                                    <Check className="w-3.5 h-3.5 text-green-500 flex-shrink-0" />
-                                                                    <span>{f}</span>
-                                                                </li>
-                                                            ))}
-                                                        </ul>
-                                                    </div>
+                                                ))}
+                                                {!day.customItems?.length && (
+                                                    <p className="text-slate-400 italic text-sm">No custom items listed.</p>
                                                 )}
                                             </div>
-                                        )}
-
-                                        {/* Custom View */}
-                                        {day.type === 'custom' && (
-                                            <div>
-                                                <table className="w-full text-sm text-left">
-                                                    <thead className="text-slate-500 border-b"><tr><th className="py-2">Item</th><th className="py-2 text-center">Qty</th><th className="py-2 text-right">Price</th></tr></thead>
-                                                    <tbody className="divide-y">
-                                                        {day.customItems?.map((item, i) => (
-                                                            <tr key={i}>
-                                                                <td className="py-2 font-medium text-slate-700">{item.name}</td>
-                                                                <td className="py-2 text-center text-slate-500">{item.quantity}</td>
-                                                                <td className="py-2 text-right text-slate-700">{financials.currency} {(item.price * item.quantity).toLocaleString()}</td>
-                                                            </tr>
-                                                        ))}
-                                                    </tbody>
-                                                </table>
-                                                <div className="mt-3 flex justify-between font-semibold border-t pt-2">
-                                                    <span>Day Total</span>
-                                                    <span>{financials.currency} {day.cost.toLocaleString()}</span>
-                                                </div>
-                                            </div>
-                                        )}
-                                    </div>
+                                        </div>
+                                    )}
                                 </div>
-                            )
-                        })}
 
-                        {/* Additional Services */}
-                        {event.additionalServices && event.additionalServices.length > 0 && (
-                            <div className="mt-6">
-                                <h4 className="text-sm font-bold uppercase text-slate-500 tracking-wider mb-3">Additional Services</h4>
-                                <div className="border rounded-lg overflow-hidden">
-                                    <table className="w-full text-sm text-left">
-                                        <thead className="bg-slate-50 text-slate-500 font-medium border-b"><tr><th className="px-4 py-3">Service Name</th><th className="px-4 py-3 text-center">Qty</th><th className="px-4 py-3 text-right">Total</th></tr></thead>
-                                        <tbody className="divide-y divide-slate-100">
-                                            {event.additionalServices.map((svc, i) => (
-                                                <tr key={i}>
-                                                    <td className="px-4 py-3 font-medium text-slate-700">{svc.name}</td>
-                                                    <td className="px-4 py-3 text-center text-slate-500">{svc.quantity}</td>
-                                                    <td className="px-4 py-3 text-right text-slate-700">{financials.currency} {svc.total.toLocaleString()}</td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
+                                {/* Footer Total */}
+                                <div className="px-6 py-4 border-t border-slate-100 bg-slate-50/30 flex justify-between items-center">
+                                    <span className="font-semibold text-slate-700">Day {idx + 1} Total</span>
+                                    <span className="font-bold text-slate-900 text-lg">
+                                        {financials.currency} {day.cost.toLocaleString()}
+                                    </span>
                                 </div>
                             </div>
-                        )}
-                    </CardContent>
-                </Card>
+                        )
+                    })}
 
-                {/* 4. FINANCIAL SUMMARY */}
+                    {/* Additional Services Section */}
+                    {event.additionalServices && event.additionalServices.length > 0 && (
+                        <div className="pt-4">
+                            <h4 className="font-bold text-slate-800 flex items-center gap-2 mb-4 text-base">
+                                <Plus className="w-5 h-5 text-blue-600" />
+                                Additional Services & Charges
+                            </h4>
+                            
+                            <div className="border rounded-xl bg-white overflow-hidden shadow-sm border-slate-200">
+                                <div className="p-6">
+                                    <div className="bg-slate-50/50 border border-slate-100 rounded-lg p-5">
+                                        <div className="space-y-3">
+                                            {event.additionalServices.map((svc, i) => (
+                                                <div key={i} className="flex justify-between items-center text-sm text-slate-700">
+                                                    <span>{svc.name} <span className="text-slate-400 text-xs ml-1">× {svc.quantity}</span></span>
+                                                    <span className="font-medium">{financials.currency} {svc.total.toLocaleString()}</span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div className="px-6 py-4 border-t border-slate-100 bg-slate-50/30 flex justify-between items-center">
+                                    <span className="font-bold text-slate-700">Total Additional Services & Charges</span>
+                                    <span className="font-bold text-slate-900 text-lg">
+                                        {financials.currency} {financials.servicesCost.toLocaleString()}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+
+                {/* 3. FINANCIAL SUMMARY */}
                 <Card className="shadow-sm border-slate-200">
                     <CardHeader className="bg-slate-50/50 border-b border-slate-100 py-4"><CardTitle className="text-sm font-bold text-slate-700">Financial Summary</CardTitle></CardHeader>
                     <CardContent className="p-6">
@@ -476,7 +477,7 @@ export default function CustomerEventApprovalPage() {
                             )}
                             <Separator />
                             <div className="flex justify-between text-lg font-bold text-[#1C4D8D]">
-                                <span>Grand Total</span>
+                                <span>Final Total</span>
                                 <span>{financials.currency} {financials.finalBudget.toLocaleString()}</span>
                             </div>
                             <div className="flex justify-between text-sm text-green-600 font-medium">
@@ -484,14 +485,14 @@ export default function CustomerEventApprovalPage() {
                                 <span>{financials.currency} {financials.paid.toLocaleString()}</span>
                             </div>
                             <div className="flex justify-between text-sm text-red-600 font-bold bg-red-50 p-3 rounded border border-red-100">
-                                <span>Balance Due</span>
+                                <span>Due Amount</span>
                                 <span>{financials.currency} {financials.due.toLocaleString()}</span>
                             </div>
                         </div>
                     </CardContent>
                 </Card>
 
-                {/* 5. ADDITIONAL NOTES */}
+                {/* 4. ADDITIONAL NOTES */}
                 <Card className="shadow-sm border-slate-200">
                     <CardHeader className="bg-slate-50/50 border-b border-slate-100 py-4"><CardTitle className="text-sm font-bold text-slate-700">Additional Notes</CardTitle></CardHeader>
                     <CardContent className="p-6">
@@ -499,7 +500,7 @@ export default function CustomerEventApprovalPage() {
                     </CardContent>
                 </Card>
 
-                {/* 6. EVENT LOCATIONS */}
+                {/* 5. EVENT LOCATIONS */}
                 <Card className="shadow-sm border-slate-200">
                     <CardHeader className="bg-slate-50/50 border-b border-slate-100 py-4"><CardTitle className="text-sm font-bold text-slate-700">Event Locations</CardTitle></CardHeader>
                     <CardContent className="p-0">
@@ -523,7 +524,7 @@ export default function CustomerEventApprovalPage() {
                     </CardContent>
                 </Card>
 
-                {/* 7. EVENT CONTACTS */}
+                {/* 6. EVENT CONTACTS */}
                 <Card className="shadow-sm border-slate-200">
                     <CardHeader className="bg-slate-50/50 border-b border-slate-100 py-4"><CardTitle className="text-sm font-bold text-slate-700">Event Contacts</CardTitle></CardHeader>
                     <CardContent className="p-0">
@@ -546,7 +547,7 @@ export default function CustomerEventApprovalPage() {
                     </CardContent>
                 </Card>
 
-                {/* 8. BANK & TERMS */}
+                {/* 7. BANK & TERMS */}
                 <div className="grid grid-cols-1 gap-6">
                     {/* Bank */}
                     {studioInfo?.banking_details && (
@@ -566,7 +567,7 @@ export default function CustomerEventApprovalPage() {
                     {/* Terms */}
                     {studioInfo?.privacy_policy_notice && (
                         <Card className="border-slate-200 shadow-sm">
-                            <CardHeader className="py-4 pb-2"><CardTitle className="text-sm font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2"><ShieldCheck className="w-4 h-4"/> Terms & Conditions</CardTitle></CardHeader>
+                            <CardHeader className="py-4 pb-2"><CardTitle className="text-sm font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2"><ShieldCheck className="w-4 h-4"/> Privacy & Terms</CardTitle></CardHeader>
                             <CardContent className="p-4 pt-2">
                                 <p className="text-xs text-slate-500 leading-relaxed text-justify whitespace-pre-line">
                                     {studioInfo.privacy_policy_notice}
@@ -578,7 +579,7 @@ export default function CustomerEventApprovalPage() {
 
                 <Separator className="my-4"/>
 
-                {/* 9. APPROVAL FORM */}
+                {/* 8. APPROVAL FORM */}
                 {isApproved ? (
                     <Card className="bg-green-50 border-green-200 shadow-sm text-center">
                         <CardContent className="p-8 space-y-4">
