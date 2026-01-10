@@ -764,46 +764,122 @@ export default function EventDetailPage() {
 
                         {/* RIGHT COLUMN - MAIN PACKAGE */}
                         <div className="lg:col-span-2 space-y-6">
-                            <Card className="shadow-sm border-slate-200 h-full">
-                                <CardHeader className="bg-slate-50/50 border-b border-slate-100 py-3"><CardTitle className="text-sm font-bold text-slate-700">Package Details</CardTitle></CardHeader>
-                                <CardContent className="p-6">
-                                    <div className="mb-6">
-                                        <h3 className="text-lg font-bold text-slate-800 mb-1">{activePackage ? activePackage.name : "Custom Package"}</h3>
-                                        <p className="text-slate-500 text-sm mb-4">{activePackage?.description || "No description available."}</p>
-                                        {activePackage?.featuresList && activePackage.featuresList.length > 0 && (
-                                            <ul className="space-y-2 mb-6">
-                                                {activePackage.featuresList.map((feature, i) => (
-                                                    <li key={i} className="flex items-center gap-2 text-sm text-slate-700"><Check className="w-4 h-4 text-green-500 flex-shrink-0" /><span>{feature}</span></li>
-                                                ))}
-                                            </ul>
-                                        )}
-                                    </div>
-                                    <h4 className="text-sm font-bold uppercase text-slate-400 tracking-wider mb-3">Cost Breakdown</h4>
-                                    <div className="border rounded-lg overflow-hidden">
-                                        <table className="w-full text-sm text-left">
-                                            <thead className="bg-slate-50 text-slate-500 font-medium border-b">
-                                                <tr><th className="px-4 py-2">Item</th><th className="px-4 py-2 w-20 text-center">Qty</th><th className="px-4 py-2 w-32 text-right">Cost</th></tr>
-                                            </thead>
-                                            <tbody className="divide-y divide-slate-100">
-                                                {activePackage && (
-                                                    <tr className="bg-blue-50/30">
-                                                        <td className="px-4 py-3 font-semibold text-blue-900">Base Package Cost</td>
-                                                        <td className="px-4 py-3 text-center text-slate-500">1</td>
-                                                        <td className="px-4 py-3 text-right text-blue-900 font-bold">{activePackage.price.toLocaleString()}</td>
-                                                    </tr>
-                                                )}
-                                                {event.additionalServices?.map((svc) => (
-                                                    <tr key={svc.id} className="hover:bg-slate-50/50">
-                                                        <td className="px-4 py-2 font-medium text-slate-700">{svc.name} <Badge variant="outline" className="ml-2 text-[10px]">Add-on</Badge></td>
-                                                        <td className="px-4 py-2 text-center text-slate-500">{svc.quantity}</td>
-                                                        <td className="px-4 py-2 text-right text-slate-700 font-medium">{svc.total.toLocaleString()}</td>
-                                                    </tr>
-                                                ))}
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                </CardContent>
-                            </Card>
+                            <Card className="shadow-sm border-slate-200">
+  <CardHeader className="bg-slate-50/50 border-b border-slate-100 py-3">
+    <CardTitle className="text-sm font-bold text-slate-700">
+      Event Day Itinerary & Packages
+    </CardTitle>
+  </CardHeader>
+
+  <CardContent className="p-4 space-y-6">
+    {event.days?.map((day, index) => {
+      const pkg =
+        day.type === "package" && day.packageId
+          ? packagesList.find(p => p.id === day.packageId)
+          : null
+
+      return (
+        <div
+          key={index}
+          className="border rounded-lg p-4 bg-white space-y-3"
+        >
+          {/* DAY HEADER */}
+          <div className="flex justify-between items-center">
+            <div>
+              <h4 className="font-semibold text-slate-800">
+                Day {index + 1}
+              </h4>
+              <p className="text-xs text-slate-500">
+                {day.date
+                  ? format(safeDate(day.date), "PPP")
+                  : "Date not set"}
+              </p>
+            </div>
+
+            <Badge
+              variant="outline"
+              className={
+                day.type === "package"
+                  ? "border-blue-300 text-blue-700"
+                  : "border-amber-300 text-amber-700"
+              }
+            >
+              {day.type === "package" ? "Package" : "Custom Plan"}
+            </Badge>
+          </div>
+
+          {/* PACKAGE DETAILS */}
+          {day.type === "package" && pkg && (
+            <div className="bg-blue-50/40 border border-blue-100 rounded-md p-3 space-y-2">
+              <div className="flex justify-between text-sm font-medium text-slate-700">
+                <span>{pkg.name}</span>
+                <span>
+                  {currency} {Number(pkg.price).toLocaleString()}
+                </span>
+              </div>
+
+              {Array.isArray(pkg.featuresList) && pkg.featuresList.length > 0 && (
+                <ul className="mt-2 space-y-1 text-xs text-slate-600">
+                    {pkg.featuresList.map((f, i) => (
+                    <li key={i} className="flex items-center gap-2">
+                        <Check className="w-3 h-3 text-green-500" />
+                        {f}
+                    </li>
+                    ))}
+                </ul>
+                )}
+
+            </div>
+          )}
+
+          {/* CUSTOM ITEMS */}
+          {day.type === "custom" && (
+            <div className="bg-amber-50/40 border border-amber-100 rounded-md p-3 space-y-2">
+              {day.customItems?.length ? (
+                <div className="space-y-2">
+                  {day.customItems.map((item, i) => (
+                    <div
+                      key={i}
+                      className="flex justify-between text-sm text-slate-700"
+                    >
+                      <span>
+                        {item.name} × {item.quantity}
+                      </span>
+                      <span>
+                        {currency}{" "}
+                        {(item.price * item.quantity).toLocaleString()}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-slate-400 italic">
+                  No custom items added for this day.
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* DAY TOTAL */}
+          <div className="flex justify-between pt-2 border-t text-sm font-semibold">
+            <span>Day {index + 1} Total</span>
+            <span>
+              {currency} {(day.cost || 0).toLocaleString()}
+            </span>
+          </div>
+        </div>
+      )
+    })}
+
+    {/* EMPTY STATE */}
+    {(!event.days || event.days.length === 0) && (
+      <p className="text-sm text-slate-400 italic text-center">
+        No day configuration available.
+      </p>
+    )}
+  </CardContent>
+</Card>
+
                         </div>
                     </div>
 
