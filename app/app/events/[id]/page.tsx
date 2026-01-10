@@ -10,10 +10,16 @@ import {
 } from "@/services/event-service"
 import { uploadFileToStorage } from "@/lib/storage-utils"
 import { compressImage } from "@/lib/image-utils"
-import { fetchInventory, InventoryItem } from "@/services/inventory-service"
-import { fetchCrewMembers } from "@/services/crew-service"
-import { doc, getDoc } from "firebase/firestore" // Needed for direct studio fetch
-import { db } from "@/lib/firebase" // Ensure this path matches your project structure
+import { 
+    fetchInventory, InventoryItem, 
+    assignInventorySchedule, removeInventorySchedule 
+} from "@/services/inventory-service"
+import { 
+    fetchCrewMembers, 
+    assignCrewSchedule, removeCrewSchedule 
+} from "@/services/crew-service"
+import { doc, getDoc } from "firebase/firestore" 
+import { db } from "@/lib/firebase" 
 
 // UI Components
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -296,27 +302,6 @@ export default function EventDetailPage() {
       }
   };
 
-  // --- RESOURCE ASSIGNMENT LOGIC ---
-  const checkAndAssignResource = async (resourceId: string, type: 'crew' | 'equipment') => {
-      if (!event || !userData?.studioID) return;
-      let available = true;
-      for (const day of event.days) {
-          const isFree = await checkResourceAvailability(userData.studioID, day.date, resourceId, type);
-          if (!isFree) { available = false; break; }
-      }
-      if (!available) {
-          const proceed = await Swal.fire({ title: 'Conflict Detected', text: 'Resource is busy. Assign anyway?', icon: 'warning', showCancelButton: true });
-          if (!proceed.isConfirmed) return;
-      }
-      if (type === 'crew') {
-          const current = event.assignedCrew || [];
-          if (!current.includes(resourceId)) await handleUpdateEvent({ assignedCrew: [...current, resourceId] });
-      } else {
-          const current = event.assignedEquipment || [];
-          if (!current.includes(resourceId)) await handleUpdateEvent({ assignedEquipment: [...current, resourceId] });
-      }
-  };
-
   // --- ARRAY CRUD HELPERS ---
   const removeArrayItem = async (field: keyof EventData, id: string) => {
       if (!event) return;
@@ -343,7 +328,7 @@ export default function EventDetailPage() {
       await handleUpdateEvent({ transactions: list }); setIsTransactionOpen(false); setEditingTransaction(null);
   }
 
-  // --- ADDITIONALS HANDLER ---
+  // --- ADDITIONALS (SERVICES) HANDLER ---
   const saveService = async (formData: FormData) => {
       if(!event) return;
       const quantity = Number(formData.get('quantity'));
@@ -351,7 +336,7 @@ export default function EventDetailPage() {
       
       const newItem: AdditionalService = {
           id: editingService ? editingService.id : crypto.randomUUID(),
-          name: serviceNameInput, // Use state instead of getting raw formData if logic controls it
+          name: serviceNameInput, 
           type: isCustomService ? 'custom' : 'parameter', 
           quantity: quantity,
           pricePerUnit: price,
@@ -368,7 +353,6 @@ export default function EventDetailPage() {
       setEditingService(null);
   };
 
-  // Helper to open Add Service Modal
   const openAddService = () => {
       setEditingService(null);
       setServiceNameInput("");
@@ -377,17 +361,123 @@ export default function EventDetailPage() {
       setIsServiceOpen(true);
   }
 
-  // Helper to open Edit Service Modal
   const openEditService = (svc: AdditionalService) => {
       setEditingService(svc);
       setServiceNameInput(svc.name);
       setServicePriceInput(svc.pricePerUnit);
-      
-      // Determine if it's custom or preset based on name match in params
       const isPreset = serviceParams.some(p => p.name === svc.name);
       setIsCustomService(!isPreset);
-      
       setIsServiceOpen(true);
+  }
+
+  // --- RESOURCE ASSIGNMENT LOGIC (With Schedule & Limits) ---
+  const checkAndAssignResource = async (resourceId: string, type: 'crew' | 'equipment') => {
+      if (!event || !userData?.studioID) return;
+      
+      let allDaysAvailable = true;
+      let conflictMsg = "";
+
+      // 1. Check Availability for ALL event days (using updated API)
+      for (const day of event.days) {
+          const check = await checkResourceAvailability(
+              userData.studioID, 
+              day.date, 
+              resourceId, 
+              type, 
+              event.id
+          );
+          
+          if (!check.available) {
+              allDaysAvailable = false;
+              conflictMsg = check.message || "Resource unavailable";
+              break;
+          }
+      }
+
+      if (!allDaysAvailable) {
+          return Swal.fire({ 
+              title: 'Unavailable', 
+              text: conflictMsg, 
+              icon: 'error' 
+          });
+      }
+
+      // 2. Perform Assignment
+      setSaving(true);
+      try {
+          if (type === 'crew') {
+              const current = event.assignedCrew || [];
+              if (!current.includes(resourceId)) {
+                  // A. Update Event Doc
+                  await handleUpdateEvent({ assignedCrew: [...current, resourceId] });
+                  
+                  // B. Update User Doc Schedule
+                  await Promise.all(event.days.map(day => 
+                      assignCrewSchedule(resourceId, safeDate(day.date), event.id!)
+                  ));
+              }
+          } else {
+              const current = event.assignedEquipment || [];
+              if (!current.includes(resourceId)) {
+                  // A. Update Event Doc
+                  await handleUpdateEvent({ assignedEquipment: [...current, resourceId] });
+                  
+                  // B. Update Inventory Doc Schedule
+                  await Promise.all(event.days.map(day => 
+                      assignInventorySchedule(userData.studioID, resourceId, safeDate(day.date), event.id!)
+                  ));
+              }
+          }
+          Toast.fire({ icon: 'success', title: 'Resource assigned successfully' });
+      } catch (e) {
+          console.error(e);
+          Toast.fire({ icon: 'error', title: 'Assignment failed' });
+      } finally {
+          setSaving(false);
+      }
+  };
+
+  // --- RESOURCE UNASSIGNMENT LOGIC ---
+  const unassignResource = async (resourceId: string, type: 'crew' | 'equipment') => {
+      if (!event || !userData?.studioID) return;
+
+      const confirm = await Swal.fire({
+          title: 'Unassign Resource?',
+          text: "This will remove them from the schedule.",
+          icon: 'warning',
+          showCancelButton: true,
+          confirmButtonColor: '#d33',
+          confirmButtonText: 'Yes, remove'
+      });
+
+      if (!confirm.isConfirmed) return;
+
+      setSaving(true);
+      try {
+          if (type === 'crew') {
+              const newCrew = (event.assignedCrew || []).filter(id => id !== resourceId);
+              await handleUpdateEvent({ assignedCrew: newCrew });
+              
+              // Remove from User Schedule
+              await Promise.all(event.days.map(day => 
+                  removeCrewSchedule(resourceId, safeDate(day.date), event.id!)
+              ));
+          } else {
+              const newEq = (event.assignedEquipment || []).filter(id => id !== resourceId);
+              await handleUpdateEvent({ assignedEquipment: newEq });
+              
+              // Remove from Inventory Schedule
+              await Promise.all(event.days.map(day => 
+                  removeInventorySchedule(userData.studioID, resourceId, safeDate(day.date), event.id!)
+              ));
+          }
+          Toast.fire({ icon: 'success', title: 'Resource unassigned' });
+      } catch (e) {
+          console.error(e);
+          Toast.fire({ icon: 'error', title: 'Removal failed' });
+      } finally {
+          setSaving(false);
+      }
   }
 
   const statusOptions = ["Quotation", "Scheduled", "In Progress", "Post Production", "Review", "Completed", "Handed Over"];
@@ -692,7 +782,8 @@ export default function EventDetailPage() {
                                 return (
                                     <div key={id} className="flex items-center justify-between p-2 bg-slate-50 rounded border">
                                         <div className="flex items-center gap-2"><Users className="w-4 h-4 text-slate-400"/><span className="text-sm">{crew?.displayName || "Unknown"}</span></div>
-                                        <Button variant="ghost" size="icon" className="h-6 w-6 text-red-400" onClick={() => { const newCrew = event.assignedCrew.filter(x => x !== id); handleUpdateEvent({ assignedCrew: newCrew }); }}><Trash2 className="w-3 h-3"/></Button>
+                                        {/* UNASSIGN BUTTON */}
+                                        <Button variant="ghost" size="icon" className="h-6 w-6 text-red-400" onClick={() => unassignResource(id, 'crew')}><Trash2 className="w-3 h-3"/></Button>
                                     </div>
                                 )
                             })}
@@ -725,7 +816,8 @@ export default function EventDetailPage() {
                                 return (
                                     <div key={id} className="flex items-center justify-between p-2 bg-slate-50 rounded border">
                                         <div className="flex items-center gap-2"><Briefcase className="w-4 h-4 text-slate-400"/><span className="text-sm">{eq?.name || "Unknown"}</span></div>
-                                        <Button variant="ghost" size="icon" className="h-6 w-6 text-red-400" onClick={() => { const newEq = event.assignedEquipment.filter(x => x !== id); handleUpdateEvent({ assignedEquipment: newEq }); }}><Trash2 className="w-3 h-3"/></Button>
+                                        {/* UNASSIGN BUTTON */}
+                                        <Button variant="ghost" size="icon" className="h-6 w-6 text-red-400" onClick={() => unassignResource(id, 'equipment')}><Trash2 className="w-3 h-3"/></Button>
                                     </div>
                                 )
                             })}
