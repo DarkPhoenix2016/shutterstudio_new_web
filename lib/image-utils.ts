@@ -57,7 +57,7 @@ export async function getCroppedImg(
 // --- 3. Compression Logic ---
 export async function compressImage(file: File | Blob): Promise<File> {
   const options = {
-    maxSizeMB: 0.5, // Max size 500KB (Excellent for web avatars)
+    maxSizeMB: 1, // Max size 1MB (Excellent for web avatars)
     maxWidthOrHeight: 1024, // Resize if larger than 1024px
     useWebWorker: true, // Use multi-threading to avoid freezing UI
     fileType: "image/jpeg", // Convert to JPEG for better compression
