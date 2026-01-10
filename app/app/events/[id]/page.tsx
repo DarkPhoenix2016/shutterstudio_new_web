@@ -7,7 +7,7 @@ import {
     fetchEventById, updateEvent, fetchStudioSettingsList,
     checkResourceAvailability, EventData, EventContact, EventLocation, TransactionRecord,
     fetchPackageConfig, fetchPackagesList, PackageData, AdditionalService,
-    EventDayConfig, CustomItem, PackageConfigParameter
+    EventDayConfig, CustomItem, PackageConfigParameter, fetchEvents
 } from "@/services/event-service"
 import { uploadFileToStorage } from "@/lib/storage-utils"
 import { compressImage } from "@/lib/image-utils"
@@ -49,7 +49,8 @@ import {
     Calendar as CalendarIcon, CheckCircle, RefreshCcw, ExternalLink,
     MessageCircle, LayoutGrid, Pencil, Check, DollarSign,
     TrendingUp, Wallet, Search, Users, Briefcase, ChevronDown, ChevronLeft, ChevronRight,
-    ImageIcon, UploadCloud, X, Maximize2
+    ImageIcon, UploadCloud, X, Maximize2,
+    Tag, Hash
 } from "lucide-react"
 import { format } from "date-fns"
 import Swal from "sweetalert2"
