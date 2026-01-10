@@ -284,321 +284,197 @@ export default function CustomerEventApprovalPage() {
     const isApproved = event.approval?.customer_confirmed;
 
     // --- VIEW: MAIN CONTENT ---
-    return (
-        <div className="min-h-screen bg-slate-50 font-sans text-slate-800">
-            {/* Top Bar */}
-            <div className="bg-white border-b sticky top-0 z-10 shadow-sm">
-                <div className="max-w-5xl mx-auto px-4 h-16 flex items-center justify-between">
-                    <span className="font-bold text-[#1C4D8D] text-lg">Event Quotation & Approval</span>
-                    {isApproved ? (
-                        <Badge className="bg-green-100 text-green-700 border-green-200 hover:bg-green-100 gap-1 px-3 py-1">
-                            <CheckCircle className="w-3 h-3"/> Approved
-                        </Badge>
-                    ) : (
-                        <Badge className="bg-yellow-100 text-yellow-700 border-yellow-200 hover:bg-yellow-100 px-3 py-1">
-                            Pending Approval
-                        </Badge>
-                    )}
-                </div>
-            </div>
+   return (
+  <div className="min-h-screen bg-slate-100 py-8 px-4 font-sans text-slate-800">
+    <div className="max-w-3xl mx-auto bg-white shadow-lg rounded-lg overflow-hidden">
 
-            <div className="max-w-5xl mx-auto p-4 md:p-8 space-y-8">
-                
-                {/* 1. HERO SECTION */}
-                <div className="relative w-full h-64 md:h-80 rounded-2xl overflow-hidden bg-slate-900 shadow-md">
-                    <img 
-                        src={event.couplePhotoUrl || "/api/placeholder/800/400"} 
-                        alt="Cover" 
-                        className="w-full h-full object-cover opacity-80"
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent" />
-                    <div className="absolute bottom-0 left-0 p-6 md:p-8 w-full text-white">
-                        <div className="flex flex-col gap-2">
-                            <Badge className="w-fit bg-blue-600 hover:bg-blue-600 border-0 uppercase tracking-wider text-[10px]">{event.eventType}</Badge>
-                            <h1 className="text-3xl md:text-5xl font-bold tracking-tight">{event.eventName}</h1>
-                            <p className="text-slate-300 font-medium text-lg flex items-center gap-2 mt-1">
-                                <Calendar className="w-5 h-5"/>
-                                {event.days && event.days.length > 0 ? format(safeDate(event.days[0].date), 'MMMM do, yyyy') : 'Date TBD'}
-                            </p>
-                        </div>
-                    </div>
-                </div>
-
-                {/* 2. MAIN GRID */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                    
-                    {/* LEFT: Details */}
-                    <div className="space-y-8">
-                        {/* Customer Details */}
-                        <section>
-                            <h3 className="text-lg font-bold mb-4 flex items-center gap-2 text-slate-700">
-                                <FileText className="w-5 h-5"/> Customer Details
-                            </h3>
-                            <Card className="shadow-sm border-slate-200">
-                                <CardContent className="p-5 grid grid-cols-1 gap-4 text-sm">
-                                    <div className="grid grid-cols-3">
-                                        <span className="text-slate-500">Name</span>
-                                        <span className="col-span-2 font-medium">{event.customerName}</span>
-                                    </div>
-                                    <div className="grid grid-cols-3">
-                                        <span className="text-slate-500">Email</span>
-                                        <span className="col-span-2 font-medium">{event.customerEmail}</span>
-                                    </div>
-                                    <div className="grid grid-cols-3">
-                                        <span className="text-slate-500">Phone</span>
-                                        <span className="col-span-2 font-medium">{event.customerMobile}</span>
-                                    </div>
-                                </CardContent>
-                            </Card>
-                        </section>
-
-                        {/* Package Details */}
-                        <section>
-                            <h3 className="text-lg font-bold mb-4 text-slate-700">Package & Services</h3>
-                            <Card className="shadow-sm border-slate-200">
-                                <CardContent className="p-5 space-y-4">
-                                    {event.additionalServices && event.additionalServices.length > 0 ? (
-                                        <div className="space-y-3">
-                                            {event.additionalServices.map((svc, i) => (
-                                                <div key={i} className="flex justify-between text-sm border-b pb-2 last:border-0 last:pb-0 border-slate-100">
-                                                    <div>
-                                                        <span className="font-medium text-slate-700">{svc.name}</span>
-                                                        <div className="text-xs text-slate-400">Qty: {svc.quantity}</div>
-                                                    </div>
-                                                    <span className="font-semibold text-slate-600">LKR {svc.total.toLocaleString()}</span>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    ) : (
-                                        <p className="text-sm text-slate-400 italic">Standard Package Configuration</p>
-                                    )}
-                                    
-                                    {/* Financial Summary Block */}
-                                    <div className="bg-slate-50 p-4 rounded-lg space-y-2 mt-4 text-sm">
-                                        <div className="flex justify-between">
-                                            <span className="text-slate-500">Total Estimate</span>
-                                            <span className="font-medium">LKR {event.totalBudget.toLocaleString()}</span>
-                                        </div>
-                                        {event.discount > 0 && (
-                                            <div className="flex justify-between text-red-600">
-                                                <span>Discount</span>
-                                                <span>- LKR {event.discountType === 'percentage' ? `${event.discount}%` : event.discount.toLocaleString()}</span>
-                                            </div>
-                                        )}
-                                        <Separator className="my-2"/>
-                                        <div className="flex justify-between font-bold text-base text-slate-900">
-                                            <span>Final Total</span>
-                                            <span>LKR {event.finalBudget.toLocaleString()}</span>
-                                        </div>
-                                        <div className="flex justify-between text-green-700 pt-2">
-                                            <span>Paid to Date</span>
-                                            <span>LKR {financials.paid.toLocaleString()}</span>
-                                        </div>
-                                        <div className="flex justify-between text-red-700 font-bold">
-                                            <span>Balance Due</span>
-                                            <span>LKR {financials.due.toLocaleString()}</span>
-                                        </div>
-                                    </div>
-                                </CardContent>
-                            </Card>
-                        </section>
-                    </div>
-
-                    {/* RIGHT: Locations & Info */}
-                    <div className="space-y-8">
-                        {/* Locations */}
-                        <section>
-                            <h3 className="text-lg font-bold mb-4 flex items-center gap-2 text-slate-700">
-                                <MapPin className="w-5 h-5"/> Event Locations
-                            </h3>
-                            <div className="space-y-3">
-                                {event.locations && event.locations.length > 0 ? (
-                                    event.locations.map((loc, i) => (
-                                        <Card key={i} className="shadow-sm border-slate-200">
-                                            <CardContent className="p-4 flex gap-4 items-start">
-                                                <div className="bg-blue-50 p-2 rounded-full text-blue-600 mt-1">
-                                                    <MapPin className="w-4 h-4"/>
-                                                </div>
-                                                <div>
-                                                    <h4 className="font-bold text-slate-800">{loc.name}</h4>
-                                                    <p className="text-sm text-slate-500">
-                                                        {format(safeDate(loc.date), 'PPP')} 
-                                                        {loc.time && <span> @ {loc.time}</span>}
-                                                    </p>
-                                                    {loc.mapUrl && (
-                                                        <a href={loc.mapUrl} target="_blank" className="text-xs text-blue-600 hover:underline mt-1 inline-block">View Map</a>
-                                                    )}
-                                                </div>
-                                            </CardContent>
-                                        </Card>
-                                    ))
-                                ) : (
-                                    <p className="text-sm text-slate-400 italic">No locations confirmed yet.</p>
-                                )}
-                            </div>
-                        </section>
-
-                        {/* Studio Info (Banking & Privacy) */}
-                        {studioInfo && (
-                            <section>
-                                <h3 className="text-lg font-bold mb-4 flex items-center gap-2 text-slate-700">
-                                    <Info className="w-5 h-5"/> Payment & Legal
-                                </h3>
-                                <Card className="bg-slate-50 border-slate-200 shadow-sm">
-                                    <CardContent className="p-5 space-y-6">
-                                        {/* Banking */}
-                                        {studioInfo.banking_details && (
-                                            <div>
-                                                <h4 className="text-sm font-bold uppercase tracking-wider text-slate-500 mb-3 flex items-center gap-2">
-                                                    <CreditCard className="w-4 h-4"/> Bank Details
-                                                </h4>
-                                                <div className="bg-white border rounded-md p-3 text-sm space-y-1 text-slate-600">
-                                                    <p><span className="font-medium">Bank:</span> {studioInfo.banking_details.bank_name}</p>
-                                                    <p><span className="font-medium">Branch:</span> {studioInfo.banking_details.branch}</p>
-                                                    <p><span className="font-medium">Account Name:</span> {studioInfo.banking_details.account_name}</p>
-                                                    <p><span className="font-medium">Account No:</span> {studioInfo.banking_details.account_number}</p>
-                                                    {studioInfo.banking_details.mobile_number && <p><span className="font-medium">Mobile:</span> {studioInfo.banking_details.mobile_number}</p>}
-                                                </div>
-                                            </div>
-                                        )}
-
-                                        {/* Privacy */}
-                                        {studioInfo.privacy_policy_notice && (
-                                            <div>
-                                                <h4 className="text-sm font-bold uppercase tracking-wider text-slate-500 mb-2 flex items-center gap-2">
-                                                    <ShieldCheck className="w-4 h-4"/> Privacy Notice
-                                                </h4>
-                                                <p className="text-xs text-slate-500 leading-relaxed text-justify">
-                                                    {studioInfo.privacy_policy_notice}
-                                                </p>
-                                            </div>
-                                        )}
-                                    </CardContent>
-                                </Card>
-                            </section>
-                        )}
-                    </div>
-                </div>
-
-                <Separator className="my-8"/>
-
-                {/* 3. APPROVAL SECTION */}
-                <div className="max-w-2xl mx-auto">
-                    {isApproved ? (
-                        /* APPROVED STATE */
-                        <Card className="bg-green-50 border-green-200 shadow-sm text-center">
-                            <CardContent className="p-8 space-y-4">
-                                <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-2">
-                                    <CheckCircle className="w-8 h-8 text-green-600" />
-                                </div>
-                                <h2 className="text-2xl font-bold text-green-800">Event Approved</h2>
-                                <p className="text-green-700">Thank you for confirming your event details.</p>
-                                
-                                <div className="bg-white/60 rounded-lg p-4 text-sm text-left max-w-sm mx-auto space-y-2 border border-green-100">
-                                    <div className="flex justify-between">
-                                        <span className="text-slate-500">Approved By:</span>
-                                        <span className="font-medium text-slate-800">{event.customerName}</span>
-                                    </div>
-                                    <div className="flex justify-between">
-                                        <span className="text-slate-500">Date:</span>
-                                        <span className="font-medium text-slate-800">
-                                            {event.approval?.confirmedAt ? format(safeDate(event.approval.confirmedAt), "PPP p") : 'N/A'}
-                                        </span>
-                                    </div>
-                                    <div className="flex justify-between">
-                                        <span className="text-slate-500">Verification:</span>
-                                        <span className="font-medium text-slate-800">{event.approval?.verification_type}</span>
-                                    </div>
-                                    <div className="flex justify-between">
-                                        <span className="text-slate-500">Doc Number:</span>
-                                        <span className="font-medium text-slate-800">{event.approval?.verification_document_number}</span>
-                                    </div>
-                                </div>
-                            </CardContent>
-                        </Card>
-                    ) : (
-                        /* APPROVAL FORM */
-                        <Card className="border-t-4 border-t-[#1C4D8D] shadow-lg">
-                            <CardHeader>
-                                <CardTitle>Final Approval</CardTitle>
-                                <CardDescription>Please verify your identity to electronically sign this quotation.</CardDescription>
-                            </CardHeader>
-                            <CardContent className="space-y-4">
-                                {/* Read Only Pre-filled */}
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div className="space-y-2">
-                                        <Label>Full Name</Label>
-                                        <Input value={event.customerName} disabled className="bg-slate-50"/>
-                                    </div>
-                                    <div className="space-y-2">
-                                        <Label>Mobile Number</Label>
-                                        <Input value={event.customerMobile} disabled className="bg-slate-50"/>
-                                    </div>
-                                    <div className="space-y-2 md:col-span-2">
-                                        <Label>Email Address</Label>
-                                        <Input value={event.customerEmail} disabled className="bg-slate-50"/>
-                                    </div>
-                                </div>
-
-                                <Separator />
-
-                                {/* Verification Inputs */}
-                                <div className="space-y-4">
-                                    <div className="space-y-2">
-                                        <Label>Verification Document Type <span className="text-red-500">*</span></Label>
-                                        <Select value={verifType} onValueChange={setVerifType}>
-                                            <SelectTrigger>
-                                                <SelectValue placeholder="Select Document Type" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="id">National Identity Card (NIC)</SelectItem>
-                                                <SelectItem value="passport">Passport</SelectItem>
-                                            </SelectContent>
-                                        </Select>
-                                    </div>
-
-                                    <div className="space-y-2">
-                                        <Label>
-                                            {verifType === 'id' ? 'NIC Number' : 'Passport Number'} <span className="text-red-500">*</span>
-                                        </Label>
-                                        <Input 
-                                            placeholder={verifType === 'id' ? "e.g. 199012345678 or 901234567V" : "Enter Passport Number"}
-                                            value={verifDocNum}
-                                            onChange={(e) => setVerifDocNum(e.target.value.toUpperCase())}
-                                        />
-                                        <p className="text-[11px] text-slate-400">
-                                            {verifType === 'id' 
-                                                ? "Accepts Sri Lankan Old (9 digits + V/X) or New (12 digits) format." 
-                                                : "Enter your valid international passport number."}
-                                        </p>
-                                    </div>
-                                </div>
-
-                                <Alert className="bg-blue-50 border-blue-100">
-                                    <AlertCircle className="h-4 w-4 text-blue-600" />
-                                    <AlertTitle className="text-blue-800">Declaration</AlertTitle>
-                                    <AlertDescription className="text-blue-700 text-xs">
-                                        By clicking "Approve Event", I confirm that the details provided above are accurate and I agree to the pricing and terms set forth by the studio.
-                                    </AlertDescription>
-                                </Alert>
-
-                                <Button 
-                                    onClick={handleApprove} 
-                                    className="w-full bg-[#1C4D8D] hover:bg-[#163b6b] h-12 text-lg"
-                                    disabled={isSubmitting}
-                                >
-                                    {isSubmitting ? (
-                                        <><Loader2 className="w-5 h-5 animate-spin mr-2" /> Processing...</>
-                                    ) : (
-                                        "Approve Event"
-                                    )}
-                                </Button>
-                            </CardContent>
-                        </Card>
-                    )}
-                </div>
-
-            </div>
+      {/* HEADER */}
+      <div className="border-b p-6 flex justify-between items-start">
+        <div>
+          <h1 className="text-2xl font-bold text-[#1C4D8D]">
+            Event Quotation
+          </h1>
+          <p className="text-sm text-slate-500 mt-1">
+            Reference: {event.displayId || event.id}
+          </p>
         </div>
-    )
+
+        {isApproved ? (
+          <Badge className="bg-green-100 text-green-700 border-green-200 gap-1">
+            <CheckCircle className="w-3 h-3" /> Approved
+          </Badge>
+        ) : (
+          <Badge className="bg-yellow-100 text-yellow-700 border-yellow-200">
+            Pending Approval
+          </Badge>
+        )}
+      </div>
+
+      {/* EVENT SUMMARY */}
+      <div className="p-6 space-y-2 border-b">
+        <h2 className="text-xl font-semibold">{event.eventName}</h2>
+        <p className="text-sm text-slate-600">
+          {event.eventType} ·{" "}
+          {event.days?.[0]?.date
+            ? format(safeDate(event.days[0].date), "PPP")
+            : "Date TBD"}
+        </p>
+      </div>
+
+      {/* CUSTOMER DETAILS */}
+      <section className="p-6 border-b space-y-3">
+        <h3 className="text-sm font-bold uppercase text-slate-500">
+          Customer Details
+        </h3>
+
+        <div className="text-sm space-y-1">
+          <p><strong>Name:</strong> {event.customerName}</p>
+          <p><strong>Email:</strong> {event.customerEmail}</p>
+          <p><strong>Phone:</strong> {event.customerMobile}</p>
+        </div>
+      </section>
+
+      {/* EVENT LOCATIONS */}
+      {event.locations?.length ? (
+        event.locations.map((loc, i) => (
+            <div key={i} className="text-sm">
+            <p className="font-medium">{loc.name}</p>
+            <p className="text-slate-500">
+                {format(safeDate(loc.date), "PPP")} {loc.time && `@ ${loc.time}`}
+            </p>
+            {loc.mapUrl && (
+                <a
+                href={loc.mapUrl}
+                target="_blank"
+                className="text-xs text-blue-600 underline"
+                >
+                View Map
+                </a>
+            )}
+            </div>
+        ))
+        ) : (
+        <p className="text-sm text-slate-400 italic">
+            No locations confirmed yet.
+        </p>
+        )}
+
+      {/* LINE ITEMS */}
+      <section className="p-6 border-b space-y-4">
+        <h3 className="text-sm font-bold uppercase text-slate-500">
+          Services & Packages
+        </h3>
+
+        {/* Day-based packages */}
+        {event.days.map((day, i) => (
+        <div key={i} className="flex justify-between text-sm">
+            <span>
+            Day {i + 1} — {day.type === "package" ? "Package" : "Custom Plan"}
+            </span>
+            <span className="font-medium">
+            LKR {day.cost.toLocaleString()}
+            </span>
+        </div>
+        ))}
+
+        {/* Additional Services */}
+        {event.additionalServices?.map((svc, i) => (
+          <div key={i} className="flex justify-between text-sm">
+            <span>
+              {svc.name} × {svc.quantity}
+            </span>
+            <span className="font-medium">
+              LKR {svc.total.toLocaleString()}
+            </span>
+          </div>
+        ))}
+      </section>
+
+      {/* FINANCIAL SUMMARY */}
+      <section className="p-6 border-b space-y-2 text-sm">
+        <div className="flex justify-between">
+          <span>Total</span>
+          <span>LKR {event.totalBudget.toLocaleString()}</span>
+        </div>
+
+        {event.discount > 0 && (
+          <div className="flex justify-between text-red-600">
+            <span>
+              Discount ({event.discountType})
+            </span>
+            <span>
+              − LKR {event.discount.toLocaleString()}
+            </span>
+          </div>
+        )}
+
+        <Separator />
+
+        <div className="flex justify-between font-bold text-base">
+          <span>Final Total</span>
+          <span>LKR {event.finalBudget.toLocaleString()}</span>
+        </div>
+
+        <div className="flex justify-between text-green-700">
+          <span>Paid</span>
+          <span>LKR {financials.paid.toLocaleString()}</span>
+        </div>
+
+        <div className="flex justify-between text-red-700 font-semibold">
+          <span>Balance Due</span>
+          <span>LKR {financials.due.toLocaleString()}</span>
+        </div>
+      </section>
+
+      {/* NOTES */}
+      {event.notes && (
+        <section className="p-6 border-b">
+          <h3 className="text-sm font-bold uppercase text-slate-500 mb-2">
+            Notes
+          </h3>
+          <p className="text-sm text-slate-600 whitespace-pre-line">
+            {event.notes}
+          </p>
+        </section>
+      )}
+
+      {/* APPROVAL */}
+      <section className="p-6">
+        {isApproved ? (
+          <div className="text-center space-y-2">
+            <CheckCircle className="w-10 h-10 text-green-600 mx-auto" />
+            <p className="font-semibold text-green-700">
+              Approved on{" "}
+              {event.approval?.confirmedAt
+                ? format(safeDate(event.approval.confirmedAt), "PPP p")
+                : ""}
+            </p>
+            <p className="text-xs text-slate-500">
+              Verified using {event.approval?.verification_type}
+            </p>
+          </div>
+        ) : (
+          <Button
+            onClick={handleApprove}
+            disabled={isSubmitting}
+            className="w-full h-12 bg-[#1C4D8D] text-lg"
+          >
+            {isSubmitting ? (
+              <>
+                <Loader2 className="w-5 h-5 animate-spin mr-2" />
+                Processing...
+              </>
+            ) : (
+              "Approve Quotation"
+            )}
+          </Button>
+        )}
+      </section>
+
+    </div>
+  </div>
+)
+
+
+
 }
