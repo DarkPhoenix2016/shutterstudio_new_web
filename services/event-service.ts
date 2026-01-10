@@ -95,6 +95,7 @@ export interface EventData {
   customerEmail?: string;
   couplePhotoUrl?: string; 
   galleryUrls?: string[]; 
+  tags?: string[];
   
   // Meta
   eventName: string;

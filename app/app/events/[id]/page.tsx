@@ -31,6 +31,7 @@ import { validateSubscriptionAction } from "@/services/subscription-service"
 
 
 // UI Components
+import { Command, CommandGroup, CommandItem, CommandList } from "@/components/ui/command"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
