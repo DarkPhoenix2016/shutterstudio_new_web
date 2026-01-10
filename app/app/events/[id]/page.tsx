@@ -21,6 +21,8 @@ import {
 } from "@/services/crew-service"
 import { doc, getDoc } from "firebase/firestore" 
 import { db } from "@/lib/firebase" 
+import { cn } from "@/lib/utils"
+
 
 // UI Components
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -351,7 +353,17 @@ export default function EventDetailPage() {
   }
 
   const savePackageChanges = async () => {
-    if(!event) return;
+    if (!event) return;
+    
+    // [!code ++]
+    if (event.approval?.customer_confirmed) {
+        return Swal.fire({ 
+            icon: 'warning', 
+            title: 'Quotation Locked', 
+            text: 'You must reset the customer approval in the Overview tab before making changes to the package.' 
+        });
+    }
+
     // Calculate final budget to save to DB
     const updates = {
         days: event.days,
@@ -817,6 +829,7 @@ export default function EventDetailPage() {
             </TabsContent>
 
             {/* --- [!code highlight] NEW TAB: PACKAGE & NOTES --- */}
+{/* --- 2. PACKAGE & NOTES TAB (EDITABLE) --- */}
             <TabsContent value="package_edit">
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between border-b bg-slate-50/50">
@@ -824,14 +837,29 @@ export default function EventDetailPage() {
                             <CardTitle>Edit Package & Configuration</CardTitle>
                             <p className="text-sm text-muted-foreground mt-1">Modify days, packages, custom items and notes.</p>
                         </div>
-                        <Button className="bg-[#1C4D8D]" onClick={savePackageChanges} disabled={saving}>
+                        <Button className="bg-[#1C4D8D]" onClick={savePackageChanges} disabled={saving || isLocked}>
                             {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Save className="mr-2 h-4 w-4"/>}
-                            Update Plan
+                            {isLocked ? "Locked" : "Update Plan"}
                         </Button>
                     </CardHeader>
                     <CardContent className="p-6 space-y-8">
-                         {/* SCHEDULE & PRICING */}
-                        <div className="space-y-4">
+                        
+                        {/* [!code ++] LOCKED STATE BANNER */}
+                        {isLocked && (
+                            <div className="bg-amber-50 border border-amber-200 rounded-md p-4 flex items-start gap-3 text-amber-800">
+                                <Lock className="h-5 w-5 mt-0.5 shrink-0" />
+                                <div>
+                                    <h4 className="font-semibold text-sm">Quotation Approved</h4>
+                                    <p className="text-xs mt-1 text-amber-700">
+                                        This event is locked because the customer has approved the quotation. 
+                                        To make changes, go to the <b>Overview</b> tab and click <b>"Reset Approval"</b>.
+                                    </p>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* SCHEDULE & PRICING */}
+                        <div className={cn("space-y-4", isLocked && "opacity-60 pointer-events-none")}>
                             <div className="flex justify-between items-center">
                                 <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Packages & Days</h3>
                                 <div className="flex items-center gap-2">
@@ -840,6 +868,7 @@ export default function EventDetailPage() {
                                         type="number" min="1" max="7" 
                                         className="w-14 h-7 text-center bg-slate-50 text-xs"
                                         value={event.dayCount}
+                                        disabled={isLocked}
                                         onChange={e => handleDayCountChange(Number(e.target.value))}
                                     />
                                 </div>
@@ -859,7 +888,7 @@ export default function EventDetailPage() {
                                             <div className="border rounded-md p-2 bg-slate-50 flex items-center justify-between">
                                                 <Label className="text-xs text-slate-500 ml-2">Date</Label>
                                                 <Popover>
-                                                    <PopoverTrigger asChild>
+                                                    <PopoverTrigger asChild disabled={isLocked}>
                                                         <Button variant="ghost" className="h-6 text-sm font-normal">
                                                             {day.date ? format(safeDate(day.date), "PPP") : <span>Pick a date</span>}
                                                             <CalendarIcon className="ml-2 h-3 w-3 opacity-50" />
@@ -879,12 +908,12 @@ export default function EventDetailPage() {
 
                                         <Tabs defaultValue={day.type} onValueChange={(v: any) => updateDayConfig(i, { type: v })} className="w-full">
                                             <TabsList className="w-full grid grid-cols-2 h-8">
-                                                <TabsTrigger value="package" className="text-xs">Package</TabsTrigger>
-                                                <TabsTrigger value="custom" className="text-xs">Custom Plan</TabsTrigger>
+                                                <TabsTrigger value="package" className="text-xs" disabled={isLocked}>Package</TabsTrigger>
+                                                <TabsTrigger value="custom" className="text-xs" disabled={isLocked}>Custom Plan</TabsTrigger>
                                             </TabsList>
 
                                             <TabsContent value="package" className="pt-2 space-y-3">
-                                                <Select value={day.packageId} onValueChange={(v) => updateDayConfig(i, { packageId: v })}>
+                                                <Select value={day.packageId} onValueChange={(v) => updateDayConfig(i, { packageId: v })} disabled={isLocked}>
                                                     <SelectTrigger><SelectValue placeholder="Select a package..." /></SelectTrigger>
                                                     <SelectContent>
                                                         {packagesList.map(p => (
@@ -931,6 +960,7 @@ export default function EventDetailPage() {
                                                                 <Input 
                                                                     placeholder="Item" className="h-8 text-xs" 
                                                                     value={item.name} 
+                                                                    disabled={isLocked}
                                                                     onChange={(e) => updateCustomItem(i, itemIdx, 'name', e.target.value)}
                                                                 />
                                                             </div>
@@ -938,6 +968,7 @@ export default function EventDetailPage() {
                                                                 <Input 
                                                                     type="number" placeholder="Qty" className="h-8 text-xs text-center" 
                                                                     value={item.quantity} 
+                                                                    disabled={isLocked}
                                                                     onChange={(e) => updateCustomItem(i, itemIdx, 'quantity', Number(e.target.value))}
                                                                 />
                                                             </div>
@@ -945,11 +976,12 @@ export default function EventDetailPage() {
                                                                 <Input 
                                                                     type="number" placeholder="Price" className="h-8 text-xs text-right" 
                                                                     value={item.price} 
+                                                                    disabled={isLocked}
                                                                     onChange={(e) => updateCustomItem(i, itemIdx, 'price', Number(e.target.value))}
                                                                 />
                                                             </div>
                                                             <div className="col-span-1 flex justify-center">
-                                                                <Button variant="ghost" size="icon" className="h-7 w-7 text-red-400 hover:text-red-600" onClick={() => removeCustomItem(i, itemIdx)}>
+                                                                <Button variant="ghost" size="icon" className="h-7 w-7 text-red-400 hover:text-red-600" onClick={() => removeCustomItem(i, itemIdx)} disabled={isLocked}>
                                                                     <Trash2 className="h-3 w-3" />
                                                                 </Button>
                                                             </div>
@@ -958,7 +990,7 @@ export default function EventDetailPage() {
 
                                                     {/* Add Parameter via Dropdown */}
                                                     <div className="flex gap-2">
-                                                        <Select onValueChange={(val) => {
+                                                        <Select disabled={isLocked} onValueChange={(val) => {
                                                             if (val === 'custom_new') {
                                                                 addCustomItem(i);
                                                             } else {
@@ -1004,6 +1036,7 @@ export default function EventDetailPage() {
                                     <div className="flex items-center gap-2">
                                         <Select 
                                             value={event.discountType} 
+                                            disabled={isLocked}
                                             onValueChange={(v: any) => setEvent({ ...event, discountType: v })}
                                         >
                                             <SelectTrigger className="h-8 w-[70px] text-xs bg-white">
@@ -1016,6 +1049,7 @@ export default function EventDetailPage() {
                                         </Select>
                                         <Input 
                                             type="number" 
+                                            disabled={isLocked}
                                             className="h-8 w-24 text-right bg-white text-sm"
                                             placeholder="0"
                                             value={event.discount || ""}
@@ -1035,11 +1069,12 @@ export default function EventDetailPage() {
                             </div>
                         </div>
 
-                        <div className="space-y-2">
+                        <div className={cn("space-y-2", isLocked && "opacity-60 pointer-events-none")}>
                             <Label>Additional Notes</Label>
                             <Textarea 
                                 placeholder="Specific requirements..." 
                                 value={event.notes} 
+                                disabled={isLocked}
                                 onChange={e => setEvent({ ...event, notes: e.target.value })} 
                                 className="bg-slate-50 min-h-[100px]" 
                             />
