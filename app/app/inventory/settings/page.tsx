@@ -5,7 +5,7 @@ import { useAuth } from "@/context/AuthContext"
 import { 
   fetchInventory, addInventoryItem, updateInventoryItem, deleteInventoryItem, adjustStock, 
   fetchCategories, addCategory, updateCategory, deleteCategory,
-  InventoryItem, InventoryCategory 
+  InventoryItem, InventoryCategory, StockTransaction, fetchItemHistory
 } from "@/services/inventory-service"
 import { fetchEvents, EventData } from "@/services/event-service" 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -54,6 +54,7 @@ export default function InventorySettingsPage() {
   const [itemPage, setItemPage] = useState(1)
   const [catPage, setCatPage] = useState(1)
   const [expandedCategories, setExpandedCategories] = useState<string[]>([]) 
+  const [filterType, setFilterType] = useState("all")
 
   // Dialog States
   const [isItemDialogOpen, setIsItemDialogOpen] = useState(false)
@@ -64,6 +65,11 @@ export default function InventorySettingsPage() {
 
   const [isStockOpen, setIsStockOpen] = useState(false)
   const [selectedStockItem, setSelectedStockItem] = useState<InventoryItem | null>(null)
+
+  // Details & History State
+  const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null)
+  const [history, setHistory] = useState<StockTransaction[]>([])
+  const [loadingHistory, setLoadingHistory] = useState(false)
 
   // Schedule State
   const [scheduleItem, setScheduleItem] = useState<InventoryItem | null>(null) 
@@ -115,12 +121,14 @@ export default function InventorySettingsPage() {
 
   // --- FILTERING & PAGINATION LOGIC ---
   const filteredItems = useMemo(() => {
-      return items.filter(i => 
-          i.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-          i.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          i.serialNumber?.toLowerCase().includes(searchQuery.toLowerCase())
-      )
-  }, [items, searchQuery])
+      return items.filter(i => {
+          const matchesSearch = i.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                                i.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                                i.serialNumber?.toLowerCase().includes(searchQuery.toLowerCase())
+          const matchesType = filterType === "all" || i.type === filterType
+          return matchesSearch && matchesType
+      })
+  }, [items, searchQuery, filterType])
 
   const sortedItems = [...filteredItems].sort((a, b) => a.category.localeCompare(b.category));
   const totalItemPages = Math.ceil(sortedItems.length / ITEMS_PER_PAGE);
@@ -144,6 +152,19 @@ export default function InventorySettingsPage() {
       setScheduleItem(item)
       setDate(new Date()) 
       setIsScheduleOpen(true)
+  }
+
+  const handleViewDetails = async (item: InventoryItem) => {
+    setSelectedItem(item)
+    setLoadingHistory(true)
+    try {
+      const hist = await fetchItemHistory(userData!.studioID!, item.id!)
+      setHistory(hist)
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setLoadingHistory(false)
+    }
   }
 
   // --- ITEM ACTIONS ---
@@ -209,8 +230,8 @@ export default function InventorySettingsPage() {
       if (!selectedStockItem || !stockAction.comment) return Toast.fire({ icon: 'warning', title: 'Comment required' })
       
       try {
-          // [!code highlight] FIXED: Ensure uid falls back to id or string if undefined
-          const performerId = userData?.uid || userData?.id || "unknown_user";
+          // [FIX] Removed userData.id check to fix TypeScript error.
+          const performerId = userData?.uid || "unknown_user";
           const performerName = userData?.displayName || 'Admin';
 
           await adjustStock(
@@ -347,6 +368,9 @@ export default function InventorySettingsPage() {
                           <Button variant="ghost" size="sm" onClick={() => { setSelectedStockItem(item); setIsStockOpen(true); }} className="h-8 w-8 p-0" title="Adjust Stock">
                               <RefreshCcw className="h-4 w-4 text-orange-600" />
                           </Button>
+                          <Button variant="ghost" size="sm" onClick={() => handleViewDetails(item)} className="h-8 w-8 p-0" title="Details">
+                              <History className="h-4 w-4 text-slate-600" />
+                          </Button>
                           <Button variant="ghost" size="sm" onClick={() => openItemDialog(item)} className="h-8 w-8 p-0" title="Edit Details">
                               <Pencil className="h-4 w-4 text-blue-600" />
                           </Button>
@@ -418,6 +442,28 @@ export default function InventorySettingsPage() {
         </Card>
       </div>
 
+      <div className="flex gap-4 items-center bg-white p-4 rounded-lg shadow-sm border">
+        <div className="relative flex-1">
+          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-400" />
+          <Input 
+            placeholder="Search items by name, category, serial..." 
+            className="pl-9"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
+        </div>
+        <Select value={filterType} onValueChange={setFilterType}>
+          <SelectTrigger className="w-[180px]">
+            <SelectValue placeholder="Filter Type" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Types</SelectItem>
+            <SelectItem value="owned">Owned Gear</SelectItem>
+            <SelectItem value="rented">Rented Gear</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
       <Tabs defaultValue="items" className="w-full">
         <TabsList className="bg-slate-100 p-1 mb-4">
             <TabsTrigger value="items" className="px-6">Item List</TabsTrigger>
@@ -437,17 +483,6 @@ export default function InventorySettingsPage() {
                     </Button>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                    {/* Search */}
-                    <div className="flex items-center gap-2 max-w-md bg-slate-50 p-2 rounded-md border">
-                        <Search className="h-4 w-4 text-slate-400" />
-                        <Input 
-                            placeholder="Search items by name, category, serial..." 
-                            className="border-none bg-transparent h-8 focus-visible:ring-0" 
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                        />
-                    </div>
-
                     <div className="rounded-md border">
                         <Table>
                             <TableHeader>
@@ -650,7 +685,70 @@ export default function InventorySettingsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* SCHEDULE DIALOG (New) */}
+      {/* DETAILS DIALOG */}
+      <Dialog open={!!selectedItem} onOpenChange={(open) => !open && setSelectedItem(null)}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              {selectedItem?.name}
+              <Badge variant="secondary">{selectedItem?.category}</Badge>
+            </DialogTitle>
+            <DialogDescription>Item usage history and current status.</DialogDescription>
+          </DialogHeader>
+          
+          <div className="grid gap-6 py-4">
+            <div className="grid grid-cols-2 gap-4">
+                <div className="p-4 bg-slate-50 rounded-lg border">
+                    <span className="text-xs text-slate-500 uppercase">Current Stock</span>
+                    <div className="text-2xl font-bold text-[#1C4D8D] mt-1">{selectedItem?.quantityAvailable} <span className="text-sm text-slate-400 font-normal">/ {selectedItem?.quantityTotal} available</span></div>
+                </div>
+                <div className="p-4 bg-slate-50 rounded-lg border">
+                    <span className="text-xs text-slate-500 uppercase">Pricing Model</span>
+                    <div className="mt-1">
+                        {selectedItem?.type === 'owned' ? (
+                            <span className="font-medium text-slate-700">${selectedItem.costPerEvent} / event</span>
+                        ) : (
+                            <span className="font-medium text-slate-700">${selectedItem?.rentalRates?.daily} / day</span>
+                        )}
+                    </div>
+                </div>
+            </div>
+
+            <div>
+                <h4 className="text-sm font-semibold mb-3 flex items-center gap-2"><History className="h-4 w-4"/> Recent Activity</h4>
+                <div className="space-y-4 max-h-[300px] overflow-y-auto pr-2">
+                    {loadingHistory ? (
+                        <div className="flex justify-center py-4"><Loader2 className="animate-spin h-5 w-5 text-slate-400"/></div>
+                    ) : history.length === 0 ? (
+                        <p className="text-sm text-slate-400 italic text-center">No history recorded.</p>
+                    ) : (
+                        history.map((log) => (
+                            <div key={log.id} className="flex gap-3 text-sm border-b pb-3 last:border-0">
+                                <div className={`mt-1 h-2 w-2 rounded-full shrink-0 ${log.type.includes('remove') || log.type.includes('assign') ? 'bg-orange-400' : 'bg-green-400'}`} />
+                                <div className="flex-1">
+                                    <div className="flex justify-between">
+                                        <p className="font-medium text-slate-800 capitalize">{log.type.replace(/_/g, " ")}</p>
+                                        <span className="text-xs text-slate-400">{log.date ? format(log.date.toDate(), 'MMM dd, HH:mm') : '-'}</span>
+                                    </div>
+                                    <p className="text-slate-600 mt-0.5">
+                                        <span className="font-mono bg-slate-100 px-1 rounded text-xs mr-2">{log.quantity > 0 ? '+' : ''}{log.quantity}</span>
+                                        {log.comment}
+                                    </p>
+                                    <div className="flex items-center gap-2 mt-2 text-xs text-slate-400">
+                                        <User className="h-3 w-3"/> {log.performedBy}
+                                        {log.eventId && <><span className="mx-1">•</span> <CalendarIcon className="h-3 w-3"/> Event ID: {log.eventId.substring(0,6)}...</>}
+                                    </div>
+                                </div>
+                            </div>
+                        ))
+                    )}
+                </div>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* SCHEDULE DIALOG (New Feature) */}
       <Dialog open={isScheduleOpen} onOpenChange={setIsScheduleOpen}>
         <DialogContent className="max-w-5xl h-[85vh] flex flex-col p-0 gap-0 overflow-hidden rounded-xl">
             <DialogHeader className="px-6 py-4 border-b bg-slate-50/50">
