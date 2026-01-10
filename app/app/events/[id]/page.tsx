@@ -372,19 +372,23 @@ export default function EventDetailPage() {
 
   // --- RESOURCE ASSIGNMENT LOGIC (With Schedule & Limits) ---
   const checkAndAssignResource = async (resourceId: string, type: 'crew' | 'equipment') => {
-      if (!event || !userData?.studioID) return;
+      if (!event || !event.id || !userData?.studioID) return;
       
+      // Capture safe strings for use inside callbacks
+      const currentEventId = event.id;
+      const studioId = userData.studioID;
+
       let allDaysAvailable = true;
       let conflictMsg = "";
 
       // 1. Check Availability for ALL event days (using updated API)
       for (const day of event.days) {
           const check = await checkResourceAvailability(
-              userData.studioID, 
+              studioId, 
               day.date, 
               resourceId, 
               type, 
-              event.id
+              currentEventId
           );
           
           if (!check.available) {
@@ -413,7 +417,7 @@ export default function EventDetailPage() {
                   
                   // B. Update User Doc Schedule
                   await Promise.all(event.days.map(day => 
-                      assignCrewSchedule(resourceId, safeDate(day.date), event.id!)
+                      assignCrewSchedule(resourceId, safeDate(day.date), currentEventId)
                   ));
               }
           } else {
@@ -424,7 +428,7 @@ export default function EventDetailPage() {
                   
                   // B. Update Inventory Doc Schedule
                   await Promise.all(event.days.map(day => 
-                      assignInventorySchedule(userData.studioID, resourceId, safeDate(day.date), event.id!)
+                      assignInventorySchedule(studioId, resourceId, safeDate(day.date), currentEventId)
                   ));
               }
           }
@@ -439,7 +443,11 @@ export default function EventDetailPage() {
 
   // --- RESOURCE UNASSIGNMENT LOGIC ---
   const unassignResource = async (resourceId: string, type: 'crew' | 'equipment') => {
-      if (!event || !userData?.studioID) return;
+      if (!event || !event.id || !userData?.studioID) return;
+
+      // Capture safe strings for use inside callbacks
+      const currentEventId = event.id;
+      const studioId = userData.studioID;
 
       const confirm = await Swal.fire({
           title: 'Unassign Resource?',
@@ -460,7 +468,7 @@ export default function EventDetailPage() {
               
               // Remove from User Schedule
               await Promise.all(event.days.map(day => 
-                  removeCrewSchedule(resourceId, safeDate(day.date), event.id!)
+                  removeCrewSchedule(resourceId, safeDate(day.date), currentEventId)
               ));
           } else {
               const newEq = (event.assignedEquipment || []).filter(id => id !== resourceId);
@@ -468,7 +476,7 @@ export default function EventDetailPage() {
               
               // Remove from Inventory Schedule
               await Promise.all(event.days.map(day => 
-                  removeInventorySchedule(userData.studioID, resourceId, safeDate(day.date), event.id!)
+                  removeInventorySchedule(studioId, resourceId, safeDate(day.date), currentEventId)
               ));
           }
           Toast.fire({ icon: 'success', title: 'Resource unassigned' });
