@@ -707,7 +707,20 @@ export default function EventDetailPage() {
                                 <div className="flex flex-wrap gap-3">
                                     <Button variant="outline" size="sm" className="gap-2" onClick={handleResetApproval}><RefreshCcw className="w-4 h-4" /> Reset Approval</Button>
                                     <Button variant="outline" size="sm" className="gap-2" onClick={() => Toast.fire({ icon: 'info', title: 'Invoice Generated' })}><FileText className="w-4 h-4" /> Generate Invoice</Button>
-                                    <Button variant="outline" size="sm" className="gap-2" onClick={() => Toast.fire({ icon: 'info', title: 'Opening Customer View' })}><ExternalLink className="w-4 h-4" /> Customer View</Button>
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        className="gap-2"
+                                        onClick={() =>
+                                            window.open(
+                                                `/public/event/${event.id}`,
+                                                "_blank"
+                                            )
+                                        }
+                                    >
+                                        <ExternalLink className="w-4 h-4" />
+                                        Customer View
+                                    </Button>
                                 </div>
                             </CardContent>
                         </Card>
@@ -761,7 +774,7 @@ export default function EventDetailPage() {
                         </Card>
                     </div>
 
-                    
+
 
                     {/* MAIN GRID */}
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -855,7 +868,7 @@ export default function EventDetailPage() {
 
                             </Card>
 
-                            
+
                         </div>
 
                         {/* RIGHT COLUMN - MAIN PACKAGE */}
@@ -1030,7 +1043,7 @@ export default function EventDetailPage() {
                         </div>
                     </div>
 
-                    
+
                 </TabsContent>
 
                 {/* --- 2. PACKAGE & NOTES TAB (EDITABLE) --- */}
