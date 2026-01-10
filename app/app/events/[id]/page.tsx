@@ -382,28 +382,35 @@ export default function EventDetailPage() {
     // --- EXISTING ACTIONS (Reset, Upload, Remove etc) ---
 
     const handleResetApproval = async () => {
+        if (!event) return
+
+        // BLOCK RESET FOR PROGRESSED EVENTS
+        if (["In Progress", "Completed", "Handed Over"].includes(event.status)) {
+            return Swal.fire({
+            icon: "error",
+            title: "Cannot Reset",
+            text: "This event has already progressed beyond quotation."
+            })
+        }
+
         const result = await Swal.fire({
             title: 'Reset Approval?',
-            text: 'This will require the customer to approve the quotation again.',
+            text: 'This will unlock the quotation and revert the event back to Quotation status.',
             icon: 'warning',
             showCancelButton: true,
-            confirmButtonText: 'Yes, reset it'
-        });
-        if (result.isConfirmed) {
-            const newApproval = {
-                ...event?.approval,
-                customer_confirmed: false,
-                confirmedAt: deleteField()
-            };
+            confirmButtonText: 'Yes, reset'
+        })
 
-            await handleUpdateEvent({
-                "approval.customer_confirmed": false,
-                "approval.confirmedAt": deleteField()
-            } as any)
+        if (!result.isConfirmed) return
 
-
+        await handleUpdateEvent({
+            status: "Quotation",
+            "approval.customer_confirmed": false,
+            "approval.confirmedAt": deleteField()
+        } as any)
         }
-    };
+
+    
 
     const handleUploadImage = async (file: File, isCover: boolean) => {
         if (!event || !userData?.studioID) return;
