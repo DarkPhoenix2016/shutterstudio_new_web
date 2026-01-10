@@ -73,11 +73,12 @@ interface StudioInfo {
     };
 }
 
+// [!code highlight] UPDATED: Matches Firestore "parameters" map structure
 interface PackageData {
     id: string;
     name: string;
     price: number;
-    featuresList?: string[];
+    parameters?: Record<string, any>; // Key-value map (e.g., "Drone Cameras": 1, "Preshoot": true)
 }
 
 // --- HELPERS ---
@@ -346,7 +347,7 @@ export default function CustomerEventApprovalPage() {
                     </CardContent>
                 </Card>
 
-                {/* 2. EVENT ITINERARY & PACKAGE DETAILS (Redesigned to match image_8b4a2d.png) */}
+                {/* 2. EVENT ITINERARY & PACKAGE DETAILS */}
                 <div className="space-y-6">
                     {/* Days Loop */}
                     {event.days?.map((day, idx) => {
@@ -385,14 +386,23 @@ export default function CustomerEventApprovalPage() {
                                                 <span className="font-semibold text-slate-700">{financials.currency} {Number(pkg.price).toLocaleString()}</span>
                                             </div>
                                             
-                                            {pkg.featuresList && pkg.featuresList.length > 0 && (
+                                            {/* [!code highlight] Renders parameters map as a list */}
+                                            {pkg.parameters && (
                                                 <ul className="space-y-2.5">
-                                                    {pkg.featuresList.map((f, i) => (
-                                                        <li key={i} className="flex items-start gap-2.5 text-sm text-slate-600">
-                                                            <Check className="w-4 h-4 text-green-500 shrink-0 mt-0.5" />
-                                                            <span>{f}</span>
-                                                        </li>
-                                                    ))}
+                                                    {Object.entries(pkg.parameters).map(([key, value], i) => {
+                                                        // Hide items that are explicitly false
+                                                        if (value === false) return null;
+                                                        return (
+                                                            <li key={i} className="flex items-start gap-2.5 text-sm text-slate-600">
+                                                                <Check className="w-4 h-4 text-green-500 shrink-0 mt-0.5" />
+                                                                <span>
+                                                                    {key}
+                                                                    {/* If value is boolean true, don't show ": true", otherwise show ": value" */}
+                                                                    {typeof value !== 'boolean' ? `: ${value}` : ''}
+                                                                </span>
+                                                            </li>
+                                                        )
+                                                    })}
                                                 </ul>
                                             )}
                                         </div>
