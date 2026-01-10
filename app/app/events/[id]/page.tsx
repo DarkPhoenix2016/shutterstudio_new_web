@@ -738,13 +738,79 @@ export default function EventDetailPage() {
 
                             <Card className="shadow-sm border-slate-200">
                                 <CardHeader className="bg-slate-50/50 border-b border-slate-100 py-3"><CardTitle className="text-sm font-bold text-slate-700">Financial Summary</CardTitle></CardHeader>
-                                <CardContent className="p-4 space-y-3 text-sm">
-                                    <div className="flex justify-between"><span className="text-slate-500">Total Budget</span><span className="font-medium text-slate-900">{currency} {financials.total.toLocaleString()}</span></div>
-                                    {financials.discountAmount > 0 && <div className="flex justify-between text-red-500"><span>Discount</span><span>- {currency} {financials.discountAmount.toLocaleString()}</span></div>}
-                                    <div className="flex justify-between font-bold border-t border-slate-100 pt-2"><span>Final</span><span>{currency} {financials.finalBudget.toLocaleString()}</span></div>
-                                    <div className="flex justify-between text-green-600"><span>Paid</span><span>{currency} {financials.paid.toLocaleString()}</span></div>
-                                    <div className="flex justify-between text-red-600 font-bold bg-red-50 p-2 rounded"><span>Due Amount</span><span>{currency} {financials.due.toLocaleString()}</span></div>
-                                </CardContent>
+                                <CardContent className="p-4 space-y-4 text-sm">
+
+  {/* PACKAGES */}
+  <div className="flex justify-between">
+    <span className="text-slate-500">Packages (Days)</span>
+    <span className="font-medium text-slate-900">
+      {currency} {financials.baseCost.toLocaleString()}
+    </span>
+  </div>
+
+  {/* ADDITIONAL SERVICES */}
+  <div className="flex justify-between">
+    <span className="text-slate-500">Additional Services & Charges</span>
+    <span className="font-medium text-slate-900">
+      {currency} {financials.servicesCost.toLocaleString()}
+    </span>
+  </div>
+
+  <Separator />
+
+  {/* SUB TOTAL */}
+  <div className="flex justify-between font-semibold">
+    <span className="text-slate-600">Sub Total</span>
+    <span className="text-slate-900">
+      {currency} {financials.total.toLocaleString()}
+    </span>
+  </div>
+
+  {/* DISCOUNT */}
+  {financials.discountAmount > 0 && (
+    <div className="flex justify-between text-red-600">
+      <span>
+        Discount
+        {event.discountType === "percentage"
+          ? ` (${event.discount}%)`
+          : ""}
+      </span>
+      <span>
+        − {currency} {financials.discountAmount.toLocaleString()}
+      </span>
+    </div>
+  )}
+
+  <Separator />
+
+  {/* FINAL BUDGET */}
+  <div className="flex justify-between text-base font-bold text-[#1C4D8D]">
+    <span>Final Budget</span>
+    <span>
+      {currency} {financials.finalBudget.toLocaleString()}
+    </span>
+  </div>
+
+  <Separator />
+
+  {/* PAID */}
+  <div className="flex justify-between text-green-700">
+    <span>Paid</span>
+    <span>
+      {currency} {financials.paid.toLocaleString()}
+    </span>
+  </div>
+
+  {/* DUE */}
+  <div className="flex justify-between text-red-700 font-bold bg-red-50 p-2 rounded-md">
+    <span>Due Amount</span>
+    <span>
+      {currency} {financials.due.toLocaleString()}
+    </span>
+  </div>
+
+</CardContent>
+
                             </Card>
 
                             {/* [!code highlight] NEW: Additional Notes Card */}
@@ -960,7 +1026,6 @@ export default function EventDetailPage() {
                     </div>
                 </TabsContent>
 
-                {/* --- [!code highlight] NEW TAB: PACKAGE & NOTES --- */}
                 {/* --- 2. PACKAGE & NOTES TAB (EDITABLE) --- */}
                 <TabsContent value="package_edit">
                     <Card>
@@ -1215,7 +1280,7 @@ export default function EventDetailPage() {
                     </Card>
                 </TabsContent>
 
-                {/* --- 2. PAYMENTS TAB (REFINED) --- */}
+                {/* --- 3. PAYMENTS TAB (REFINED) --- */}
                 <TabsContent value="payments">
                     {/* FINANCIAL SUMMARY BAR */}
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
@@ -1240,7 +1305,7 @@ export default function EventDetailPage() {
                     </Card>
                 </TabsContent>
 
-                {/* --- 3. EXPENSES TAB (REFINED) --- */}
+                {/* --- 4. EXPENSES TAB (REFINED) --- */}
                 <TabsContent value="expenses">
                     {/* EXPENSE SUMMARY BAR */}
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
@@ -1265,7 +1330,7 @@ export default function EventDetailPage() {
                     </Card>
                 </TabsContent>
 
-                {/* --- 4. RESOURCES TAB (ENHANCED) --- */}
+                {/* --- 5. RESOURCES TAB (ENHANCED) --- */}
                 <TabsContent value="resources">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         {/* CREW SECTION */}
@@ -1336,7 +1401,7 @@ export default function EventDetailPage() {
                     </div>
                 </TabsContent>
 
-                {/* --- 5. CONTACTS / LOCATIONS / ADDITIONALS TABS --- */}
+                {/* --- 6. CONTACTS / LOCATIONS / ADDITIONALS TABS --- */}
                 <TabsContent value="contacts">
                     <Card>
                         <CardHeader className="flex flex-row items-center justify-between">
