@@ -2,35 +2,60 @@
 
 import { useState, useEffect } from "react"
 import { useAuth } from "@/context/AuthContext"
+import { useRouter } from "next/navigation"
 import { fetchCrewMembers, Member } from "@/services/crew-service"
+import { fetchEvents, EventData } from "@/services/event-service" // Import fetchEvents
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Input } from "@/components/ui/input"
-import { Phone, MessageCircle, Mail, Loader2, Users, UserCheck, UserX, Search } from "lucide-react"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog" // Dialog components
+import { Calendar } from "@/components/ui/calendar" // Shadcn Calendar
+import { Badge } from "@/components/ui/badge"
+import { 
+    Phone, MessageCircle, Mail, Loader2, Users, UserCheck, UserX, Search, 
+    CalendarDays, MapPin, Clock, ChevronRight 
+} from "lucide-react"
+import { format, isSameDay } from "date-fns"
 
 export default function StudioOverviewPage() {
   const { userData } = useAuth()
+  const router = useRouter()
   const [loading, setLoading] = useState(true)
+  
+  // Data States
   const [members, setMembers] = useState<Member[]>([])
+  const [events, setEvents] = useState<EventData[]>([]) // Store events
   const [stats, setStats] = useState({ total: 0, active: 0, disabled: 0 })
+  
+  // UI States
   const [searchQuery, setSearchQuery] = useState("")
+  const [date, setDate] = useState<Date | undefined>(new Date()) // Selected calendar date
+  const [isScheduleOpen, setIsScheduleOpen] = useState(false)
 
   useEffect(() => {
     const fetchData = async () => {
         if (!userData?.studioID) return;
 
         try {
-            const fetchedUsers = await fetchCrewMembers(userData.studioID);
+            // Fetch Members and Events in parallel
+            const [fetchedUsers, fetchedEvents] = await Promise.all([
+                fetchCrewMembers(userData.studioID),
+                fetchEvents(userData.studioID)
+            ]);
             
+            // Set Members Data
             setMembers(fetchedUsers);
-
             const activeCount = fetchedUsers.filter(u => !(u.disabled || u.accountDisabled || u.status === "Disabled")).length;
             setStats({
                 total: fetchedUsers.length,
                 active: activeCount,
                 disabled: fetchedUsers.length - activeCount
             });
+
+            // Set Events Data
+            setEvents(fetchedEvents);
+
         } catch (error) {
             console.error("Error fetching overview data:", error);
         } finally {
@@ -49,13 +74,115 @@ export default function StudioOverviewPage() {
 
   const formatRole = (role?: string) => role ? role.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase()) : "Staff";
 
+  // --- CALENDAR LOGIC ---
+  
+  // 1. Get all dates that have events for the calendar indicators
+  const eventDates = events.flatMap(event => 
+    event.days?.map(day => new Date(day.date)) || []
+  );
+
+  // 2. Filter events for the specifically selected date
+  const selectedDateEvents = events.filter(event => 
+    event.days?.some(day => date && isSameDay(new Date(day.date), date))
+  );
+
   if (loading) {
     return <div className="flex h-96 items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-gray-400" /></div>
   }
 
   return (
     <div className="space-y-6 p-6">
-      <h1 className="text-3xl font-bold tracking-tight">Overview</h1>
+      
+      {/* HEADER WITH SCHEDULE ACTION */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <h1 className="text-3xl font-bold tracking-tight">Overview</h1>
+        
+        <Dialog open={isScheduleOpen} onOpenChange={setIsScheduleOpen}>
+            <DialogTrigger asChild>
+                <Button className="bg-[#1C4D8D] hover:bg-[#153a6a]">
+                    <CalendarDays className="mr-2 h-4 w-4" /> View Schedule
+                </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+                <DialogHeader>
+                    <DialogTitle>Event Schedule</DialogTitle>
+                </DialogHeader>
+                
+                <div className="flex flex-col md:flex-row gap-6 h-full overflow-auto p-2">
+                    {/* LEFT: CALENDAR */}
+                    <div className="flex-shrink-0 mx-auto md:mx-0">
+                        <Calendar
+                            mode="single"
+                            selected={date}
+                            onSelect={setDate}
+                            className="rounded-md border"
+                            modifiers={{
+                                booked: eventDates // Highlight days with events
+                            }}
+                            modifiersStyles={{
+                                booked: { fontWeight: 'bold', textDecoration: 'underline', color: '#1C4D8D' }
+                            }}
+                        />
+                        <div className="mt-4 p-4 bg-slate-50 rounded-lg border text-sm text-slate-500">
+                            <p className="flex items-center gap-2">
+                                <span className="w-2 h-2 rounded-full bg-[#1C4D8D]"></span> 
+                                Indicates days with scheduled events
+                            </p>
+                        </div>
+                    </div>
+
+                    {/* RIGHT: EVENT LIST */}
+                    <div className="flex-1 flex flex-col gap-4 min-w-0">
+                        <h3 className="font-semibold text-lg border-b pb-2">
+                            Events for {date ? format(date, "MMMM do, yyyy") : "Select a date"}
+                        </h3>
+                        
+                        <div className="flex-1 overflow-y-auto space-y-3 pr-2 max-h-[400px]">
+                            {selectedDateEvents.length > 0 ? (
+                                selectedDateEvents.map(evt => {
+                                    // Find specific time/details for this day
+                                    const dayConfig = evt.days.find(d => date && isSameDay(new Date(d.date), date));
+                                    
+                                    return (
+                                        <div 
+                                            key={evt.id} 
+                                            className="group flex flex-col p-3 rounded-lg border bg-white hover:border-blue-300 hover:shadow-md transition-all cursor-pointer"
+                                            onClick={() => router.push(`/app/events/${evt.id}`)}
+                                        >
+                                            <div className="flex justify-between items-start mb-2">
+                                                <div>
+                                                    <h4 className="font-bold text-slate-800 group-hover:text-blue-700">{evt.eventName}</h4>
+                                                    <Badge variant="secondary" className="text-[10px] mt-1">{evt.eventType}</Badge>
+                                                </div>
+                                                <ChevronRight className="h-4 w-4 text-slate-300 group-hover:text-blue-500" />
+                                            </div>
+                                            
+                                            <div className="grid grid-cols-2 gap-2 text-xs text-slate-500 mt-1">
+                                                <div className="flex items-center gap-1">
+                                                    <UserCheck className="h-3 w-3" />
+                                                    <span>{evt.customerName}</span>
+                                                </div>
+                                                {/* If location exists for this specific day (complex mapping, simpler to show primary loc) */}
+                                                <div className="flex items-center gap-1">
+                                                    <MapPin className="h-3 w-3" />
+                                                    <span className="truncate">{evt.locations?.[0]?.name || "Location TBD"}</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )
+                                })
+                            ) : (
+                                <div className="flex flex-col items-center justify-center h-40 text-slate-400">
+                                    <CalendarDays className="h-10 w-10 mb-2 opacity-20" />
+                                    <p>No events scheduled for this day.</p>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            </DialogContent>
+        </Dialog>
+      </div>
 
       {/* STATS CARDS */}
       <div className="grid gap-4 md:grid-cols-3">
