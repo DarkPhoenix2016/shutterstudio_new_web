@@ -195,6 +195,10 @@ export default function EventDetailPage() {
 
     const jumpToGallery = () => setActiveTab("gallery");
 
+    const [existingTags, setExistingTags] = useState<string[]>([])
+    const [tagInput, setTagInput] = useState("")
+    const [showTagSuggestions, setShowTagSuggestions] = useState(false)
+
     // Load Data
     useEffect(() => {
         const load = async () => {
@@ -206,13 +210,14 @@ export default function EventDetailPage() {
                     setCurrency(studioSnap.data().base_currency || "LKR");
                 }
 
-                const [evtData, methods, crew, equip, params, allPackages] = await Promise.all([
+                const [evtData, methods, crew, equip, params, allPackages, allEventsList] = await Promise.all([
                     fetchEventById(userData.studioID, id as string),
                     fetchStudioSettingsList(userData.studioID, 'payment_methods'),
                     fetchCrewMembers(userData.studioID),
                     fetchInventory(userData.studioID),
                     fetchPackageConfig(userData.studioID),
-                    fetchPackagesList(userData.studioID)
+                    fetchPackagesList(userData.studioID),
+                    fetchEvents(userData.studioID) // Fetch all events
                 ])
 
                 setEvent(evtData)
@@ -247,6 +252,13 @@ export default function EventDetailPage() {
         }
         return imgs;
     }, [event]);
+
+    const tagsSet = new Set<string>();
+        allEventsList.forEach((e: EventData) => {
+            // @ts-ignore (in case tags property isn't on EventData type definition yet)
+            if (Array.isArray(e.tags)) e.tags.forEach(t => tagsSet.add(t));
+        });
+        setExistingTags(Array.from(tagsSet).sort());
 
     const handleGalleryUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         if (!event || !userData?.studioID || !e.target.files?.[0]) return;
