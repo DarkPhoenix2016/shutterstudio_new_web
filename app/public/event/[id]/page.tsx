@@ -367,15 +367,16 @@ export default function CustomerEventApprovalPage() {
 
         {/* Day-based packages */}
         {event.days.map((day, i) => (
-        <div key={i} className="flex justify-between text-sm">
-            <span>
-            Day {i + 1} — {day.type === "package" ? "Package" : "Custom Plan"}
-            </span>
-            <span className="font-medium">
-            LKR {day.cost.toLocaleString()}
-            </span>
-        </div>
-        ))}
+  <div key={i} className="flex justify-between text-sm">
+    <span>
+      Day {i + 1} — {day.type === "package" ? "Package" : "Custom Plan"}
+    </span>
+    <span className="font-medium">
+      LKR {day.cost.toLocaleString()}
+    </span>
+  </div>
+))}
+
 
         {/* Additional Services */}
         {event.additionalServices?.map((svc, i) => (
