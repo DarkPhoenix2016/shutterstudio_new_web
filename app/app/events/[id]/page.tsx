@@ -672,7 +672,7 @@ export default function EventDetailPage() {
 
                     {/* APPROVAL STATE SECTION */}
                     <Card className="shadow-sm border-slate-200">
-                        <CardContent className="p-6">
+                        <CardContent className="">
                             <div className="flex justify-between items-center mb-4">
                                 <h3 className="font-semibold text-slate-700">State of Customer Approval</h3>
                                 {isLocked ? (
@@ -695,9 +695,9 @@ export default function EventDetailPage() {
                     </Card>
 
                     {/* ACTION BARS */}
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                         <Card className="lg:col-span-1 shadow-sm border-slate-200">
-                            <CardHeader className="pb-3"><CardTitle className="text-sm font-bold uppercase tracking-wider text-slate-500">Event Management</CardTitle></CardHeader>
+                            <CardHeader className=""><CardTitle className="text-sm font-bold uppercase tracking-wider text-slate-500">Event Management</CardTitle></CardHeader>
                             <CardContent className="space-y-4">
                                 <div className="flex flex-wrap gap-2 pb-4 border-b border-slate-100">
                                     {statusOptions.map((status, idx) => (
@@ -712,7 +712,7 @@ export default function EventDetailPage() {
                             </CardContent>
                         </Card>
                         <Card className="shadow-sm border-slate-200">
-                            <CardHeader className="pb-3"><CardTitle className="text-sm font-bold uppercase tracking-wider text-slate-500">Communication</CardTitle></CardHeader>
+                            <CardHeader className=""><CardTitle className="text-sm font-bold uppercase tracking-wider text-slate-500">Communication</CardTitle></CardHeader>
                             <CardContent className="grid grid-cols-1 gap-3">
                                 <a href={`tel:${event.customerMobile}`} className="flex items-center justify-center gap-2 w-full py-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-md text-sm font-medium text-slate-700 transition-colors"><Phone className="w-4 h-4 text-blue-600" /> Call Customer</a>
                                 <a href={`sms:${event.customerMobile}`} className="flex items-center justify-center gap-2 w-full py-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-md text-sm font-medium text-slate-700 transition-colors"><MessageCircle className="w-4 h-4 text-green-600" /> Send SMS</a>
@@ -721,9 +721,9 @@ export default function EventDetailPage() {
                         </Card>
                     </div>
                     {/* MANAGE SECTIONS */}
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <div className="grid grid-cols-1 lg:grid-cols-1 gap-6">
                         <Card className="shadow-sm border-slate-200">
-                            <CardHeader className="bg-slate-50/50 border-b border-slate-100 py-3 flex flex-row justify-between items-center"><CardTitle className="text-sm font-bold text-slate-700">Locations</CardTitle><Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setActiveTab('locations')}>Manage</Button></CardHeader>
+                            <CardHeader className="bg-slate-50/50 border-b border-slate-100  flex flex-row justify-between items-center"><CardTitle className="text-sm font-bold text-slate-700">Locations</CardTitle><Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setActiveTab('locations')}>Manage</Button></CardHeader>
                             <div className="overflow-x-auto p-0">
                                 <table className="w-full text-sm text-left">
                                     <thead className="bg-slate-50 text-slate-500 font-medium border-b"><tr><th className="px-4 py-2">Name</th><th className="px-4 py-2">Date</th><th className="px-4 py-2 text-right">Map</th></tr></thead>
