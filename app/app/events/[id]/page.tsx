@@ -321,9 +321,12 @@ export default function EventDetailPage() {
             if (pkg) updatedDay.cost = Number(pkg.price || 0);
         }
         if (updates.customItems && updatedDay.type === 'custom') {
-            updatedDay.cost = updates.customItems.reduce((sum: number, item: CustomItem) => sum + (item.price || 0), 0);
-        }
-
+            updatedDay.cost = updates.customItems.reduce(
+                (sum, item) =>
+                sum + (Number(item.quantity || 1) * Number(item.price || 0)),
+                0
+            )
+            }
         newDays[index] = updatedDay;
         setEvent({ ...event, days: newDays });
     }
