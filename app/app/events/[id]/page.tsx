@@ -740,76 +740,76 @@ export default function EventDetailPage() {
                                 <CardHeader className="bg-slate-50/50 border-b border-slate-100 py-3"><CardTitle className="text-sm font-bold text-slate-700">Financial Summary</CardTitle></CardHeader>
                                 <CardContent className="p-4 space-y-4 text-sm">
 
-  {/* PACKAGES */}
-  <div className="flex justify-between">
-    <span className="text-slate-500">Packages (Days)</span>
-    <span className="font-medium text-slate-900">
-      {currency} {financials.baseCost.toLocaleString()}
-    </span>
-  </div>
+                                    {/* PACKAGES */}
+                                    <div className="flex justify-between">
+                                        <span className="text-slate-500">Packages (Days)</span>
+                                        <span className="font-medium text-slate-900">
+                                            {currency} {financials.baseCost.toLocaleString()}
+                                        </span>
+                                    </div>
 
-  {/* ADDITIONAL SERVICES */}
-  <div className="flex justify-between">
-    <span className="text-slate-500">Additional Services & Charges</span>
-    <span className="font-medium text-slate-900">
-      {currency} {financials.servicesCost.toLocaleString()}
-    </span>
-  </div>
+                                    {/* ADDITIONAL SERVICES */}
+                                    <div className="flex justify-between">
+                                        <span className="text-slate-500">Additional Services & Charges</span>
+                                        <span className="font-medium text-slate-900">
+                                            {currency} {financials.servicesCost.toLocaleString()}
+                                        </span>
+                                    </div>
 
-  <Separator />
+                                    <Separator />
 
-  {/* SUB TOTAL */}
-  <div className="flex justify-between font-semibold">
-    <span className="text-slate-600">Sub Total</span>
-    <span className="text-slate-900">
-      {currency} {financials.total.toLocaleString()}
-    </span>
-  </div>
+                                    {/* SUB TOTAL */}
+                                    <div className="flex justify-between font-semibold">
+                                        <span className="text-slate-600">Sub Total</span>
+                                        <span className="text-slate-900">
+                                            {currency} {financials.total.toLocaleString()}
+                                        </span>
+                                    </div>
 
-  {/* DISCOUNT */}
-  {financials.discountAmount > 0 && (
-    <div className="flex justify-between text-red-600">
-      <span>
-        Discount
-        {event.discountType === "percentage"
-          ? ` (${event.discount}%)`
-          : ""}
-      </span>
-      <span>
-        − {currency} {financials.discountAmount.toLocaleString()}
-      </span>
-    </div>
-  )}
+                                    {/* DISCOUNT */}
+                                    {financials.discountAmount > 0 && (
+                                        <div className="flex justify-between text-red-600">
+                                            <span>
+                                                Discount
+                                                {event.discountType === "percentage"
+                                                    ? ` (${event.discount}%)`
+                                                    : ""}
+                                            </span>
+                                            <span>
+                                                − {currency} {financials.discountAmount.toLocaleString()}
+                                            </span>
+                                        </div>
+                                    )}
 
-  <Separator />
+                                    <Separator />
 
-  {/* FINAL BUDGET */}
-  <div className="flex justify-between text-base font-bold text-[#1C4D8D]">
-    <span>Final Budget</span>
-    <span>
-      {currency} {financials.finalBudget.toLocaleString()}
-    </span>
-  </div>
+                                    {/* FINAL BUDGET */}
+                                    <div className="flex justify-between text-base font-bold text-[#1C4D8D]">
+                                        <span>Final Budget</span>
+                                        <span>
+                                            {currency} {financials.finalBudget.toLocaleString()}
+                                        </span>
+                                    </div>
 
-  <Separator />
+                                    <Separator />
 
-  {/* PAID */}
-  <div className="flex justify-between text-green-700">
-    <span>Paid</span>
-    <span>
-      {currency} {financials.paid.toLocaleString()}
-    </span>
-  </div>
+                                    {/* PAID */}
+                                    <div className="flex justify-between text-green-700">
+                                        <span>Paid</span>
+                                        <span>
+                                            {currency} {financials.paid.toLocaleString()}
+                                        </span>
+                                    </div>
 
-  {/* DUE */}
-  <div className="flex justify-between text-red-700 font-bold bg-red-50 p-2 rounded-md">
-    <span>Due Amount</span>
-    <span>
-      {currency} {financials.due.toLocaleString()}
-    </span>
-  </div>
+                                    {/* DUE */}
+                                    <div className="flex justify-between text-red-700 font-bold bg-red-50 p-2 rounded-md">
+                                        <span>Due Amount</span>
+                                        <span>
+                                            {currency} {financials.due.toLocaleString()}
+                                        </span>
+                                    </div>
 
-</CardContent>
+                                </CardContent>
 
                             </Card>
 
@@ -948,82 +948,45 @@ export default function EventDetailPage() {
                                     )}
 
                                     {/* ADDITIONAL SERVICES (FROM ADDITIONALS TAB) */}
-                            {event.additionalServices && event.additionalServices.length > 0 && (
-                                <div className="border-t pt-6 space-y-4">
-                                    <h4 className="text-sm font-bold text-slate-700 flex items-center gap-2">
-                                        <Plus className="w-4 h-4 text-blue-600" />
-                                        Additional Services & Charges
-                                    </h4>
+                                    {event.additionalServices && event.additionalServices.length > 0 && (
+                                        <div className="border-t pt-6 space-y-4">
+                                            <h4 className="text-sm font-bold text-slate-700 flex items-center gap-2">
+                                                <Plus className="w-4 h-4 text-blue-600" />
+                                                Additional Services & Charges
+                                            </h4>
 
-                                    <div className="bg-slate-50 border rounded-lg p-4 space-y-2">
-                                        {event.additionalServices.map((svc) => (
-                                            <div
-                                                key={svc.id}
-                                                className="flex justify-between text-sm text-slate-700"
-                                            >
-                                                <span>
-                                                    {svc.name} × {svc.quantity}
-                                                </span>
-                                                <span className="font-medium">
-                                                    {currency} {svc.total.toLocaleString()}
-                                                </span>
+                                            <div className="bg-slate-50 border rounded-lg p-4 space-y-2">
+                                                {event.additionalServices.map((svc) => (
+                                                    <div
+                                                        key={svc.id}
+                                                        className="flex justify-between text-sm text-slate-700"
+                                                    >
+                                                        <span>
+                                                            {svc.name} × {svc.quantity}
+                                                        </span>
+                                                        <span className="font-medium">
+                                                            {currency} {svc.total.toLocaleString()}
+                                                        </span>
+                                                    </div>
+                                                ))}
+
+                                                <Separator />
+
+                                                <div className="flex justify-between text-sm font-bold text-slate-900">
+                                                    <span>Total Additional Services & Charges</span>
+                                                    <span>
+                                                        {currency} {financials.servicesCost.toLocaleString()}
+                                                    </span>
+                                                </div>
                                             </div>
-                                        ))}
-
-                                        <Separator />
-
-                                        <div className="flex justify-between text-sm font-bold text-slate-900">
-                                            <span>Total Additional Services & Charges</span>
-                                            <span>
-                                                {currency} {financials.servicesCost.toLocaleString()}
-                                            </span>
                                         </div>
-                                    </div>
-                                </div>
-                            )}
+                                    )}
                                 </CardContent>
                             </Card>
                         </div>
                     </div>
 
-                    {/* MANAGE SECTIONS */}
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                        <Card className="shadow-sm border-slate-200">
-                            <CardHeader className="bg-slate-50/50 border-b border-slate-100 py-3 flex flex-row justify-between items-center"><CardTitle className="text-sm font-bold text-slate-700">Locations</CardTitle><Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setActiveTab('locations')}>Manage</Button></CardHeader>
-                            <div className="overflow-x-auto p-0">
-                                <table className="w-full text-sm text-left">
-                                    <thead className="bg-slate-50 text-slate-500 font-medium border-b"><tr><th className="px-4 py-2">Name</th><th className="px-4 py-2">Date</th><th className="px-4 py-2 text-right">Map</th></tr></thead>
-                                    <tbody>
-                                        {event.locations?.map((l, i) => (
-                                            <tr key={i} className="border-b last:border-0"><td className="px-4 py-2 font-medium">{l.name}</td><td className="px-4 py-2 text-slate-600">{format(safeDate(l.date), 'MM/dd/yyyy')}</td>
-                                                <td className="px-4 py-2 text-right">
-                                                    {l.mapUrl && <a href={l.mapUrl} target="_blank" className="inline-flex items-center gap-1 text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded hover:bg-blue-100"><ExternalLink size={12} /> Open Map</a>}
-                                                </td></tr>
-                                        ))}
-                                        {(!event.locations?.length) && <tr><td colSpan={3} className="px-4 py-4 text-center text-slate-400 italic">No locations set.</td></tr>}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </Card>
-
-                        <Card className="shadow-sm border-slate-200">
-                            <CardHeader className="bg-slate-50/50 border-b border-slate-100 py-3 flex flex-row justify-between items-center"><CardTitle className="text-sm font-bold text-slate-700">Event Contacts</CardTitle><Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setActiveTab('contacts')}>Manage</Button></CardHeader>
-                            <div className="overflow-x-auto p-0">
-                                <table className="w-full text-sm text-left">
-                                    <thead className="bg-slate-50 text-slate-500 font-medium border-b"><tr><th className="px-4 py-2">Name</th><th className="px-4 py-2">Role</th><th className="px-4 py-2">Phone</th><th className="px-4 py-2 text-center">Actions</th></tr></thead>
-                                    <tbody>
-                                        {event.contacts?.map((c, i) => (
-                                            <tr key={i} className="border-b last:border-0 hover:bg-slate-50/50">
-                                                <td className="px-4 py-2 font-medium">{c.name}</td><td className="px-4 py-2"><Badge variant="outline" className="bg-white">{c.role}</Badge></td><td className="px-4 py-2 text-slate-600">{c.phone}</td>
-                                                <td className="px-4 py-2 flex justify-center gap-2"><a href={`tel:${c.phone}`} className="p-1.5 text-blue-600 bg-blue-50 rounded"><Phone size={14} /></a><a href={`https://wa.me/${c.phone}`} className="p-1.5 text-green-600 bg-green-50 rounded"><MessageCircle size={14} /></a></td>
-                                            </tr>
-                                        ))}
-                                        {(!event.contacts?.length) && <tr><td colSpan={4} className="px-4 py-4 text-center text-slate-400 italic">No contacts added.</td></tr>}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </Card>
-                    </div>
+                    
                 </TabsContent>
 
                 {/* --- 2. PACKAGE & NOTES TAB (EDITABLE) --- */}
