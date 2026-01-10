@@ -323,10 +323,10 @@ export default function EventDetailPage() {
         if (updates.customItems && updatedDay.type === 'custom') {
             updatedDay.cost = updates.customItems.reduce(
                 (sum, item) =>
-                sum + (Number(item.quantity || 1) * Number(item.price || 0)),
+                    sum + (Number(item.quantity || 1) * Number(item.price || 0)),
                 0
             )
-            }
+        }
         newDays[index] = updatedDay;
         setEvent({ ...event, days: newDays });
     }
@@ -390,9 +390,9 @@ export default function EventDetailPage() {
         // BLOCK RESET FOR PROGRESSED EVENTS
         if (["In Progress", "Completed", "Handed Over"].includes(event.status)) {
             return Swal.fire({
-            icon: "error",
-            title: "Cannot Reset",
-            text: "This event has already progressed beyond quotation."
+                icon: "error",
+                title: "Cannot Reset",
+                text: "This event has already progressed beyond quotation."
             })
         }
 
@@ -411,9 +411,9 @@ export default function EventDetailPage() {
             "approval.customer_confirmed": false,
             "approval.confirmedAt": deleteField()
         } as any)
-        }
+    }
 
-    
+
 
     const handleUploadImage = async (file: File, isCover: boolean) => {
         if (!event || !userData?.studioID) return;
@@ -768,121 +768,155 @@ export default function EventDetailPage() {
                         {/* RIGHT COLUMN - MAIN PACKAGE */}
                         <div className="lg:col-span-2 space-y-6">
                             <Card className="shadow-sm border-slate-200">
-  <CardHeader className="bg-slate-50/50 border-b border-slate-100 py-3">
-    <CardTitle className="text-sm font-bold text-slate-700">
-      Event Day Itinerary & Packages
-    </CardTitle>
-  </CardHeader>
+                                <CardHeader className="bg-slate-50/50 border-b border-slate-100 py-3">
+                                    <CardTitle className="text-sm font-bold text-slate-700">
+                                        Event Day Itinerary & Packages
+                                    </CardTitle>
+                                </CardHeader>
 
-  <CardContent className="p-4 space-y-6">
-    {event.days?.map((day, index) => {
-      const pkg =
-        day.type === "package" && day.packageId
-          ? packagesList.find(p => p.id === day.packageId)
-          : null
+                                <CardContent className="p-4 space-y-6">
+                                    {event.days?.map((day, index) => {
+                                        const pkg =
+                                            day.type === "package" && day.packageId
+                                                ? packagesList.find(p => p.id === day.packageId)
+                                                : null
 
-      return (
-        <div
-          key={index}
-          className="border rounded-lg p-4 bg-white space-y-3"
-        >
-          {/* DAY HEADER */}
-          <div className="flex justify-between items-center">
-            <div>
-              <h4 className="font-semibold text-slate-800">
-                Day {index + 1}
-              </h4>
-              <p className="text-xs text-slate-500">
-                {day.date
-                  ? format(safeDate(day.date), "PPP")
-                  : "Date not set"}
-              </p>
-            </div>
+                                        return (
+                                            <div
+                                                key={index}
+                                                className="border rounded-lg p-4 bg-white space-y-3"
+                                            >
+                                                {/* DAY HEADER */}
+                                                <div className="flex justify-between items-center">
+                                                    <div>
+                                                        <h4 className="font-semibold text-slate-800">
+                                                            Day {index + 1}
+                                                        </h4>
+                                                        <p className="text-xs text-slate-500">
+                                                            {day.date
+                                                                ? format(safeDate(day.date), "PPP")
+                                                                : "Date not set"}
+                                                        </p>
+                                                    </div>
 
-            <Badge
-              variant="outline"
-              className={
-                day.type === "package"
-                  ? "border-blue-300 text-blue-700"
-                  : "border-amber-300 text-amber-700"
-              }
-            >
-              {day.type === "package" ? "Package" : "Custom Plan"}
-            </Badge>
-          </div>
+                                                    <Badge
+                                                        variant="outline"
+                                                        className={
+                                                            day.type === "package"
+                                                                ? "border-blue-300 text-blue-700"
+                                                                : "border-amber-300 text-amber-700"
+                                                        }
+                                                    >
+                                                        {day.type === "package" ? "Package" : "Custom Plan"}
+                                                    </Badge>
+                                                </div>
 
-          {/* PACKAGE DETAILS */}
-          {day.type === "package" && pkg && (
-            <div className="bg-blue-50/40 border border-blue-100 rounded-md p-3 space-y-2">
-              <div className="flex justify-between text-sm font-medium text-slate-700">
-                <span>{pkg.name}</span>
-                <span>
-                  {currency} {Number(pkg.price).toLocaleString()}
-                </span>
-              </div>
+                                                {/* PACKAGE DETAILS */}
+                                                {day.type === "package" && pkg && (
+                                                    <div className="bg-blue-50/40 border border-blue-100 rounded-md p-3 space-y-2">
+                                                        <div className="flex justify-between text-sm font-medium text-slate-700">
+                                                            <span>{pkg.name}</span>
+                                                            <span>
+                                                                {currency} {Number(pkg.price).toLocaleString()}
+                                                            </span>
+                                                        </div>
 
-              {Array.isArray(pkg.featuresList) && pkg.featuresList.length > 0 && (
-                <ul className="mt-2 space-y-1 text-xs text-slate-600">
-                    {pkg.featuresList.map((f, i) => (
-                    <li key={i} className="flex items-center gap-2">
-                        <Check className="w-3 h-3 text-green-500" />
-                        {f}
-                    </li>
-                    ))}
-                </ul>
-                )}
+                                                        {Array.isArray(pkg.featuresList) && pkg.featuresList.length > 0 && (
+                                                            <ul className="mt-2 space-y-1 text-xs text-slate-600">
+                                                                {pkg.featuresList.map((f, i) => (
+                                                                    <li key={i} className="flex items-center gap-2">
+                                                                        <Check className="w-3 h-3 text-green-500" />
+                                                                        {f}
+                                                                    </li>
+                                                                ))}
+                                                            </ul>
+                                                        )}
 
-            </div>
-          )}
+                                                    </div>
+                                                )}
 
-          {/* CUSTOM ITEMS */}
-          {day.type === "custom" && (
-            <div className="bg-amber-50/40 border border-amber-100 rounded-md p-3 space-y-2">
-              {day.customItems?.length ? (
-                <div className="space-y-2">
-                  {day.customItems.map((item, i) => (
-                    <div
-                      key={i}
-                      className="flex justify-between text-sm text-slate-700"
-                    >
-                      <span>
-                        {item.name} × {item.quantity}
-                      </span>
-                      <span>
-                        {currency}{" "}
-                        {(item.price * item.quantity).toLocaleString()}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-xs text-slate-400 italic">
-                  No custom items added for this day.
-                </p>
-              )}
-            </div>
-          )}
+                                                {/* CUSTOM ITEMS */}
+                                                {day.type === "custom" && (
+                                                    <div className="bg-amber-50/40 border border-amber-100 rounded-md p-3 space-y-2">
+                                                        {day.customItems?.length ? (
+                                                            <div className="space-y-2">
+                                                                {day.customItems.map((item, i) => (
+                                                                    <div
+                                                                        key={i}
+                                                                        className="flex justify-between text-sm text-slate-700"
+                                                                    >
+                                                                        <span>
+                                                                            {item.name} × {item.quantity}
+                                                                        </span>
+                                                                        <span>
+                                                                            {currency}{" "}
+                                                                            {(item.price * item.quantity).toLocaleString()}
+                                                                        </span>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        ) : (
+                                                            <p className="text-xs text-slate-400 italic">
+                                                                No custom items added for this day.
+                                                            </p>
+                                                        )}
+                                                    </div>
+                                                )}
 
-          {/* DAY TOTAL */}
-          <div className="flex justify-between pt-2 border-t text-sm font-semibold">
-            <span>Day {index + 1} Total</span>
-            <span>
-              {currency} {(day.cost || 0).toLocaleString()}
-            </span>
-          </div>
-        </div>
-      )
-    })}
+                                                {/* DAY TOTAL */}
+                                                <div className="flex justify-between pt-2 border-t text-sm font-semibold">
+                                                    <span>Day {index + 1} Total</span>
+                                                    <span>
+                                                        {currency} {(day.cost || 0).toLocaleString()}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        )
+                                    })}
 
-    {/* EMPTY STATE */}
-    {(!event.days || event.days.length === 0) && (
-      <p className="text-sm text-slate-400 italic text-center">
-        No day configuration available.
-      </p>
-    )}
-  </CardContent>
-</Card>
+                                    {/* EMPTY STATE */}
+                                    {(!event.days || event.days.length === 0) && (
+                                        <p className="text-sm text-slate-400 italic text-center">
+                                            No day configuration available.
+                                        </p>
+                                    )}
 
+                                    {/* ADDITIONAL SERVICES (FROM ADDITIONALS TAB) */}
+                            {event.additionalServices && event.additionalServices.length > 0 && (
+                                <div className="border-t pt-6 space-y-4">
+                                    <h4 className="text-sm font-bold text-slate-700 flex items-center gap-2">
+                                        <Plus className="w-4 h-4 text-blue-600" />
+                                        Additional Services & Charges
+                                    </h4>
+
+                                    <div className="bg-slate-50 border rounded-lg p-4 space-y-2">
+                                        {event.additionalServices.map((svc) => (
+                                            <div
+                                                key={svc.id}
+                                                className="flex justify-between text-sm text-slate-700"
+                                            >
+                                                <span>
+                                                    {svc.name} × {svc.quantity}
+                                                </span>
+                                                <span className="font-medium">
+                                                    {currency} {svc.total.toLocaleString()}
+                                                </span>
+                                            </div>
+                                        ))}
+
+                                        <Separator />
+
+                                        <div className="flex justify-between text-sm font-bold text-slate-900">
+                                            <span>Total Additional Services & Charges</span>
+                                            <span>
+                                                {currency} {financials.servicesCost.toLocaleString()}
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                                </CardContent>
+                            </Card>
                         </div>
                     </div>
 
