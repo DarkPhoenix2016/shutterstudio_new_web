@@ -26,6 +26,7 @@ import { doc, getDoc } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 import { cn } from "@/lib/utils"
 import { deleteField } from "firebase/firestore"
+import { validateSubscriptionAction } from "@/services/subscription-service"
 
 
 
@@ -47,7 +48,7 @@ import {
     Plus, Trash2, Camera, Lock, FileText,
     Calendar as CalendarIcon, CheckCircle, RefreshCcw, ExternalLink,
     MessageCircle, LayoutGrid, Pencil, Check, DollarSign,
-    TrendingUp, Wallet, Search, Users, Briefcase, ChevronDown,ChevronLeft
+    TrendingUp, Wallet, Search, Users, Briefcase, ChevronDown,ChevronLeft,ChevronRight,
     ImageIcon, UploadCloud, X, Maximize2
 } from "lucide-react"
 import { format } from "date-fns"
