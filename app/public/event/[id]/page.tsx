@@ -10,7 +10,7 @@ import {
 import {
     Loader2, Calendar as CalendarIcon, MapPin, Phone,
     CheckCircle, Lock, ShieldCheck,
-    CreditCard, AlertCircle, Info, Mail, User, Check, ExternalLink
+    CreditCard, AlertCircle, Info, Mail, User, Check, ExternalLink, Briefcase
 } from "lucide-react"
 import { format } from "date-fns"
 import Swal from "sweetalert2"
@@ -127,12 +127,9 @@ export default function CustomerEventApprovalPage() {
 
         try {
             const eventsRef = collectionGroup(db, 'Events');
-            
-            // Try finding by internal ID first
             let q = query(eventsRef, where('id', '==', id));
             let querySnapshot = await getDocs(q);
 
-            // Fallback to display ID
             if (querySnapshot.empty) {
                 q = query(eventsRef, where('displayId', '==', id));
                 querySnapshot = await getDocs(q);
@@ -150,7 +147,6 @@ export default function CustomerEventApprovalPage() {
 
             if (!studioId) throw new Error("Invalid Data Structure");
 
-            // Verify Email
             if (eventData.customerEmail?.toLowerCase().trim() !== authEmail.toLowerCase().trim()) {
                 Swal.fire("Access Denied", "The email provided does not match our records.", "error");
                 setLoading(false);
@@ -241,18 +237,11 @@ export default function CustomerEventApprovalPage() {
     // --- CALCULATIONS ---
     const financials = useMemo(() => {
         if (!event) return { 
-            baseCost: 0, 
-            servicesCost: 0, 
-            totalBudget: 0, 
-            discountAmount: 0, 
-            finalBudget: 0, 
-            paid: 0, 
-            due: 0, 
-            currency: "LKR" 
+            baseCost: 0, servicesCost: 0, totalBudget: 0, 
+            discountAmount: 0, finalBudget: 0, paid: 0, due: 0, currency: "LKR" 
         }; 
         
         const paid = event.transactions?.filter(t => t.type === 'income').reduce((acc, t) => acc + (Number(t.amount) || 0), 0) || 0;
-        
         const baseCost = event.days?.reduce((acc, day) => acc + (day.cost || 0), 0) || 0;
         const servicesCost = event.additionalServices?.reduce((acc, s) => acc + (s.total || 0), 0) || 0;
         const totalBudget = baseCost + servicesCost;
@@ -267,14 +256,8 @@ export default function CustomerEventApprovalPage() {
         const finalBudget = Math.max(0, totalBudget - discountAmount);
 
         return { 
-            baseCost,
-            servicesCost,
-            totalBudget,
-            discountAmount,
-            finalBudget,
-            paid, 
-            due: finalBudget - paid,
-            currency: "LKR" 
+            baseCost, servicesCost, totalBudget, discountAmount, 
+            finalBudget, paid, due: finalBudget - paid, currency: "LKR" 
         };
     }, [event]);
 
@@ -318,7 +301,7 @@ export default function CustomerEventApprovalPage() {
     if (!event) return null;
     const isApproved = event.approval?.customer_confirmed;
 
-    // --- MAIN DASHBOARD (Single Column Layout) ---
+    // --- MAIN DASHBOARD (Single Column) ---
     return (
         <div className="min-h-screen bg-slate-50 font-sans text-slate-800 pb-20">
             
@@ -361,7 +344,7 @@ export default function CustomerEventApprovalPage() {
 
                 {/* 2. CUSTOMER DETAILS */}
                 <Card className="shadow-sm border-slate-200">
-                    <CardHeader className="bg-slate-50/50 border-b border-slate-100 py-4"><CardTitle className="text-sm font-bold text-slate-700">Customer Information</CardTitle></CardHeader>
+                    <CardHeader className="bg-slate-50/50 border-b border-slate-100 py-4"><CardTitle className="text-sm font-bold text-slate-700">Customer Details</CardTitle></CardHeader>
                     <CardContent className="p-6">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div className="space-y-1">
@@ -379,126 +362,193 @@ export default function CustomerEventApprovalPage() {
                     </CardContent>
                 </Card>
 
-                {/* 3. ITEM BREAKDOWN & FINANCIALS */}
+                {/* 3. EVENT ITINERARY & PACKAGE DETAILS */}
                 <Card className="shadow-sm border-slate-200">
-                    <CardHeader className="bg-slate-50/50 border-b border-slate-100 py-4"><CardTitle className="text-sm font-bold text-slate-700">Quotation Details</CardTitle></CardHeader>
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-sm text-left">
-                            <thead className="bg-slate-50 text-slate-500 font-medium border-b">
-                                <tr>
-                                    <th className="px-6 py-3">Item Description</th>
-                                    <th className="px-6 py-3 text-center w-24">Qty</th>
-                                    <th className="px-6 py-3 text-right w-36">Amount</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-100">
-                                {/* Packages */}
-                                {event.days?.map((day, idx) => {
-                                    const pkg = day.type === 'package' && day.packageId ? packagesList.find(p => p.id === day.packageId) : null;
-                                    if (day.type === 'package' && pkg) {
-                                        return (
-                                            <tr key={`pkg-${idx}`}>
-                                                <td className="px-6 py-4 font-medium text-slate-700">
-                                                    <div className="flex flex-col">
-                                                        <span>{pkg.name}</span>
-                                                        <span className="text-xs text-slate-400 font-normal mt-0.5">Day {idx + 1} Package</span>
+                    <CardHeader className="bg-slate-50/50 border-b border-slate-100 py-4"><CardTitle className="text-sm font-bold text-slate-700">Itinerary & Package Breakdown</CardTitle></CardHeader>
+                    <CardContent className="p-6 space-y-8">
+                        {/* Days Loop */}
+                        {event.days?.map((day, idx) => {
+                            const pkg = day.type === 'package' && day.packageId ? packagesList.find(p => p.id === day.packageId) : null;
+                            return (
+                                <div key={idx} className="border rounded-lg bg-white overflow-hidden shadow-sm">
+                                    <div className="bg-slate-100 px-4 py-3 flex justify-between items-center border-b">
+                                        <div className="flex items-center gap-2">
+                                            <CalendarIcon className="w-4 h-4 text-slate-500" />
+                                            <span className="font-semibold text-slate-800">Day {idx + 1}</span>
+                                            <span className="text-slate-500 text-sm">- {format(safeDate(day.date), 'MMMM do, yyyy')}</span>
+                                        </div>
+                                        <Badge variant="outline" className={day.type === 'package' ? "bg-blue-50 text-blue-700" : "bg-amber-50 text-amber-700"}>
+                                            {day.type === 'package' ? 'Package' : 'Custom Plan'}
+                                        </Badge>
+                                    </div>
+                                    
+                                    <div className="p-4">
+                                        {/* Package View */}
+                                        {day.type === 'package' && pkg && (
+                                            <div className="space-y-4">
+                                                <div className="flex justify-between items-start">
+                                                    <div>
+                                                        <h3 className="text-lg font-bold text-slate-800">{pkg.name}</h3>
+                                                        <p className="text-xs text-slate-500 mt-1">Standard Package Configuration</p>
                                                     </div>
-                                                </td>
-                                                <td className="px-6 py-4 text-center text-slate-500">1</td>
-                                                <td className="px-6 py-4 text-right text-slate-700">{financials.currency} {Number(pkg.price).toLocaleString()}</td>
-                                            </tr>
-                                        )
-                                    }
-                                    return null;
-                                })}
-
-                                {/* Additional Services */}
-                                {event.additionalServices?.map((svc, i) => (
-                                    <tr key={`svc-${i}`}>
-                                        <td className="px-6 py-4 font-medium text-slate-700">{svc.name}</td>
-                                        <td className="px-6 py-4 text-center text-slate-500">{svc.quantity}</td>
-                                        <td className="px-6 py-4 text-right text-slate-700">{financials.currency} {svc.total.toLocaleString()}</td>
-                                    </tr>
-                                ))}
-
-                                {/* Custom Items */}
-                                {event.days?.map((day) => 
-                                    day.customItems?.map((item, i) => (
-                                        <tr key={`custom-${i}`}>
-                                            <td className="px-6 py-4 font-medium text-slate-700">
-                                                <div className="flex flex-col">
-                                                    <span>{item.name}</span>
-                                                    <span className="text-xs text-slate-400 font-normal mt-0.5">Custom Item</span>
+                                                    <span className="font-bold text-[#1C4D8D] text-lg">{financials.currency} {Number(pkg.price).toLocaleString()}</span>
                                                 </div>
-                                            </td>
-                                            <td className="px-6 py-4 text-center text-slate-500">{item.quantity}</td>
-                                            <td className="px-6 py-4 text-right text-slate-700">{financials.currency} {(item.price * item.quantity).toLocaleString()}</td>
-                                        </tr>
-                                    ))
-                                )}
-                            </tbody>
-                        </table>
-                    </div>
-                    
-                    {/* Financial Summary Section within the same card */}
-                    <div className="bg-slate-50/50 p-6 border-t border-slate-100">
-                        <div className="max-w-xs ml-auto space-y-3">
+                                                
+                                                {pkg.featuresList && pkg.featuresList.length > 0 && (
+                                                    <div className="bg-slate-50 rounded-md p-3 border border-slate-100">
+                                                        <p className="text-xs font-semibold text-slate-500 uppercase mb-2">Includes:</p>
+                                                        <ul className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                                                            {pkg.featuresList.map((f, i) => (
+                                                                <li key={i} className="flex items-center gap-2 text-sm text-slate-700">
+                                                                    <Check className="w-3.5 h-3.5 text-green-500 flex-shrink-0" />
+                                                                    <span>{f}</span>
+                                                                </li>
+                                                            ))}
+                                                        </ul>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
+
+                                        {/* Custom View */}
+                                        {day.type === 'custom' && (
+                                            <div>
+                                                <table className="w-full text-sm text-left">
+                                                    <thead className="text-slate-500 border-b"><tr><th className="py-2">Item</th><th className="py-2 text-center">Qty</th><th className="py-2 text-right">Price</th></tr></thead>
+                                                    <tbody className="divide-y">
+                                                        {day.customItems?.map((item, i) => (
+                                                            <tr key={i}>
+                                                                <td className="py-2 font-medium text-slate-700">{item.name}</td>
+                                                                <td className="py-2 text-center text-slate-500">{item.quantity}</td>
+                                                                <td className="py-2 text-right text-slate-700">{financials.currency} {(item.price * item.quantity).toLocaleString()}</td>
+                                                            </tr>
+                                                        ))}
+                                                    </tbody>
+                                                </table>
+                                                <div className="mt-3 flex justify-between font-semibold border-t pt-2">
+                                                    <span>Day Total</span>
+                                                    <span>{financials.currency} {day.cost.toLocaleString()}</span>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            )
+                        })}
+
+                        {/* Additional Services */}
+                        {event.additionalServices && event.additionalServices.length > 0 && (
+                            <div className="mt-6">
+                                <h4 className="text-sm font-bold uppercase text-slate-500 tracking-wider mb-3">Additional Services</h4>
+                                <div className="border rounded-lg overflow-hidden">
+                                    <table className="w-full text-sm text-left">
+                                        <thead className="bg-slate-50 text-slate-500 font-medium border-b"><tr><th className="px-4 py-3">Service Name</th><th className="px-4 py-3 text-center">Qty</th><th className="px-4 py-3 text-right">Total</th></tr></thead>
+                                        <tbody className="divide-y divide-slate-100">
+                                            {event.additionalServices.map((svc, i) => (
+                                                <tr key={i}>
+                                                    <td className="px-4 py-3 font-medium text-slate-700">{svc.name}</td>
+                                                    <td className="px-4 py-3 text-center text-slate-500">{svc.quantity}</td>
+                                                    <td className="px-4 py-3 text-right text-slate-700">{financials.currency} {svc.total.toLocaleString()}</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        )}
+                    </CardContent>
+                </Card>
+
+                {/* 4. FINANCIAL SUMMARY */}
+                <Card className="shadow-sm border-slate-200">
+                    <CardHeader className="bg-slate-50/50 border-b border-slate-100 py-4"><CardTitle className="text-sm font-bold text-slate-700">Financial Summary</CardTitle></CardHeader>
+                    <CardContent className="p-6">
+                        <div className="space-y-3 max-w-sm ml-auto">
                             <div className="flex justify-between text-sm">
                                 <span className="text-slate-500">Sub Total</span>
                                 <span className="font-medium text-slate-900">{financials.currency} {financials.totalBudget.toLocaleString()}</span>
                             </div>
                             {financials.discountAmount > 0 && (
                                 <div className="flex justify-between text-sm text-red-600">
-                                    <span>Discount</span>
+                                    <span>Discount {event.discountType === 'percentage' ? `(${event.discount}%)` : ''}</span>
                                     <span>- {financials.currency} {financials.discountAmount.toLocaleString()}</span>
                                 </div>
                             )}
-                            <Separator className="bg-slate-200" />
-                            <div className="flex justify-between text-base font-bold text-slate-900">
-                                <span>Total</span>
+                            <Separator />
+                            <div className="flex justify-between text-lg font-bold text-[#1C4D8D]">
+                                <span>Grand Total</span>
                                 <span>{financials.currency} {financials.finalBudget.toLocaleString()}</span>
                             </div>
-                            <div className="flex justify-between text-sm text-green-600 font-medium pt-1">
+                            <div className="flex justify-between text-sm text-green-600 font-medium">
                                 <span>Paid to Date</span>
                                 <span>{financials.currency} {financials.paid.toLocaleString()}</span>
                             </div>
-                            <div className="flex justify-between text-sm text-red-600 font-bold bg-red-50 p-2 rounded border border-red-100">
+                            <div className="flex justify-between text-sm text-red-600 font-bold bg-red-50 p-3 rounded border border-red-100">
                                 <span>Balance Due</span>
                                 <span>{financials.currency} {financials.due.toLocaleString()}</span>
                             </div>
                         </div>
-                    </div>
+                    </CardContent>
                 </Card>
 
-                {/* 4. LOCATIONS */}
-                {event.locations && event.locations.length > 0 && (
-                    <Card className="shadow-sm border-slate-200">
-                        <CardHeader className="bg-slate-50/50 border-b border-slate-100 py-4"><CardTitle className="text-sm font-bold text-slate-700">Event Locations</CardTitle></CardHeader>
-                        <CardContent className="p-0">
-                            {event.locations.map((l, i) => (
+                {/* 5. ADDITIONAL NOTES */}
+                <Card className="shadow-sm border-slate-200">
+                    <CardHeader className="bg-slate-50/50 border-b border-slate-100 py-4"><CardTitle className="text-sm font-bold text-slate-700">Additional Notes</CardTitle></CardHeader>
+                    <CardContent className="p-6">
+                        {event.notes ? <p className="text-sm text-slate-600 whitespace-pre-line leading-relaxed">{event.notes}</p> : <p className="text-sm text-slate-400 italic">No additional notes.</p>}
+                    </CardContent>
+                </Card>
+
+                {/* 6. EVENT LOCATIONS */}
+                <Card className="shadow-sm border-slate-200">
+                    <CardHeader className="bg-slate-50/50 border-b border-slate-100 py-4"><CardTitle className="text-sm font-bold text-slate-700">Event Locations</CardTitle></CardHeader>
+                    <CardContent className="p-0">
+                        {event.locations && event.locations.length > 0 ? (
+                            event.locations.map((l, i) => (
                                 <div key={i} className="flex items-center justify-between p-4 px-6 border-b last:border-0 hover:bg-slate-50/50">
-                                    <div>
-                                        <div className="font-medium text-slate-800 text-sm">{l.name}</div>
-                                        <div className="text-xs text-slate-500 mt-1">{format(safeDate(l.date), 'MMMM do, yyyy')} {l.time && `at ${l.time}`}</div>
+                                    <div className="flex items-start gap-3">
+                                        <MapPin className="w-5 h-5 text-slate-400 mt-0.5"/>
+                                        <div>
+                                            <div className="font-medium text-slate-800 text-sm">{l.name}</div>
+                                            <div className="text-xs text-slate-500 mt-1">{format(safeDate(l.date), 'MMMM do, yyyy')} {l.time && `at ${l.time}`}</div>
+                                            {l.note && <div className="text-xs text-slate-400 mt-1 italic">{l.note}</div>}
+                                        </div>
                                     </div>
-                                    {l.mapUrl && <a href={l.mapUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800"><ExternalLink className="h-4 w-4"/></a>}
+                                    {l.mapUrl && <a href={l.mapUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 flex items-center gap-1 text-xs"><ExternalLink className="h-3 w-3"/> Map</a>}
                                 </div>
-                            ))}
-                        </CardContent>
-                    </Card>
-                )}
+                            ))
+                        ) : (
+                            <p className="p-6 text-sm text-slate-400 italic">No locations added.</p>
+                        )}
+                    </CardContent>
+                </Card>
 
-                {/* 5. NOTES & PAYMENT INFO */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {/* Notes */}
-                    <Card className="shadow-sm border-slate-200">
-                        <CardHeader className="py-4 pb-2"><CardTitle className="text-sm font-bold text-slate-700">Additional Notes</CardTitle></CardHeader>
-                        <CardContent className="p-4 pt-2">
-                            {event.notes ? <p className="text-sm text-slate-600 whitespace-pre-line leading-relaxed">{event.notes}</p> : <p className="text-sm text-slate-400 italic">No notes available.</p>}
-                        </CardContent>
-                    </Card>
+                {/* 7. EVENT CONTACTS */}
+                <Card className="shadow-sm border-slate-200">
+                    <CardHeader className="bg-slate-50/50 border-b border-slate-100 py-4"><CardTitle className="text-sm font-bold text-slate-700">Event Contacts</CardTitle></CardHeader>
+                    <CardContent className="p-0">
+                        {event.contacts && event.contacts.length > 0 ? (
+                            <table className="w-full text-sm text-left">
+                                <thead className="bg-slate-50 text-slate-500 font-medium border-b"><tr><th className="px-6 py-3">Name</th><th className="px-6 py-3">Role</th><th className="px-6 py-3">Phone</th></tr></thead>
+                                <tbody className="divide-y divide-slate-100">
+                                    {event.contacts.map((c, i) => (
+                                        <tr key={i}>
+                                            <td className="px-6 py-3 font-medium text-slate-800">{c.name}</td>
+                                            <td className="px-6 py-3 text-slate-500"><Badge variant="outline">{c.role}</Badge></td>
+                                            <td className="px-6 py-3 text-slate-600 font-mono">{c.phone}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        ) : (
+                            <p className="p-6 text-sm text-slate-400 italic">No contacts listed.</p>
+                        )}
+                    </CardContent>
+                </Card>
 
-                    {/* Payment Info */}
+                {/* 8. BANK & TERMS */}
+                <div className="grid grid-cols-1 gap-6">
+                    {/* Bank */}
                     {studioInfo?.banking_details && (
                         <Card className="bg-blue-50/30 border-blue-100 shadow-sm">
                             <CardHeader className="py-4 pb-2"><CardTitle className="text-sm font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2"><CreditCard className="w-4 h-4"/> Payment Details</CardTitle></CardHeader>
@@ -512,23 +562,23 @@ export default function CustomerEventApprovalPage() {
                             </CardContent>
                         </Card>
                     )}
+
+                    {/* Terms */}
+                    {studioInfo?.privacy_policy_notice && (
+                        <Card className="border-slate-200 shadow-sm">
+                            <CardHeader className="py-4 pb-2"><CardTitle className="text-sm font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2"><ShieldCheck className="w-4 h-4"/> Terms & Conditions</CardTitle></CardHeader>
+                            <CardContent className="p-4 pt-2">
+                                <p className="text-xs text-slate-500 leading-relaxed text-justify whitespace-pre-line">
+                                    {studioInfo.privacy_policy_notice}
+                                </p>
+                            </CardContent>
+                        </Card>
+                    )}
                 </div>
 
-                {/* 6. PRIVACY & TERMS */}
-                {studioInfo?.privacy_policy_notice && (
-                    <Card className="border-slate-200 shadow-sm">
-                        <CardHeader className="py-4 pb-2"><CardTitle className="text-sm font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2"><ShieldCheck className="w-4 h-4"/> Terms & Conditions</CardTitle></CardHeader>
-                        <CardContent className="p-4 pt-2">
-                            <p className="text-xs text-slate-500 leading-relaxed text-justify whitespace-pre-line">
-                                {studioInfo.privacy_policy_notice}
-                            </p>
-                        </CardContent>
-                    </Card>
-                )}
+                <Separator className="my-4"/>
 
-                <Separator className="my-8"/>
-
-                {/* 7. APPROVAL FORM */}
+                {/* 9. APPROVAL FORM */}
                 {isApproved ? (
                     <Card className="bg-green-50 border-green-200 shadow-sm text-center">
                         <CardContent className="p-8 space-y-4">
