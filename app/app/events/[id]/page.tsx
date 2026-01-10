@@ -721,17 +721,6 @@ export default function EventDetailPage() {
                             </CardContent>
                         </Card>
 
-                        <Card className="shadow-sm border-slate-200">
-                            <CardHeader className="bg-slate-50/50 border-b border-slate-100 py-3"><CardTitle className="text-sm font-bold text-slate-700">Customer Details</CardTitle></CardHeader>
-                            <CardContent className="p-4 space-y-4">
-                                <div><Label className="text-xs text-slate-400 uppercase">Full Name</Label><Input value={event.customerName} onChange={(e) => setEvent({ ...event!, customerName: e.target.value })} className="mt-1 h-9 bg-slate-50" /></div>
-                                <div className="grid grid-cols-1 lg:col-span-3 gap-3">
-                                    <div><Label className="text-xs text-slate-400 uppercase">Mobile</Label><Input value={event.customerMobile} onChange={(e) => setEvent({ ...event!, customerMobile: e.target.value })} className="mt-1 h-9 bg-slate-50" /></div>
-                                    <div><Label className="text-xs text-slate-400 uppercase">Email</Label><Input value={event.customerEmail} onChange={(e) => setEvent({ ...event!, customerEmail: e.target.value })} className="mt-1 h-9 bg-slate-50" /></div>
-                                </div>
-                            </CardContent>
-                        </Card>
-
                     </div>
                     {/* MANAGE SECTIONS */}
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -778,7 +767,16 @@ export default function EventDetailPage() {
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                         {/* LEFT COLUMN */}
                         <div className="space-y-6">
-                            
+                            <Card className="shadow-sm border-slate-200">
+                                <CardHeader className="bg-slate-50/50 border-b border-slate-100 py-3"><CardTitle className="text-sm font-bold text-slate-700">Customer Details</CardTitle></CardHeader>
+                                <CardContent className="p-4 space-y-4">
+                                    <div><Label className="text-xs text-slate-400 uppercase">Full Name</Label><Input value={event.customerName} onChange={(e) => setEvent({ ...event!, customerName: e.target.value })} className="mt-1 h-9 bg-slate-50" /></div>
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <div><Label className="text-xs text-slate-400 uppercase">Mobile</Label><Input value={event.customerMobile} onChange={(e) => setEvent({ ...event!, customerMobile: e.target.value })} className="mt-1 h-9 bg-slate-50" /></div>
+                                        <div><Label className="text-xs text-slate-400 uppercase">Email</Label><Input value={event.customerEmail} onChange={(e) => setEvent({ ...event!, customerEmail: e.target.value })} className="mt-1 h-9 bg-slate-50" /></div>
+                                    </div>
+                                </CardContent>
+                            </Card>
 
                             <Card className="shadow-sm border-slate-200">
                                 <CardHeader className="bg-slate-50/50 border-b border-slate-100 py-3"><CardTitle className="text-sm font-bold text-slate-700">Financial Summary</CardTitle></CardHeader>
@@ -857,22 +855,7 @@ export default function EventDetailPage() {
 
                             </Card>
 
-                            {/* [!code highlight] NEW: Additional Notes Card */}
-                            <Card className="shadow-sm border-slate-200">
-                                <CardHeader className="bg-slate-50/50 border-b border-slate-100 py-3 flex flex-row justify-between items-center">
-                                    <CardTitle className="text-sm font-bold text-slate-700">Additional Notes</CardTitle>
-                                    <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => setActiveTab('package_edit')}>
-                                        <Pencil className="h-3 w-3 text-slate-500" />
-                                    </Button>
-                                </CardHeader>
-                                <CardContent className="p-4">
-                                    {event.notes ? (
-                                        <p className="text-sm text-slate-600 whitespace-pre-line">{event.notes}</p>
-                                    ) : (
-                                        <p className="text-sm text-slate-400 italic">No additional notes added.</p>
-                                    )}
-                                </CardContent>
-                            </Card>
+                            
                         </div>
 
                         {/* RIGHT COLUMN - MAIN PACKAGE */}
@@ -1024,6 +1007,23 @@ export default function EventDetailPage() {
                                                 </div>
                                             </div>
                                         </div>
+                                    )}
+                                </CardContent>
+                            </Card>
+
+                            {/* [!code highlight] NEW: Additional Notes Card */}
+                            <Card className="shadow-sm border-slate-200">
+                                <CardHeader className="bg-slate-50/50 border-b border-slate-100 py-3 flex flex-row justify-between items-center">
+                                    <CardTitle className="text-sm font-bold text-slate-700">Additional Notes</CardTitle>
+                                    <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => setActiveTab('package_edit')}>
+                                        <Pencil className="h-3 w-3 text-slate-500" />
+                                    </Button>
+                                </CardHeader>
+                                <CardContent className="p-4">
+                                    {event.notes ? (
+                                        <p className="text-sm text-slate-600 whitespace-pre-line">{event.notes}</p>
+                                    ) : (
+                                        <p className="text-sm text-slate-400 italic">No additional notes added.</p>
                                     )}
                                 </CardContent>
                             </Card>
