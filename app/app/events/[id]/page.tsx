@@ -196,7 +196,7 @@ export default function EventDetailPage() {
 
     const jumpToGallery = () => setActiveTab("gallery");
 
-    const [existingTags, setExistingTags] = useState<string[]>([])
+    const [allEvents, setAllEvents] = useState<EventData[]>([]) 
     const [tagInput, setTagInput] = useState("")
     const [showTagSuggestions, setShowTagSuggestions] = useState(false)
 
@@ -226,6 +226,7 @@ export default function EventDetailPage() {
                 setCrewList(crew)
                 setEquipmentList(equip)
                 setServiceParams(params)
+                setAllEvents(allEventsList as EventData[])
 
                 // Store full lists for the Package & Notes tab
                 setPackagesList(allPackages as PackageData[]);
@@ -254,12 +255,50 @@ export default function EventDetailPage() {
         return imgs;
     }, [event]);
 
-    const tagsSet = new Set<string>();
-        allEventsList.forEach((e: EventData) => {
-            // @ts-ignore (in case tags property isn't on EventData type definition yet)
-            if (Array.isArray(e.tags)) e.tags.forEach(t => tagsSet.add(t));
+   const availableTags = useMemo(() => {
+        const tags = new Set<string>();
+        allEvents.forEach(e => {
+            // @ts-ignore
+            if(Array.isArray(e.tags)) e.tags.forEach(t => tags.add(t))
         });
-        setExistingTags(Array.from(tagsSet).sort());
+        return Array.from(tags).sort();
+    }, [allEvents]);
+
+    const filteredTagSuggestions = useMemo(() => {
+        if (!tagInput) return [];
+        return availableTags.filter(t => 
+            t.toLowerCase().includes(tagInput.toLowerCase()) && 
+            // @ts-ignore
+            !event?.tags?.includes(t)
+        );
+    }, [availableTags, tagInput, event]);
+
+    const handleAddTag = async (tag: string) => {
+        if (!event) return;
+        const trimmed = tag.trim();
+        if (!trimmed) return;
+        
+        // @ts-ignore
+        const currentTags = event.tags || [];
+        if (currentTags.includes(trimmed)) {
+            setTagInput("");
+            return;
+        }
+
+        const newTags = [...currentTags, trimmed];
+        setEvent({ ...event, tags: newTags } as any);
+        setTagInput("");
+        setShowTagSuggestions(false);
+        await handleUpdateEvent({ tags: newTags } as any);
+    };
+
+    const handleRemoveTag = async (tagToRemove: string) => {
+        if (!event) return;
+        // @ts-ignore
+        const newTags = (event.tags || []).filter(t => t !== tagToRemove);
+        setEvent({ ...event, tags: newTags } as any);
+        await handleUpdateEvent({ tags: newTags } as any);
+    };
 
     const handleGalleryUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         if (!event || !userData?.studioID || !e.target.files?.[0]) return;
@@ -865,6 +904,16 @@ export default function EventDetailPage() {
                                 </Button>
                             </CardHeader>
                             <CardContent className="p-4">
+                                    {event.tags && event.tags.length > 0 && (
+                                    <div className="flex flex-wrap gap-2">
+                                        {/* @ts-ignore */}
+                                        {event.tags.map((tag, i) => (
+                                            <Badge key={i} variant="secondary" className="bg-slate-100 text-slate-600 border-slate-200 font-normal">
+                                                <Hash className="w-3 h-3 mr-1 opacity-50" /> {tag}
+                                            </Badge>
+                                        ))}
+                                    </div>
+                                )}
                                 {overviewImages.length > 0 ? (
                                     <div className="columns-2 md:columns-4 gap-3 space-y-3">
                                         {overviewImages.map((imgObj, idx) => (
@@ -1795,7 +1844,53 @@ export default function EventDetailPage() {
                     </Dialog>
                 </TabsContent>
 
-                <TabsContent value="gallery">
+                <TabsContent value="gallery" className="space-y-6">
+                    <Card className="shadow-sm border-slate-200">
+                        <CardHeader className="bg-slate-50/50 border-b border-slate-100 py-3">
+                            <CardTitle className="text-sm font-bold text-slate-700 flex items-center gap-2">
+                                <Tag className="w-4 h-4"/> Event Tags
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent className="p-4 space-y-4">
+                            <div className="flex flex-wrap gap-2">
+                                {/* @ts-ignore */}
+                                {event.tags?.map((tag, i) => (
+                                    <Badge key={i} className="pl-2 pr-1 py-1 h-7 flex items-center gap-1 bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100">
+                                        {tag}
+                                        <button onClick={() => handleRemoveTag(tag)} className="ml-1 h-4 w-4 rounded-full hover:bg-blue-200 flex items-center justify-center text-blue-600"><X className="w-3 h-3"/></button>
+                                    </Badge>
+                                ))}
+                                {/* @ts-ignore */}
+                                {!event.tags?.length && <span className="text-sm text-slate-400 italic">No tags added yet.</span>}
+                            </div>
+                            <div className="relative max-w-md">
+                                <div className="flex gap-2">
+                                    <Input 
+                                        placeholder="Add a tag..." 
+                                        value={tagInput}
+                                        onChange={(e) => { setTagInput(e.target.value); setShowTagSuggestions(true); }}
+                                        onFocus={() => setShowTagSuggestions(true)}
+                                        onBlur={() => setTimeout(() => setShowTagSuggestions(false), 200)}
+                                        onKeyDown={(e) => e.key === 'Enter' && handleAddTag(tagInput)}
+                                    />
+                                    <Button onClick={() => handleAddTag(tagInput)} disabled={!tagInput} className="bg-[#1C4D8D]"><Plus className="w-4 h-4 mr-2"/> Add</Button>
+                                </div>
+                                {showTagSuggestions && tagInput && filteredTagSuggestions.length > 0 && (
+                                    <div className="absolute top-full left-0 w-full mt-1 bg-white border border-slate-200 rounded-md shadow-lg z-10 max-h-48 overflow-y-auto">
+                                        <Command>
+                                            <CommandList>
+                                                <CommandGroup heading="Suggestions">
+                                                    {filteredTagSuggestions.map((tag) => (
+                                                        <CommandItem key={tag} onSelect={() => handleAddTag(tag)} className="cursor-pointer">{tag}</CommandItem>
+                                                    ))}
+                                                </CommandGroup>
+                                            </CommandList>
+                                        </Command>
+                                    </div>
+                                )}
+                            </div>
+                        </CardContent>
+                    </Card>
                     <Card>
                         <CardHeader className="flex flex-row items-center justify-between border-b bg-slate-50/50 py-4">
                             <div>
