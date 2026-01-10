@@ -670,33 +670,6 @@ export default function EventDetailPage() {
                         </div>
                     </div>
 
-                    {/* ACTION BARS */}
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                        <Card className="lg:col-span-2 shadow-sm border-slate-200">
-                            <CardHeader className="pb-3"><CardTitle className="text-sm font-bold uppercase tracking-wider text-slate-500">Event Management</CardTitle></CardHeader>
-                            <CardContent className="space-y-4">
-                                <div className="flex flex-wrap gap-2 pb-4 border-b border-slate-100">
-                                    {statusOptions.map((status, idx) => (
-                                        <button key={idx} onClick={() => handleUpdateEvent({ status })} className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide border transition-all ${event.status === status ? "bg-slate-900 text-white border-slate-900 shadow-md" : "bg-white text-slate-500 border-slate-200 hover:border-slate-400"}`}>{status}</button>
-                                    ))}
-                                </div>
-                                <div className="flex flex-wrap gap-3">
-                                    <Button variant="outline" size="sm" className="gap-2" onClick={handleResetApproval}><RefreshCcw className="w-4 h-4" /> Reset Approval</Button>
-                                    <Button variant="outline" size="sm" className="gap-2" onClick={() => Toast.fire({ icon: 'info', title: 'Invoice Generated' })}><FileText className="w-4 h-4" /> Generate Invoice</Button>
-                                    <Button variant="outline" size="sm" className="gap-2" onClick={() => Toast.fire({ icon: 'info', title: 'Opening Customer View' })}><ExternalLink className="w-4 h-4" /> Customer View</Button>
-                                </div>
-                            </CardContent>
-                        </Card>
-                        <Card className="shadow-sm border-slate-200">
-                            <CardHeader className="pb-3"><CardTitle className="text-sm font-bold uppercase tracking-wider text-slate-500">Communication</CardTitle></CardHeader>
-                            <CardContent className="grid grid-cols-1 gap-3">
-                                <a href={`tel:${event.customerMobile}`} className="flex items-center justify-center gap-2 w-full py-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-md text-sm font-medium text-slate-700 transition-colors"><Phone className="w-4 h-4 text-blue-600" /> Call Customer</a>
-                                <a href={`sms:${event.customerMobile}`} className="flex items-center justify-center gap-2 w-full py-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-md text-sm font-medium text-slate-700 transition-colors"><MessageCircle className="w-4 h-4 text-green-600" /> Send SMS</a>
-                                <a href={`https://wa.me/${event.customerMobile}`} target="_blank" className="flex items-center justify-center gap-2 w-full py-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-md text-sm font-medium text-slate-700 transition-colors"><MessageCircle className="w-4 h-4 text-green-500" /> WhatsApp</a>
-                            </CardContent>
-                        </Card>
-                    </div>
-
                     {/* APPROVAL STATE SECTION */}
                     <Card className="shadow-sm border-slate-200">
                         <CardContent className="p-6">
@@ -720,6 +693,73 @@ export default function EventDetailPage() {
                             </p>
                         </CardContent>
                     </Card>
+
+                    {/* ACTION BARS */}
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <Card className="lg:col-span-1 shadow-sm border-slate-200">
+                            <CardHeader className="pb-3"><CardTitle className="text-sm font-bold uppercase tracking-wider text-slate-500">Event Management</CardTitle></CardHeader>
+                            <CardContent className="space-y-4">
+                                <div className="flex flex-wrap gap-2 pb-4 border-b border-slate-100">
+                                    {statusOptions.map((status, idx) => (
+                                        <button key={idx} onClick={() => handleUpdateEvent({ status })} className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide border transition-all ${event.status === status ? "bg-slate-900 text-white border-slate-900 shadow-md" : "bg-white text-slate-500 border-slate-200 hover:border-slate-400"}`}>{status}</button>
+                                    ))}
+                                </div>
+                                <div className="flex flex-wrap gap-3">
+                                    <Button variant="outline" size="sm" className="gap-2" onClick={handleResetApproval}><RefreshCcw className="w-4 h-4" /> Reset Approval</Button>
+                                    <Button variant="outline" size="sm" className="gap-2" onClick={() => Toast.fire({ icon: 'info', title: 'Invoice Generated' })}><FileText className="w-4 h-4" /> Generate Invoice</Button>
+                                    <Button variant="outline" size="sm" className="gap-2" onClick={() => Toast.fire({ icon: 'info', title: 'Opening Customer View' })}><ExternalLink className="w-4 h-4" /> Customer View</Button>
+                                </div>
+                            </CardContent>
+                        </Card>
+                        <Card className="shadow-sm border-slate-200">
+                            <CardHeader className="pb-3"><CardTitle className="text-sm font-bold uppercase tracking-wider text-slate-500">Communication</CardTitle></CardHeader>
+                            <CardContent className="grid grid-cols-1 gap-3">
+                                <a href={`tel:${event.customerMobile}`} className="flex items-center justify-center gap-2 w-full py-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-md text-sm font-medium text-slate-700 transition-colors"><Phone className="w-4 h-4 text-blue-600" /> Call Customer</a>
+                                <a href={`sms:${event.customerMobile}`} className="flex items-center justify-center gap-2 w-full py-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-md text-sm font-medium text-slate-700 transition-colors"><MessageCircle className="w-4 h-4 text-green-600" /> Send SMS</a>
+                                <a href={`https://wa.me/${event.customerMobile}`} target="_blank" className="flex items-center justify-center gap-2 w-full py-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-md text-sm font-medium text-slate-700 transition-colors"><MessageCircle className="w-4 h-4 text-green-500" /> WhatsApp</a>
+                            </CardContent>
+                        </Card>
+                    </div>
+                    {/* MANAGE SECTIONS */}
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <Card className="shadow-sm border-slate-200">
+                            <CardHeader className="bg-slate-50/50 border-b border-slate-100 py-3 flex flex-row justify-between items-center"><CardTitle className="text-sm font-bold text-slate-700">Locations</CardTitle><Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setActiveTab('locations')}>Manage</Button></CardHeader>
+                            <div className="overflow-x-auto p-0">
+                                <table className="w-full text-sm text-left">
+                                    <thead className="bg-slate-50 text-slate-500 font-medium border-b"><tr><th className="px-4 py-2">Name</th><th className="px-4 py-2">Date</th><th className="px-4 py-2 text-right">Map</th></tr></thead>
+                                    <tbody>
+                                        {event.locations?.map((l, i) => (
+                                            <tr key={i} className="border-b last:border-0"><td className="px-4 py-2 font-medium">{l.name}</td><td className="px-4 py-2 text-slate-600">{format(safeDate(l.date), 'MM/dd/yyyy')}</td>
+                                                <td className="px-4 py-2 text-right">
+                                                    {l.mapUrl && <a href={l.mapUrl} target="_blank" className="inline-flex items-center gap-1 text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded hover:bg-blue-100"><ExternalLink size={12} /> Open Map</a>}
+                                                </td></tr>
+                                        ))}
+                                        {(!event.locations?.length) && <tr><td colSpan={3} className="px-4 py-4 text-center text-slate-400 italic">No locations set.</td></tr>}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </Card>
+
+                        <Card className="shadow-sm border-slate-200">
+                            <CardHeader className="bg-slate-50/50 border-b border-slate-100 py-3 flex flex-row justify-between items-center"><CardTitle className="text-sm font-bold text-slate-700">Event Contacts</CardTitle><Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setActiveTab('contacts')}>Manage</Button></CardHeader>
+                            <div className="overflow-x-auto p-0">
+                                <table className="w-full text-sm text-left">
+                                    <thead className="bg-slate-50 text-slate-500 font-medium border-b"><tr><th className="px-4 py-2">Name</th><th className="px-4 py-2">Role</th><th className="px-4 py-2">Phone</th><th className="px-4 py-2 text-center">Actions</th></tr></thead>
+                                    <tbody>
+                                        {event.contacts?.map((c, i) => (
+                                            <tr key={i} className="border-b last:border-0 hover:bg-slate-50/50">
+                                                <td className="px-4 py-2 font-medium">{c.name}</td><td className="px-4 py-2"><Badge variant="outline" className="bg-white">{c.role}</Badge></td><td className="px-4 py-2 text-slate-600">{c.phone}</td>
+                                                <td className="px-4 py-2 flex justify-center gap-2"><a href={`tel:${c.phone}`} className="p-1.5 text-blue-600 bg-blue-50 rounded"><Phone size={14} /></a><a href={`https://wa.me/${c.phone}`} className="p-1.5 text-green-600 bg-green-50 rounded"><MessageCircle size={14} /></a></td>
+                                            </tr>
+                                        ))}
+                                        {(!event.contacts?.length) && <tr><td colSpan={4} className="px-4 py-4 text-center text-slate-400 italic">No contacts added.</td></tr>}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </Card>
+                    </div>
+
+                    
 
                     {/* MAIN GRID */}
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
