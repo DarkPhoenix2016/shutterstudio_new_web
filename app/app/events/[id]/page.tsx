@@ -576,6 +576,36 @@ export default function EventDetailPage() {
                     </Card>
                 </div>
 
+                {/* APPROVAL STATE SECTION (NEW) */}
+                <Card className="shadow-sm border-slate-200">
+                    <CardContent className="p-6">
+                        <div className="flex justify-between items-center mb-4">
+                            <h3 className="font-semibold text-slate-700">State of Customer Approval</h3>
+                            {isLocked ? (
+                                <Badge className="bg-green-100 text-green-700 border-green-200 hover:bg-green-100">
+                                    Approved
+                                </Badge>
+                            ) : (
+                                <Badge className="bg-yellow-100 text-yellow-700 border-yellow-200 hover:bg-yellow-100">
+                                    Pending Review
+                                </Badge>
+                            )}
+                        </div>
+                        
+                        <div className="w-full bg-slate-100 rounded-full h-2.5 mb-2">
+                            <div 
+                                className={`h-2.5 rounded-full ${isLocked ? 'bg-green-500 w-full' : 'bg-blue-600 w-[60%]'}`}
+                            ></div>
+                        </div>
+                        
+                        <p className="text-sm text-slate-500">
+                            {isLocked
+                                ? `Customer confirmed on ${(event.approval as any)?.confirmedAt ? format(safeDate((event.approval as any).confirmedAt), "PPP p") : "Unknown date"}`
+                                : "Waiting for customer to sign off on the Quotation."}
+                        </p>
+                    </CardContent>
+                </Card>
+
                 {/* MASONRY GALLERY */}
                 {showGallery && (
                     <Card className="shadow-sm border-slate-200 overflow-hidden">
