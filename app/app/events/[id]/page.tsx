@@ -903,7 +903,7 @@ export default function EventDetailPage() {
                                     <Pencil className="h-3 w-3 text-slate-500" />
                                 </Button>
                             </CardHeader>
-                            <CardContent className="p-4">
+                            <CardContent className="p-4 space-y-4">
                                     {event.tags && event.tags.length > 0 && (
                                     <div className="flex flex-wrap gap-2">
                                         {/* @ts-ignore */}
