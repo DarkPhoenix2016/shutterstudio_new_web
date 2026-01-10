@@ -1,7 +1,7 @@
 import { db } from "@/lib/firebase";
 import { 
   collection, getDocs, doc, getDoc, addDoc, deleteDoc, updateDoc, 
-  serverTimestamp, query, orderBy, Timestamp, runTransaction, where 
+  serverTimestamp, query, orderBy, Timestamp, runTransaction, where, arrayUnion, arrayRemove 
 } from "firebase/firestore";
 
 // --- TYPES ---
