@@ -42,35 +42,29 @@ export default function MyTasksPage() {
     const [activeTab, setActiveTab] = useState("today")
 
     // --- DATA LOADING ---
-    useEffect(() => {
-        // Wait for Auth
-        if (userData === undefined) return;
+   useEffect(() => {
+    if (!userData) return;
 
-        const loadMyTasks = async () => {
-            if (userData?.studioID && userData?.uid) {
-                setLoading(true);
-                try {
-                    // Fetch all studio events (Optimization: In a real app, use a query for 'assignedCrew array-contains uid')
-                    const events = await fetchEvents(userData.studioID);
-                    
-                    // Filter: Only events where current user is assigned
-                    const myEvents = events.filter(event => 
-                        event.assignedCrew?.includes(userData.uid)
-                    );
-                    console.log("Loaded my tasks:", myEvents);
-                    setAllEvents(myEvents);
-                } catch (error) {
-                    console.error("Failed to load tasks", error);
-                } finally {
-                    setLoading(false);
-                }
-            } else {
-                setLoading(false);
-            }
+    const debugLoad = async () => {
+        console.log("1. Current User UID:", userData.uid ||userData);
+        console.log("2. Studio ID:", userData.studioID);
+
+        // Fetch RAW events without filtering first to see if access works
+        const allEvents = await fetchEvents(userData.studioID); 
+        console.log("3. Total Events Fetched:", allEvents.length);
+
+        if (allEvents.length > 0) {
+            const sampleEvent = allEvents[0];
+            console.log("4. Sample Event Structure:", sampleEvent);
+            console.log("5. Sample AssignedCrew:", sampleEvent.assignedCrew);
+            
+            const isMatch = sampleEvent.assignedCrew?.includes(userData.uid);
+            console.log("6. Does sample match user?", isMatch);
         }
+    };
 
-        loadMyTasks();
-    }, [userData]);
+    debugLoad();
+}, [userData]);
 
     // --- CATEGORIZATION LOGIC ---
     const { todayTasks, upcomingTasks, pastTasks } = useMemo(() => {

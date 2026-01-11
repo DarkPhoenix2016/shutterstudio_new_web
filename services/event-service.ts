@@ -454,3 +454,22 @@ export const fetchEventsForDateRange = async (studioId: string, centerDate: Date
         return [];
     }
 };
+
+
+
+export const fetchMyAssignedEvents = async (studioId: string, userId: string) => {
+  try {
+    const eventsRef = collection(db, "Studios", studioId, "Events");
+    const q = query(
+      eventsRef, 
+      where("assignedCrew", "array-contains", userId),
+      orderBy("createdAt", "desc") // Requires an Index (see Step 3)
+    );
+
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as EventData));
+  } catch (error) {
+    console.error("Error fetching assigned tasks:", error);
+    return [];
+  }
+};
