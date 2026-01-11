@@ -199,7 +199,7 @@ export default function EventGalleryPage() {
                                 <SheetTitle className="text-xl font-bold text-[#0F2854]">Filter Gallery</SheetTitle>
                             </SheetHeader>
                             
-                            <div className="py-6 space-y-8">
+                            <div className="py-6 space-y-8 p-4">
                                 {/* Event Type Filter */}
                                 <div className="space-y-3">
                                     <label className="text-sm font-semibold text-slate-700 uppercase tracking-wider">Event Type</label>
