@@ -118,7 +118,7 @@ export default function CalendarPage() {
                 <p className="text-slate-500">Manage your upcoming events</p>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8 items-start">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
                 
                 {/* 1. CALENDAR SECTION (Sticky) */}
                 <div className="md:col-span-1 md:sticky md:top-24">
