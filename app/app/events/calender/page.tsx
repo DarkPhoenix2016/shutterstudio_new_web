@@ -11,7 +11,6 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Calendar } from "@/components/ui/calendar"
-import { Separator } from "@/components/ui/separator"
 
 // Icons
 import { 
@@ -24,7 +23,7 @@ import {
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
-// [!code highlight] Helper to safely parse dates (handles Firestore Timestamp vs JS Date)
+// Helper to safely parse dates (handles Firestore Timestamp vs JS Date)
 const safeDate = (dateInput: any): Date => {
     try {
         if (!dateInput) return new Date();
@@ -48,22 +47,40 @@ export default function CalendarPage() {
     const [events, setEvents] = useState<EventData[]>([])
     const [loading, setLoading] = useState(true)
 
-    // Load Events
-    useEffect(() => {
-        const loadData = async () => {
-            if (userData?.studioID) {
-                try {
-                    const data = await fetchEvents(userData.studioID)
-                    setEvents(data)
-                } catch (error) {
-                    console.error("Failed to load events", error)
-                } finally {
-                    setLoading(false)
-                }
-            }
-        }
-        loadData()
-    }, [userData])
+ useEffect(() => {
+  if (userData === undefined) return;
+
+  if (!userData?.studioID) {
+    setLoading(false);
+    return;
+  }
+
+  const studioID = userData.studioID; // ✅ now guaranteed string
+
+  let isMounted = true;
+
+  const loadData = async () => {
+    try {
+      const data = await fetchEvents(studioID);
+      if (isMounted) {
+        setEvents(data);
+      }
+    } catch (error) {
+      console.error("Failed to load events", error);
+    } finally {
+      if (isMounted) {
+        setLoading(false);
+      }
+    }
+  };
+
+  loadData();
+
+  return () => {
+    isMounted = false;
+  };
+}, [userData?.studioID]);
+
 
     // --- COMPUTED DATA ---
 
@@ -72,7 +89,6 @@ export default function CalendarPage() {
         const dates: Date[] = []
         events.forEach(event => {
             event.days?.forEach(day => {
-                // [!code highlight] Use safeDate helper to fix TS error
                 if (day.date) {
                     dates.push(safeDate(day.date))
                 }
@@ -86,7 +102,6 @@ export default function CalendarPage() {
         if (!date) return []
         return events.filter(event => 
             event.days?.some(day => {
-                // [!code highlight] Use safeDate helper to fix TS error
                 if (!day.date) return false;
                 return isSameDay(safeDate(day.date), date)
             })
@@ -100,7 +115,7 @@ export default function CalendarPage() {
         if (s.includes('inquiry')) return 'bg-blue-100 text-blue-700 border-blue-200'
         if (s.includes('confirm') || s.includes('scheduled')) return 'bg-purple-100 text-purple-700 border-purple-200'
         if (s.includes('complet')) return 'bg-green-100 text-green-700 border-green-200'
-        if (s.includes('Cancelled')) return 'bg-red-100 text-red-700 border-red-200'
+        if (s.includes('cancel')) return 'bg-red-100 text-red-700 border-red-200'
         return 'bg-slate-100 text-slate-700 border-slate-200'
     }
 
@@ -160,8 +175,8 @@ export default function CalendarPage() {
                 <div className="grid grid-cols-1 gap-4">
                     {selectedDayEvents.length > 0 ? (
                         selectedDayEvents.map((event) => {
-                            // Find the specific day config for the selected date to get specific details if any
-                            const dayConfig = event.days?.find(d => isSameDay(safeDate(d.date), date!));
+                            // Find the specific day config for the selected date
+                            const dayConfig = event.days?.find(d => d.date && isSameDay(safeDate(d.date), date!));
                             
                             return (
                                 <Card 
@@ -199,7 +214,7 @@ export default function CalendarPage() {
                                             </div>
 
                                             {/* Specific Day Details */}
-                                            <div className="flex items-center gap-4 pt-1">
+                                            <div className="flex flex-wrap items-center gap-2 pt-1">
                                                 <Badge variant="secondary" className={cn(
                                                     "text-xs font-normal border",
                                                     dayConfig?.type === 'package' ? "bg-blue-50 text-blue-700 border-blue-100" : "bg-amber-50 text-amber-700 border-amber-100"
@@ -209,9 +224,9 @@ export default function CalendarPage() {
                                                 
                                                 {/* If location info matches this date, show it */}
                                                 {event.locations?.map((loc, idx) => {
-                                                    if (isSameDay(safeDate(loc.date), date!)) {
+                                                    if (loc.date && isSameDay(safeDate(loc.date), date!)) {
                                                         return (
-                                                            <div key={idx} className="flex items-center gap-1.5 text-xs text-slate-600 bg-slate-50 px-2 py-1 rounded-full">
+                                                            <div key={idx} className="flex items-center gap-1.5 text-xs text-slate-600 bg-slate-50 px-2 py-1 rounded-full border border-slate-100">
                                                                 <MapPin className="w-3 h-3" />
                                                                 <span className="truncate max-w-[150px]">{loc.name} {loc.time && `@ ${loc.time}`}</span>
                                                             </div>
