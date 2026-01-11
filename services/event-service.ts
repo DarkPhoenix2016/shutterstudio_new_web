@@ -3,6 +3,7 @@ import {
   collection, getDocs, doc, getDoc, addDoc, deleteDoc, updateDoc, 
   serverTimestamp, query, orderBy, Timestamp, runTransaction, where, arrayRemove 
 } from "firebase/firestore";
+import { startOfMonth, endOfMonth, subMonths, addMonths, isWithinInterval } from "date-fns";
 
 // --- TYPES ---
 
