@@ -283,7 +283,7 @@ export default function ConsultationPage() {
     if (loading) return <div className="h-screen flex items-center justify-center"><Loader2 className="w-8 h-8 animate-spin text-[#1C4D8D]" /></div>;
 
     return (
-        <div className="h-max bg-slate-50 flex flex-col overflow-hidden w-100% p-0">
+        <div className="h-full w-full -m-6 md:-m-8 bg-slate-50 flex flex-col overflow-hidden ">
             
             {/* 1. HEADER (Fixed) */}
             <header className="shrink-0 h-16 bg-white border-b border-slate-200 px-6 flex items-center justify-between shadow-sm z-50">
