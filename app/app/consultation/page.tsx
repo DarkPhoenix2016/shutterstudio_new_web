@@ -169,14 +169,26 @@ export default function ConsultationPage() {
     }, [consultation.package.selectedPackageId, consultation.package.customItems, packages]);
 
     // --- ACTIONS ---
-    const handleAutoSave = async () => {
+    const handleAutoSave = async (silent = true) => {
         if (!userData?.studioID) return;
         setIsSaving(true);
         try {
             const saved = await saveConsultation(userData.studioID, consultation);
             if (!consultation.id) setConsultation(prev => ({ ...prev, id: saved.id }));
+            
+            if (!silent) {
+                const Toast = Swal.mixin({
+                    toast: true,
+                    position: 'top-end',
+                    showConfirmButton: false,
+                    timer: 2000,
+                    timerProgressBar: true,
+                });
+                Toast.fire({ icon: 'success', title: 'Consultation saved successfully' });
+            }
         } catch (e) {
             console.error("Save failed", e);
+            if (!silent) Swal.fire({ icon: 'error', title: 'Save Failed', text: 'Could not save the draft.' });
         } finally {
             setIsSaving(false);
         }
@@ -304,7 +316,7 @@ export default function ConsultationPage() {
                     <ScrollArea className="flex-1 w-full">
                         <div className="p-6 pb-24 max-w-6xl mx-auto w-full"> {/* Bottom padding for fixed footer */}
                             
-                            {/* --- STEP 0: WELCOME (Restored) --- */}
+                            {/* --- STEP 0: WELCOME --- */}
                             {step === 0 && (
                                 <div className="flex flex-col items-center justify-center min-h-[60vh] py-10 space-y-8 animate-in fade-in zoom-in-95 duration-500">
                                     <div className="text-center space-y-2">
@@ -500,8 +512,8 @@ export default function ConsultationPage() {
                                                     
                                                     {/* Lightbox Content */}
                                                     <DialogContent className="max-w-5xl p-0 overflow-hidden bg-black/95 border-none text-white h-[85vh] flex flex-col md:flex-row">
-                                                        {/* [!code highlight] Fix for Accessibility */}
-                                                        <DialogTitle className="sr-only">Event Inspiration: {event.eventName}</DialogTitle>
+                                                        {/* Fix for Accessibility */}
+                                                        <DialogTitle className="sr-only">Event Lightbox: {event.eventName}</DialogTitle>
                                                         
                                                         <div className="flex-1 flex items-center justify-center relative bg-black">
                                                             <img src={event.couplePhotoUrl} className="max-h-full max-w-full object-contain" alt="Full View"/>
@@ -709,19 +721,19 @@ export default function ConsultationPage() {
                                 </Button>
                             </div>
                             <div className="flex items-center gap-4">
+                                {step > 0 && (
+                                    <Button variant="outline" onClick={() => handleAutoSave(false)} disabled={isSaving} className="border-slate-300 text-slate-600">
+                                        <Save className="w-4 h-4 mr-2" /> Save Draft
+                                    </Button>
+                                )}
                                 {step < 4 ? (
                                     <Button className="bg-[#1C4D8D] px-8 hover:bg-[#153a6b]" onClick={handleNext}>
                                         Next Step <ChevronRight className="w-4 h-4 ml-2"/>
                                     </Button>
                                 ) : (
-                                    <div className="flex gap-3">
-                                        <Button variant="outline" onClick={handleAutoSave} disabled={isSaving}>
-                                            <Save className="w-4 h-4 mr-2" /> Save Draft
-                                        </Button>
-                                        <Button className="bg-green-600 hover:bg-green-700 text-white" onClick={handleConvertToEvent}>
-                                            <CheckCircle className="w-4 h-4 mr-2" /> Convert to Event
-                                        </Button>
-                                    </div>
+                                    <Button className="bg-green-600 hover:bg-green-700 text-white" onClick={handleConvertToEvent}>
+                                        <CheckCircle className="w-4 h-4 mr-2" /> Convert to Event
+                                    </Button>
                                 )}
                             </div>
                         </div>
