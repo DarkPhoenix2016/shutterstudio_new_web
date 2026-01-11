@@ -4,14 +4,13 @@ import { useState, useEffect, useMemo } from "react"
 import { useAuth } from "@/context/AuthContext"
 import { useRouter } from "next/navigation"
 import { fetchEvents, EventData } from "@/services/event-service"
-import { format, isSameDay, parseISO } from "date-fns"
+import { format, isSameDay } from "date-fns"
 
 // UI Components
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Calendar } from "@/components/ui/calendar"
-import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
 
 // Icons
@@ -20,11 +19,25 @@ import {
     Calendar as CalendarIcon, 
     MapPin, 
     User, 
-    Clock, 
     ChevronRight,
     Briefcase
 } from "lucide-react"
 import { cn } from "@/lib/utils"
+
+// [!code highlight] Helper to safely parse dates (handles Firestore Timestamp vs JS Date)
+const safeDate = (dateInput: any): Date => {
+    try {
+        if (!dateInput) return new Date();
+        // Check if it has a toDate function (Firestore Timestamp)
+        if (typeof dateInput.toDate === 'function') {
+            return dateInput.toDate();
+        }
+        // If it's already a Date object or string/number
+        return new Date(dateInput);
+    } catch (e) {
+        return new Date();
+    }
+};
 
 export default function CalendarPage() {
     const { userData } = useAuth()
@@ -59,11 +72,10 @@ export default function CalendarPage() {
         const dates: Date[] = []
         events.forEach(event => {
             event.days?.forEach(day => {
-                // Handle Firestore Timestamp or Date object
-                const d = day.date && typeof day.date.toDate === 'function' 
-                    ? day.date.toDate() 
-                    : new Date(day.date)
-                dates.push(d)
+                // [!code highlight] Use safeDate helper to fix TS error
+                if (day.date) {
+                    dates.push(safeDate(day.date))
+                }
             })
         })
         return dates
@@ -74,10 +86,9 @@ export default function CalendarPage() {
         if (!date) return []
         return events.filter(event => 
             event.days?.some(day => {
-                const d = day.date && typeof day.date.toDate === 'function' 
-                    ? day.date.toDate() 
-                    : new Date(day.date)
-                return isSameDay(d, date)
+                // [!code highlight] Use safeDate helper to fix TS error
+                if (!day.date) return false;
+                return isSameDay(safeDate(day.date), date)
             })
         )
     }, [events, date])
@@ -85,15 +96,13 @@ export default function CalendarPage() {
     // --- HELPERS ---
 
     const getStatusColor = (status: string) => {
-        const s = status.toLowerCase()
+        const s = status?.toLowerCase() || ""
         if (s.includes('inquiry')) return 'bg-blue-100 text-blue-700 border-blue-200'
         if (s.includes('confirm') || s.includes('scheduled')) return 'bg-purple-100 text-purple-700 border-purple-200'
         if (s.includes('complet')) return 'bg-green-100 text-green-700 border-green-200'
-        if (s.includes('cancel')) return 'bg-red-100 text-red-700 border-red-200'
+        if (s.includes('Cancelled')) return 'bg-red-100 text-red-700 border-red-200'
         return 'bg-slate-100 text-slate-700 border-slate-200'
     }
-
-    const safeDate = (d: any) => d && typeof d.toDate === 'function' ? d.toDate() : new Date(d)
 
     if (loading) return <div className="h-screen flex items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-[#1C4D8D]" /></div>
 
@@ -199,10 +208,10 @@ export default function CalendarPage() {
                                                 </Badge>
                                                 
                                                 {/* If location info matches this date, show it */}
-                                                {event.locations?.map(loc => {
+                                                {event.locations?.map((loc, idx) => {
                                                     if (isSameDay(safeDate(loc.date), date!)) {
                                                         return (
-                                                            <div key={loc.id} className="flex items-center gap-1.5 text-xs text-slate-600 bg-slate-50 px-2 py-1 rounded-full">
+                                                            <div key={idx} className="flex items-center gap-1.5 text-xs text-slate-600 bg-slate-50 px-2 py-1 rounded-full">
                                                                 <MapPin className="w-3 h-3" />
                                                                 <span className="truncate max-w-[150px]">{loc.name} {loc.time && `@ ${loc.time}`}</span>
                                                             </div>

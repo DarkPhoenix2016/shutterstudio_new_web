@@ -764,7 +764,7 @@ export default function EventDetailPage() {
         }
     }
 
-    const statusOptions = ["Quotation", "Scheduled", "In Progress", "Post Production", "Review", "Completed", "Handed Over"];
+    const statusOptions = ["Quotation", "Scheduled", "In Progress", "Post Production", "Review", "Completed", "Handed Over", "Cancelled"];
     const showGallery = event && ["Post Production", "Review", "Completed", "Handed Over"].includes(event.status || "");
     const isLocked = event?.approval?.customer_confirmed;
 
