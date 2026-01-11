@@ -46,6 +46,8 @@ export default function CalendarPage() {
     const [dataLoading, setDataLoading] = useState(true)
 
     useEffect(() => {
+
+        
     if (authLoading) {
         console.log("CalendarPage: waiting for auth...");
         return;
