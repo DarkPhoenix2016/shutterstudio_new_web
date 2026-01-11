@@ -109,7 +109,8 @@ export default function CalendarPage() {
         if (s.includes('cancel')) return 'bg-red-100 text-red-700 border-red-200'
         return 'bg-slate-100 text-slate-700 border-slate-200'
     }
-
+    console.log("Rendered CalendarPage with events:", events.length, "selectedDate:", selectedDate );
+    
     if (loading && events.length === 0) return <div className="h-screen flex items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-[#1C4D8D]" /></div>
 
     return (
