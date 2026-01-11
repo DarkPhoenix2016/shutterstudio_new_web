@@ -13,11 +13,11 @@ import { Badge } from "@/components/ui/badge"
 import { Calendar } from "@/components/ui/calendar"
 
 // Icons
-import { 
-    Loader2, 
-    Calendar as CalendarIcon, 
-    MapPin, 
-    User, 
+import {
+    Loader2,
+    Calendar as CalendarIcon,
+    MapPin,
+    User,
     ChevronRight,
     Briefcase
 } from "lucide-react"
@@ -41,45 +41,45 @@ const safeDate = (dateInput: any): Date => {
 export default function CalendarPage() {
     const { userData } = useAuth()
     const router = useRouter()
-    
+
     // State
     const [date, setDate] = useState<Date | undefined>(new Date())
     const [events, setEvents] = useState<EventData[]>([])
     const [loading, setLoading] = useState(true)
 
- useEffect(() => {
-  if (userData === undefined) return;
+    useEffect(() => {
+        if (userData === undefined) return;
 
-  if (!userData?.studioID) {
-    setLoading(false);
-    return;
-  }
+        if (!userData?.studioID) {
+            setLoading(false);
+            return;
+        }
 
-  const studioID = userData.studioID; // ✅ now guaranteed string
+        const studioID = userData.studioID; 
+        let isMounted = true;
+        console.log("Loading events for studioID:", studioID);
 
-  let isMounted = true;
+        const loadData = async () => {
+            try {
+                const data = await fetchEvents(studioID);
+                if (isMounted) {
+                    setEvents(data);
+                }
+            } catch (error) {
+                console.error("Failed to load events", error);
+            } finally {
+                if (isMounted) {
+                    setLoading(false);
+                }
+            }
+        };
 
-  const loadData = async () => {
-    try {
-      const data = await fetchEvents(studioID);
-      if (isMounted) {
-        setEvents(data);
-      }
-    } catch (error) {
-      console.error("Failed to load events", error);
-    } finally {
-      if (isMounted) {
-        setLoading(false);
-      }
-    }
-  };
+        loadData();
 
-  loadData();
-
-  return () => {
-    isMounted = false;
-  };
-}, [userData?.studioID]);
+        return () => {
+            isMounted = false;
+        };
+    }, [userData?.studioID]);
 
 
     // --- COMPUTED DATA ---
@@ -100,7 +100,7 @@ export default function CalendarPage() {
     // 2. Filter events for the selected date
     const selectedDayEvents = useMemo(() => {
         if (!date) return []
-        return events.filter(event => 
+        return events.filter(event =>
             event.days?.some(day => {
                 if (!day.date) return false;
                 return isSameDay(safeDate(day.date), date)
@@ -123,7 +123,7 @@ export default function CalendarPage() {
 
     return (
         <div className="max-w-3xl mx-auto p-4 md:p-8 space-y-8 animate-in fade-in duration-500 min-h-screen pb-20">
-            
+
             {/* HEADER */}
             <div className="flex flex-col gap-2">
                 <h1 className="text-3xl font-bold text-[#0F2854]">Calendar</h1>
@@ -177,10 +177,10 @@ export default function CalendarPage() {
                         selectedDayEvents.map((event) => {
                             // Find the specific day config for the selected date
                             const dayConfig = event.days?.find(d => d.date && isSameDay(safeDate(d.date), date!));
-                            
+
                             return (
-                                <Card 
-                                    key={event.id} 
+                                <Card
+                                    key={event.id}
                                     className="group cursor-pointer hover:shadow-md transition-all border-slate-200 hover:border-blue-300"
                                     onClick={() => router.push(`/app/events/${event.id}`)}
                                 >
@@ -221,7 +221,7 @@ export default function CalendarPage() {
                                                 )}>
                                                     {dayConfig?.type === 'package' ? "Package Plan" : "Custom Plan"}
                                                 </Badge>
-                                                
+
                                                 {/* If location info matches this date, show it */}
                                                 {event.locations?.map((loc, idx) => {
                                                     if (loc.date && isSameDay(safeDate(loc.date), date!)) {
