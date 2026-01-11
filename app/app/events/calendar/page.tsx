@@ -46,13 +46,13 @@ export default function CalendarPage() {
 
     // State
     const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date())
-    const [currentMonth, setCurrentMonth] = useState<Date>(new Date()) 
+    const [currentMonth, setCurrentMonth] = useState<Date>(new Date())
     const [events, setEvents] = useState<EventData[]>([])
     const [loading, setLoading] = useState(true)
 
     // WORKFLOW: Fetch events when Studio ID exists OR when the Month changes
     useEffect(() => {
-        if (userData === undefined) return; 
+        if (userData === undefined) return;
 
         const loadEvents = async () => {
             if (userData?.studioID) {
@@ -71,7 +71,7 @@ export default function CalendarPage() {
         }
 
         loadEvents();
-    }, [userData, currentMonth]); 
+    }, [userData, currentMonth]);
 
     // --- COMPUTED DATA ---
 
@@ -118,7 +118,7 @@ export default function CalendarPage() {
 
                 {/* 1. CALENDAR SECTION (Sticky) */}
                 <div className="md:col-span-1 md:sticky md:top-24 z-100" >
-                     {/* HEADER */}
+                    {/* HEADER */}
                     <div className="flex flex-col gap-2 mb-6">
                         <h1 className="text-3xl font-bold text-[#0F2854]">Schedule</h1>
                         <p className="text-slate-500">Manage your upcoming events</p>
@@ -148,26 +148,31 @@ export default function CalendarPage() {
                             />
                         </CardContent>
                     </Card>
-
-                    <div className="flex items-center justify-between bg-white py-2 sticky top-0 z-10 border-b border-slate-100 md:static md:bg-transparent md:border-none">
-                        <h2 className="text-lg font-bold text-slate-700 flex items-center gap-2">
-                            {selectedDate ? format(selectedDate, "EEEE, MMMM do") : "Select a date"}
-                        </h2>
-                        <Badge variant="secondary" className="bg-white border-slate-200 text-slate-700">
-                            {selectedDayEvents.length} Events
-                        </Badge>
-                    </div>
                 </div>
 
                 {/* 2. EVENTS LIST SECTION */}
                 <div className="md:col-span-2 space-y-4">
-                    
+                            <Card className="mt-6 bg-white border-slate-200 shadow-lg p-0">
+                        <CardContent className="flex items-center gap-4 p-4">
+                            <CalendarIcon className="w-6 h-6 text-blue-500" />
+                            <div className="flex items-center justify-between bg-white py-4 sticky px-auto">
+                                <h2 className="text-lg font-bold text-slate-700 flex items-center gap-2">
+                                    {selectedDate ? format(selectedDate, "EEEE, MMMM do") : "Select a date"}
+                                </h2>
+                                <Badge variant="secondary" className="bg-white border-slate-200 text-slate-700">
+                                    {selectedDayEvents.length} Events
+                                </Badge>
+
+                            </div>
+                        </CardContent>
+                    </Card>
+
 
                     <div className="grid grid-cols-1 gap-4">
                         {selectedDayEvents.length > 0 ? (
                             selectedDayEvents.map((event) => {
                                 // Filter locations specific to the selected date
-                                const dayLocations = event.locations?.filter(loc => 
+                                const dayLocations = event.locations?.filter(loc =>
                                     loc.date && isSameDay(safeDate(loc.date), selectedDate!)
                                 ) || [];
 
@@ -177,17 +182,17 @@ export default function CalendarPage() {
                                 return (
                                     <Card
                                         key={event.id}
-                                        className="group cursor-pointer hover:shadow-lg transition-all border-slate-200 hover:border-blue-300 overflow-hidden bg-white"
+                                        className="group cursor-pointer hover:shadow-lg transition-all border-slate-200 hover:border-blue-300 overflow-hidden bg-white p-0"
                                         onClick={() => router.push(`/app/events/${event.id}`)}
                                     >
                                         <div className="flex flex-col sm:flex-row h-full min-h-[160px]">
-                                            
+
                                             {/* IMAGE SECTION */}
                                             <div className="w-full sm:w-40 h-40 sm:h-auto bg-slate-100 relative shrink-0">
                                                 {event.couplePhotoUrl ? (
-                                                    <img 
-                                                        src={event.couplePhotoUrl} 
-                                                        alt="Cover" 
+                                                    <img
+                                                        src={event.couplePhotoUrl}
+                                                        alt="Cover"
                                                         className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
                                                     />
                                                 ) : (
@@ -199,7 +204,7 @@ export default function CalendarPage() {
 
                                             {/* CONTENT SECTION */}
                                             <div className="flex-1 p-4 flex flex-col gap-3">
-                                                
+
                                                 {/* Header: ID, Type, Status */}
                                                 <div className="flex justify-between items-start">
                                                     <div className="flex items-center gap-2">
@@ -228,27 +233,27 @@ export default function CalendarPage() {
 
                                                 {/* [!code highlight] QUICK ACTION BUTTONS */}
                                                 <div className="flex items-center gap-2">
-                                                    <Button 
-                                                        variant="outline" 
-                                                        size="sm" 
+                                                    <Button
+                                                        variant="outline"
+                                                        size="sm"
                                                         className="h-7 px-2 text-xs gap-1.5 border-slate-200 text-slate-600 hover:text-blue-600 hover:border-blue-200 bg-white"
                                                         onClick={(e) => { e.stopPropagation(); window.open(`tel:${event.customerMobile}`, '_self'); }}
                                                         disabled={!event.customerMobile}
                                                     >
                                                         <Phone className="h-3 w-3" /> Call
                                                     </Button>
-                                                    <Button 
-                                                        variant="outline" 
-                                                        size="sm" 
+                                                    <Button
+                                                        variant="outline"
+                                                        size="sm"
                                                         className="h-7 px-2 text-xs gap-1.5 border-slate-200 text-slate-600 hover:text-green-600 hover:border-green-200 bg-white"
                                                         onClick={(e) => { e.stopPropagation(); window.open(`https://wa.me/${cleanPhone}`, '_blank'); }}
                                                         disabled={!cleanPhone}
                                                     >
                                                         <MessageCircle className="h-3 w-3" /> WhatsApp
                                                     </Button>
-                                                    <Button 
-                                                        variant="outline" 
-                                                        size="sm" 
+                                                    <Button
+                                                        variant="outline"
+                                                        size="sm"
                                                         className="h-7 px-2 text-xs gap-1.5 border-slate-200 text-slate-600 hover:text-indigo-600 hover:border-indigo-200 bg-white"
                                                         onClick={(e) => { e.stopPropagation(); window.open(`sms:${event.customerMobile}`, '_self'); }}
                                                         disabled={!event.customerMobile}
@@ -261,24 +266,24 @@ export default function CalendarPage() {
                                                 {dayLocations.length > 0 ? (
                                                     <div className="mt-auto pt-2 space-y-2">
                                                         {dayLocations.map((loc, idx) => (
-                                                            <div 
+                                                            <div
                                                                 key={idx}
                                                                 onClick={(e) => {
                                                                     if (loc.mapUrl) {
-                                                                        e.stopPropagation(); 
+                                                                        e.stopPropagation();
                                                                         window.open(loc.mapUrl, '_blank');
                                                                     }
                                                                 }}
                                                                 className={cn(
                                                                     "flex items-center gap-2 px-3 py-2 rounded-md text-xs font-medium transition-colors border",
-                                                                    loc.mapUrl 
-                                                                        ? "bg-slate-50 border-slate-100 text-blue-700 hover:bg-blue-50 hover:border-blue-200 cursor-pointer" 
+                                                                    loc.mapUrl
+                                                                        ? "bg-slate-50 border-slate-100 text-blue-700 hover:bg-blue-50 hover:border-blue-200 cursor-pointer"
                                                                         : "bg-slate-50 border-slate-100 text-slate-600 cursor-default"
                                                                 )}
                                                             >
                                                                 <MapPin className={cn("w-3.5 h-3.5 shrink-0", loc.mapUrl ? "text-blue-500" : "text-slate-400")} />
                                                                 <span className="truncate flex-1">
-                                                                    {loc.name} 
+                                                                    {loc.name}
                                                                     {loc.time && <span className="text-slate-500 font-normal ml-1">@ {loc.time}</span>}
                                                                     {loc.note && <span className="text-slate-400 font-normal ml-1">- {loc.note}</span>}
                                                                 </span>
