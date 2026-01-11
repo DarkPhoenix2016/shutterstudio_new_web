@@ -16,7 +16,7 @@ export default function UnauthorizedPage() {
       <div className="relative w-64 h-64 mb-6 md:w-80 md:h-80">
         {/* Ensure you add this image to your public folder: public/images/backgrounds/403.svg */}
         <Image 
-          src="/images/backgrounds/403.svg" 
+          src="/images/background/403.svg" 
           alt="Access Restricted" 
           fill
           className="object-contain drop-shadow-sm"
