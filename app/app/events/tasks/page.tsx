@@ -57,7 +57,7 @@ export default function MyTasksPage() {
                     const myEvents = events.filter(event => 
                         event.assignedCrew?.includes(userData.uid)
                     );
-                    
+                    console.log("Loaded my tasks:", myEvents);
                     setAllEvents(myEvents);
                 } catch (error) {
                     console.error("Failed to load tasks", error);
@@ -135,7 +135,7 @@ export default function MyTasksPage() {
         if (s.includes('complet')) return "bg-green-100 text-green-700 border-green-200";
         if (s.includes('progress') || s.includes('shoot')) return "bg-blue-100 text-blue-700 border-blue-200";
         if (s.includes('edit') || s.includes('post')) return "bg-purple-100 text-purple-700 border-purple-200";
-        if (s.includes('cancel')) return "bg-red-100 text-red-700 border-red-200";
+        if (s.includes('cancelled')) return "bg-red-100 text-red-700 border-red-200";
         return "bg-slate-100 text-slate-700 border-slate-200";
     };
 
