@@ -22,7 +22,10 @@ import {
     Briefcase,
     Clock,
     ImageIcon,
-    ExternalLink // Added for map links
+    ExternalLink,
+    Phone,              // [!code ++]
+    MessageCircle,      // [!code ++] Used for WhatsApp
+    MessageSquareText   // [!code ++] Used for SMS
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -111,17 +114,16 @@ export default function CalendarPage() {
 
     return (
         <div className="max-w-7xl mx-auto p-4 md:p-8 space-y-8 animate-in fade-in duration-500 min-h-screen pb-20">
-
-            {/* HEADER */}
-            <div className="flex flex-col gap-2 mb-6">
-                <h1 className="text-3xl font-bold text-[#0F2854]">Schedule</h1>
-                <p className="text-slate-500">Manage your upcoming events</p>
-            </div>
-
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
-                
+
                 {/* 1. CALENDAR SECTION (Sticky) */}
-                <div className="md:col-span-1 md:sticky md:top-24">
+                <div className="md:col-span-1 md:sticky md:top-24 z-100" >
+                     {/* HEADER */}
+                    <div className="flex flex-col gap-2 mb-6">
+                        <h1 className="text-3xl font-bold text-[#0F2854]">Schedule</h1>
+                        <p className="text-slate-500">Manage your upcoming events</p>
+                    </div>
+
                     <Card className="shadow-lg border-slate-200 overflow-hidden">
                         <CardContent className="p-0">
                             <Calendar
@@ -146,11 +148,8 @@ export default function CalendarPage() {
                             />
                         </CardContent>
                     </Card>
-                </div>
 
-                {/* 2. EVENTS LIST SECTION */}
-                <div className="md:col-span-2 space-y-4">
-                    <div className="flex items-center justify-between bg-white/95 backdrop-blur py-2 sticky top-0 z-10 border-b border-slate-100 md:static md:bg-transparent md:border-none">
+                    <div className="flex items-center justify-between bg-white py-2 sticky top-0 z-10 border-b border-slate-100 md:static md:bg-transparent md:border-none">
                         <h2 className="text-lg font-bold text-slate-700 flex items-center gap-2">
                             {selectedDate ? format(selectedDate, "EEEE, MMMM do") : "Select a date"}
                         </h2>
@@ -158,6 +157,11 @@ export default function CalendarPage() {
                             {selectedDayEvents.length} Events
                         </Badge>
                     </div>
+                </div>
+
+                {/* 2. EVENTS LIST SECTION */}
+                <div className="md:col-span-2 space-y-4">
+                    
 
                     <div className="grid grid-cols-1 gap-4">
                         {selectedDayEvents.length > 0 ? (
@@ -167,13 +171,16 @@ export default function CalendarPage() {
                                     loc.date && isSameDay(safeDate(loc.date), selectedDate!)
                                 ) || [];
 
+                                // Clean phone number for WhatsApp
+                                const cleanPhone = event.customerMobile?.replace(/[^0-9]/g, "") || "";
+
                                 return (
                                     <Card
                                         key={event.id}
-                                        className="group cursor-pointer hover:shadow-lg transition-all border-slate-200 hover:border-blue-300 overflow-hidden bg-white p-0"
+                                        className="group cursor-pointer hover:shadow-lg transition-all border-slate-200 hover:border-blue-300 overflow-hidden bg-white"
                                         onClick={() => router.push(`/app/events/${event.id}`)}
                                     >
-                                        <div className="flex flex-col sm:flex-row h-full min-h-[140px]">
+                                        <div className="flex flex-col sm:flex-row h-full min-h-[160px]">
                                             
                                             {/* IMAGE SECTION */}
                                             <div className="w-full sm:w-40 h-40 sm:h-auto bg-slate-100 relative shrink-0">
@@ -219,15 +226,46 @@ export default function CalendarPage() {
                                                     </div>
                                                 </div>
 
+                                                {/* [!code highlight] QUICK ACTION BUTTONS */}
+                                                <div className="flex items-center gap-2">
+                                                    <Button 
+                                                        variant="outline" 
+                                                        size="sm" 
+                                                        className="h-7 px-2 text-xs gap-1.5 border-slate-200 text-slate-600 hover:text-blue-600 hover:border-blue-200 bg-white"
+                                                        onClick={(e) => { e.stopPropagation(); window.open(`tel:${event.customerMobile}`, '_self'); }}
+                                                        disabled={!event.customerMobile}
+                                                    >
+                                                        <Phone className="h-3 w-3" /> Call
+                                                    </Button>
+                                                    <Button 
+                                                        variant="outline" 
+                                                        size="sm" 
+                                                        className="h-7 px-2 text-xs gap-1.5 border-slate-200 text-slate-600 hover:text-green-600 hover:border-green-200 bg-white"
+                                                        onClick={(e) => { e.stopPropagation(); window.open(`https://wa.me/${cleanPhone}`, '_blank'); }}
+                                                        disabled={!cleanPhone}
+                                                    >
+                                                        <MessageCircle className="h-3 w-3" /> WhatsApp
+                                                    </Button>
+                                                    <Button 
+                                                        variant="outline" 
+                                                        size="sm" 
+                                                        className="h-7 px-2 text-xs gap-1.5 border-slate-200 text-slate-600 hover:text-indigo-600 hover:border-indigo-200 bg-white"
+                                                        onClick={(e) => { e.stopPropagation(); window.open(`sms:${event.customerMobile}`, '_self'); }}
+                                                        disabled={!event.customerMobile}
+                                                    >
+                                                        <MessageSquareText className="h-3 w-3" /> SMS
+                                                    </Button>
+                                                </div>
+
                                                 {/* Footer: Date-Specific Locations */}
                                                 {dayLocations.length > 0 ? (
-                                                    <div className="mt-auto space-y-2">
+                                                    <div className="mt-auto pt-2 space-y-2">
                                                         {dayLocations.map((loc, idx) => (
                                                             <div 
                                                                 key={idx}
                                                                 onClick={(e) => {
                                                                     if (loc.mapUrl) {
-                                                                        e.stopPropagation(); // [!code highlight] Stop card click from triggering
+                                                                        e.stopPropagation(); 
                                                                         window.open(loc.mapUrl, '_blank');
                                                                     }
                                                                 }}
@@ -249,7 +287,6 @@ export default function CalendarPage() {
                                                         ))}
                                                     </div>
                                                 ) : (
-                                                    // Spacer if no location to keep card height consistent if needed
                                                     <div className="mt-auto"></div>
                                                 )}
                                             </div>
@@ -264,7 +301,7 @@ export default function CalendarPage() {
                             })
                         ) : (
                             <div className="flex flex-col items-center justify-center py-12 text-center text-slate-400 bg-white rounded-lg border border-dashed border-slate-200">
-                                <Clock className="w-12 h-12 mb-3 opacity-20" />
+                                <Clock className="w-10 h-10 mb-3 opacity-20" />
                                 <p className="text-sm font-medium text-slate-600">No events scheduled</p>
                                 <p className="text-xs">Select another date to view details.</p>
                                 <Button
