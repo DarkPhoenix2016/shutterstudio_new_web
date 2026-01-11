@@ -312,14 +312,6 @@ export default function CalendarPage() {
                                 <Clock className="w-10 h-10 mb-3 opacity-20" />
                                 <p className="text-sm font-medium text-slate-600">No events scheduled</p>
                                 <p className="text-xs">Select another date to view details.</p>
-                                <Button
-                                    variant="link"
-                                    size="sm"
-                                    className="mt-2 text-[#1C4D8D]"
-                                    onClick={() => router.push('/app/events')}
-                                >
-                                    Create New Event
-                                </Button>
                             </div>
                         )}
                     </div>
