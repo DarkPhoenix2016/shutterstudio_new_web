@@ -393,7 +393,7 @@ export default function ConsultationPage() {
             <div className="flex flex-1 overflow-hidden w-full">
                 
                 {/* 2A. LEFT: Main Content */}
-                <main className="flex-1 flex flex-col overflow-hidden relative bg-slate-50/50">
+                <main className="flex-1 flex flex-col overflow-y-auto relative bg-slate-50/50">
                     <ScrollArea className="flex-1 w-full">
                         <div className="p-6 pb-24 max-w-6xl mx-auto w-full"> 
                             
@@ -554,7 +554,7 @@ export default function ConsultationPage() {
                                                 className={cn(
                                                     "min-w-[300px] w-[320px] snap-center cursor-pointer transition-all border-2 relative hover:shadow-lg flex flex-col",
                                                     consultation.package.selectedPackageId === pkg.id 
-                                                        ? "border-blue-500 shadow-xl scale-105 z-10" 
+                                                        ? "border-blue-500 shadow-xl scale-95 z-10" 
                                                         : "border-slate-100 hover:border-blue-200"
                                                 )}
                                                 onClick={() => setConsultation({...consultation, package: {...consultation.package, selectedPackageId: pkg.id}})}
@@ -736,7 +736,7 @@ export default function ConsultationPage() {
 
                     {/* Footer Actions */}
                     {step > 0 && (
-                        <div className="absolute bottom-0 left-0 right-0 bg-white border-t border-slate-200 p-4 flex justify-between items-center z-40 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
+                        <div className="absolute sticky bottom-0 left-0 right-0 bg-white border-t border-slate-200 p-4 flex justify-between items-center z-40 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
                             <div>
                                 <Button variant="ghost" onClick={handleBack} className="text-slate-500">
                                     <ChevronLeft className="w-4 h-4 mr-2"/> Back
