@@ -4,21 +4,20 @@ import { useState, useEffect, useMemo } from "react"
 import { useAuth } from "@/context/AuthContext"
 import { useRouter } from "next/navigation"
 import { fetchEvents, EventData } from "@/services/event-service"
-import { format, isSameDay, isAfter, isBefore, startOfToday, endOfToday, parseISO } from "date-fns"
+import { format, isSameDay, isAfter, isBefore, startOfToday, endOfToday } from "date-fns"
 
 // UI Components
-import { Card, CardContent } from "@/components/ui/card"
+import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Button } from "@/components/ui/button"
-import { ScrollArea } from "@/components/ui/scroll-area"
 
 // Icons
 import { 
-    Loader2, Search, Calendar, Clock, MapPin, 
-    CheckCircle, ArrowRight, Briefcase, User, 
-    AlertCircle, PartyPopper, History
+    Loader2, Search, Calendar, MapPin, 
+    ArrowRight, Briefcase, User, 
+    PartyPopper, History
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -32,7 +31,7 @@ const safeDate = (dateInput: any): Date => {
 };
 
 export default function MyTasksPage() {
-    const { userData } = useAuth()
+    const { userData, currentUser } = useAuth() // [!code highlight] Use currentUser for reliable UID
     const router = useRouter()
 
     // State
@@ -42,29 +41,41 @@ export default function MyTasksPage() {
     const [activeTab, setActiveTab] = useState("today")
 
     // --- DATA LOADING ---
-   useEffect(() => {
-    if (!userData) return;
+    useEffect(() => {
+        // Wait for Auth to fully load
+        if (userData === undefined || currentUser === null) return;
 
-    const debugLoad = async () => {
-        console.log("1. Current User UID:", userData.uid ||userData);
-        console.log("2. Studio ID:", userData.studioID);
+        const loadMyTasks = async () => {
+            if (userData?.studioID && currentUser?.uid) {
+                setLoading(true);
+                try {
+                    // Fetch all studio events
+                    const events = await fetchEvents(userData.studioID);
+                    
+                    // [!code highlight] FIXED FILTER: Use currentUser.uid
+                    const myEvents = events.filter(event => {
+                        // 1. Check top-level assignment
+                        const isMainCrew = event.assignedCrew?.includes(currentUser.uid);
+                        
+                        // 2. (Optional) Check per-day assignment if your data structure supports it
+                        // const isDayCrew = event.days?.some(d => d.assignedCrew?.includes(currentUser.uid));
 
-        // Fetch RAW events without filtering first to see if access works
-        const allEvents = await fetchEvents(userData.studioID); 
-        console.log("3. Total Events Fetched:", allEvents.length);
-
-        if (allEvents.length > 0) {
-            const sampleEvent = allEvents[0];
-            console.log("4. Sample Event Structure:", sampleEvent);
-            console.log("5. Sample AssignedCrew:", sampleEvent.assignedCrew);
-            
-            const isMatch = sampleEvent.assignedCrew?.includes(userData.uid);
-            console.log("6. Does sample match user?", isMatch);
+                        return isMainCrew;
+                    });
+                    
+                    setAllEvents(myEvents);
+                } catch (error) {
+                    console.error("Failed to load tasks", error);
+                } finally {
+                    setLoading(false);
+                }
+            } else {
+                setLoading(false);
+            }
         }
-    };
 
-    debugLoad();
-}, [userData]);
+        loadMyTasks();
+    }, [userData, currentUser]); // [!code highlight] Depend on currentUser
 
     // --- CATEGORIZATION LOGIC ---
     const { todayTasks, upcomingTasks, pastTasks } = useMemo(() => {
@@ -94,9 +105,7 @@ export default function MyTasksPage() {
             // Check if any day is TODAY
             const isToday = days.some(d => isSameDay(d, today));
             
-            // Check if any day is FUTURE (and not today, generally)
-            // Logic: If it has a today date, it goes to Today tab even if it has future dates (multi-day).
-            // Upcoming is strictly future dates only OR future dates if not active today.
+            // Check if any day is FUTURE
             const hasFuture = days.some(d => isAfter(d, endToday));
             
             // Check if all days are PAST
@@ -110,14 +119,9 @@ export default function MyTasksPage() {
                 pastList.push(event);
             }
         });
-
-        // Sorting
-        // Today: Earliest time/date first (if times available) or standard priority
-        // Upcoming: Earliest date first
-        // Past: Most recent first (descending)
         
         return {
-            todayTasks: todayList, // Add sort logic if needed
+            todayTasks: todayList,
             upcomingTasks: upcomingList.sort((a, b) => safeDate(a.days[0].date).getTime() - safeDate(b.days[0].date).getTime()),
             pastTasks: pastList.sort((a, b) => safeDate(b.days[0].date).getTime() - safeDate(a.days[0].date).getTime())
         };
@@ -129,7 +133,7 @@ export default function MyTasksPage() {
         if (s.includes('complet')) return "bg-green-100 text-green-700 border-green-200";
         if (s.includes('progress') || s.includes('shoot')) return "bg-blue-100 text-blue-700 border-blue-200";
         if (s.includes('edit') || s.includes('post')) return "bg-purple-100 text-purple-700 border-purple-200";
-        if (s.includes('cancelled')) return "bg-red-100 text-red-700 border-red-200";
+        if (s.includes('cancel')) return "bg-red-100 text-red-700 border-red-200";
         return "bg-slate-100 text-slate-700 border-slate-200";
     };
 
@@ -140,12 +144,10 @@ export default function MyTasksPage() {
             const date = safeDate(d.date);
             if (type === 'today') return isSameDay(date, new Date());
             if (type === 'upcoming') return isAfter(date, new Date());
-            return true; // Default to first for past
+            return true;
         }) || event.days[0];
 
         const dayDate = safeDate(relevantDay?.date);
-        
-        // Find location for this day if exists
         const dayLocation = event.locations?.find(l => isSameDay(safeDate(l.date), dayDate));
 
         return (
@@ -157,12 +159,10 @@ export default function MyTasksPage() {
                     type === 'past' ? "opacity-75 hover:opacity-100 grayscale-[0.3] hover:grayscale-0" : ""
                 )}
             >
-                {/* Status Stripe for Today items */}
                 {type === 'today' && <div className="absolute left-0 top-3 bottom-3 w-1 bg-blue-500 rounded-r-full" />}
 
                 <div className={cn("flex flex-col gap-3", type === 'today' ? "pl-3" : "")}>
                     
-                    {/* Header: Status & ID */}
                     <div className="flex justify-between items-start">
                         <Badge variant="outline" className={cn("font-medium border", getStatusStyles(event.status))}>
                             {event.status}
@@ -172,7 +172,6 @@ export default function MyTasksPage() {
                         </span>
                     </div>
 
-                    {/* Main Content */}
                     <div>
                         <h3 className={cn("font-bold text-[#0F2854] leading-tight group-hover:text-blue-700 transition-colors", type === 'today' ? "text-lg" : "text-base")}>
                             {event.eventName}
@@ -184,23 +183,19 @@ export default function MyTasksPage() {
                         </div>
                     </div>
 
-                    {/* Meta Grid */}
                     <div className="grid grid-cols-2 gap-2 mt-1">
-                        {/* Date/Time */}
                         <div className="flex items-start gap-2 text-sm text-slate-700 bg-slate-50 p-2 rounded-md">
                             <Calendar className={cn("w-4 h-4 mt-0.5", type === 'today' ? "text-blue-500" : "text-slate-400")} />
                             <div className="flex flex-col">
                                 <span className={cn("font-medium", type === 'today' ? "text-blue-700" : "")}>
                                     {type === 'today' ? "Today" : format(dayDate, "EEE, MMM do")}
                                 </span>
-                                {/* Simulate Time if not in DB (or use location time) */}
                                 <span className="text-xs text-slate-500">
                                     {dayLocation?.time || "All Day"}
                                 </span>
                             </div>
                         </div>
 
-                        {/* Location */}
                         <div className="flex items-start gap-2 text-sm text-slate-700 bg-slate-50 p-2 rounded-md">
                             <MapPin className="w-4 h-4 mt-0.5 text-slate-400" />
                             <div className="flex flex-col">
@@ -212,7 +207,6 @@ export default function MyTasksPage() {
                         </div>
                     </div>
 
-                    {/* Footer / Role */}
                     <div className="flex justify-between items-center mt-1 pt-2 border-t border-slate-50">
                         <div className="flex items-center gap-1.5 text-xs text-slate-500">
                             <Briefcase className="w-3.5 h-3.5" />

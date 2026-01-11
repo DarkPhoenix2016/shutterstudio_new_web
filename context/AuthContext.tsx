@@ -16,6 +16,7 @@ import { logAuditAction } from "@/lib/logger"
 
 // --- Types ---
 interface UserData {
+  id: string
   uid: string
   email: string
   role: string 
@@ -27,7 +28,7 @@ interface UserData {
   lastLogin?: string
   coverURL?: string
   phoneNumber?: string
-  studioID?: string
+  studioID: string
   designation?: string
   createdAt?: any
 }
