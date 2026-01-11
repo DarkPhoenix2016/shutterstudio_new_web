@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useMemo } from "react"
+import { useState, useEffect, useMemo, useCallback } from "react"
 import { useAuth } from "@/context/AuthContext"
 import { useRouter } from "next/navigation"
 import { 
@@ -23,7 +23,7 @@ import { Slider } from "@/components/ui/slider"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
 import { Textarea } from "@/components/ui/textarea"
-import { Dialog, DialogContent, DialogTrigger, DialogTitle, DialogHeader, DialogDescription } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
@@ -33,7 +33,8 @@ import { Calendar } from "@/components/ui/calendar"
 import {
     Loader2, ChevronRight, ChevronLeft, Save, CheckCircle, 
     Maximize2, Minimize2, MapPin, Calendar as CalendarIcon, DollarSign,
-    Image as ImageIcon, Plus, Trash2, User, Video, Camera, LayoutTemplate, ArrowRight, Play, X, Clock, FileText
+    Image as ImageIcon, Plus, Trash2, User, Video, Camera, LayoutTemplate, 
+    ArrowRight, Play, X, ZoomIn, ZoomOut, Info, Check
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import Swal from "sweetalert2"
@@ -41,10 +42,7 @@ import Swal from "sweetalert2"
 // --- COMPONENTS ---
 
 const ConsultationStepper = ({ currentStep }: { currentStep: number }) => {
-    // Hide stepper on Welcome Screen (Step 0)
     if (currentStep === 0) return null;
-
-    // Steps 1 to 4 mapped to indices 0 to 3 for display
     const steps = ["Requirements", "Inspiration", "Packages", "Review"];
     const displayIndex = currentStep - 1; 
 
@@ -69,23 +67,34 @@ const ConsultationStepper = ({ currentStep }: { currentStep: number }) => {
     );
 };
 
+// --- HELPER: SAFE DATE ---
+const safeDate = (dateInput: any): Date => {
+    try {
+        if (!dateInput) return new Date();
+        if (typeof dateInput.toDate === 'function') return dateInput.toDate();
+        return new Date(dateInput);
+    } catch { return new Date(); }
+};
+
 export default function ConsultationPage() {
     const { userData } = useAuth()
     const router = useRouter()
 
     // --- STATE ---
     const [loading, setLoading] = useState(true)
-    
-    // STEP STATE: 0 = Welcome, 1 = Req, 2 = Insp, 3 = Pkg, 4 = Review
     const [step, setStep] = useState(0) 
-    
     const [isSaving, setIsSaving] = useState(false)
     const [isFullScreen, setIsFullScreen] = useState(false)
 
-    // Draft Loading State
+    // Draft Loading
     const [isLoadDialogOpen, setIsLoadDialogOpen] = useState(false)
     const [drafts, setDrafts] = useState<ConsultationData[]>([])
     const [loadingDrafts, setLoadingDrafts] = useState(false)
+
+    // Lightbox State
+    const [lightboxIndex, setLightboxIndex] = useState<number | null>(null)
+    const [showInfoPanel, setShowInfoPanel] = useState(true)
+    const [zoomLevel, setZoomLevel] = useState(1)
 
     // Master Data
     const [events, setEvents] = useState<EventData[]>([])
@@ -93,7 +102,7 @@ export default function ConsultationPage() {
     const [eventTypes, setEventTypes] = useState<string[]>([])
     const [availableTags, setAvailableTags] = useState<string[]>([])
 
-    // Consultation Document State
+    // Consultation Data
     const [consultation, setConsultation] = useState<ConsultationData>({
         studioId: "",
         status: "draft",
@@ -113,7 +122,6 @@ export default function ConsultationPage() {
     // --- INITIALIZATION ---
     useEffect(() => {
         if (!userData?.studioID) return;
-
         const init = async () => {
             try {
                 const [evtList, pkgList, types] = await Promise.all([
@@ -121,15 +129,12 @@ export default function ConsultationPage() {
                     fetchPackagesList(userData.studioID),
                     fetchStudioSettingsList(userData.studioID, 'EVENT_TYPES')
                 ]);
-
                 setEvents(evtList);
                 setPackages(pkgList);
                 setEventTypes(types.length ? types : ["Weddings", "Homecoming", "Preshoot", "Birthday", "Corporate"]);
-
                 const tags = new Set<string>();
                 evtList.forEach(e => e.tags?.forEach(t => tags.add(t)));
                 setAvailableTags(Array.from(tags).sort());
-
                 setConsultation(prev => ({ ...prev, studioId: userData.studioID! }));
             } catch (e) {
                 console.error("Init failed", e);
@@ -140,7 +145,7 @@ export default function ConsultationPage() {
         init();
     }, [userData]);
 
-    // --- COMPUTED DATA ---
+    // --- MATCHING LOGIC ---
     const matchedEvents = useMemo(() => {
         return events.filter(e => {
             const typeMatch = e.eventType === consultation.requirements.eventType;
@@ -171,23 +176,38 @@ export default function ConsultationPage() {
         }));
     }, [consultation.package.selectedPackageId, consultation.package.customItems, packages]);
 
-    // --- ACTIONS ---
+    // --- LIGHTBOX ACTIONS ---
+    const handleLightboxNext = useCallback(() => {
+        setLightboxIndex(prev => (prev !== null && prev < matchedEvents.length - 1 ? prev + 1 : 0));
+        setZoomLevel(1);
+    }, [matchedEvents.length]);
 
+    const handleLightboxPrev = useCallback(() => {
+        setLightboxIndex(prev => (prev !== null && prev > 0 ? prev - 1 : matchedEvents.length - 1));
+        setZoomLevel(1);
+    }, [matchedEvents.length]);
+
+    const handleKeyDown = useCallback((e: KeyboardEvent) => {
+        if (lightboxIndex === null) return;
+        if (e.key === "ArrowRight") handleLightboxNext();
+        if (e.key === "ArrowLeft") handleLightboxPrev();
+        if (e.key === "Escape") setLightboxIndex(null);
+    }, [lightboxIndex, handleLightboxNext, handleLightboxPrev]);
+
+    useEffect(() => {
+        window.addEventListener("keydown", handleKeyDown);
+        return () => window.removeEventListener("keydown", handleKeyDown);
+    }, [handleKeyDown]);
+
+    // --- MAIN ACTIONS ---
     const handleAutoSave = async (silent = true) => {
         if (!userData?.studioID) return;
         setIsSaving(true);
         try {
             const saved = await saveConsultation(userData.studioID, consultation);
             if (!consultation.id) setConsultation(prev => ({ ...prev, id: saved.id }));
-            
             if (!silent) {
-                const Toast = Swal.mixin({
-                    toast: true,
-                    position: 'top-end',
-                    showConfirmButton: false,
-                    timer: 2000,
-                    timerProgressBar: true,
-                });
+                const Toast = Swal.mixin({ toast: true, position: 'top-end', showConfirmButton: false, timer: 2000, timerProgressBar: true });
                 Toast.fire({ icon: 'success', title: 'Consultation saved' });
             }
         } catch (e) {
@@ -205,24 +225,21 @@ export default function ConsultationPage() {
         try {
             const data = await fetchConsultations(userData.studioID, 'draft');
             setDrafts(data);
-        } catch (e) {
-            console.error(e);
-        } finally {
-            setLoadingDrafts(false);
-        }
+        } catch (e) { console.error(e); } 
+        finally { setLoadingDrafts(false); }
     };
 
     const selectDraft = (draft: ConsultationData) => {
         setConsultation(draft);
         setIsLoadDialogOpen(false);
-        setStep(1); // Go to Requirements step
+        setStep(1);
         const Toast = Swal.mixin({ toast: true, position: 'top-end', showConfirmButton: false, timer: 1500 });
         Toast.fire({ icon: 'success', title: 'Draft Loaded' });
     };
 
     const handleNext = () => {
         if (step === 1 && !consultation.client.name) {
-            return Swal.fire({ icon: 'warning', title: 'Client Name Required', text: 'Please enter a client name to proceed.' });
+            return Swal.fire({ icon: 'warning', title: 'Client Name Required', text: 'Please enter a client name.' });
         }
         if (step > 0) handleAutoSave(); 
         setStep(s => Math.min(s + 1, 4));
@@ -245,7 +262,7 @@ export default function ConsultationPage() {
     const handleConvertToEvent = async () => {
         const result = await Swal.fire({
             title: 'Convert to Event?',
-            text: `This will create a new "${consultation.requirements.eventType}" event for ${consultation.client.name}.`,
+            text: `Create "${consultation.requirements.eventType}" event for ${consultation.client.name}?`,
             icon: 'question',
             showCancelButton: true,
             confirmButtonText: 'Yes, Create',
@@ -265,15 +282,13 @@ export default function ConsultationPage() {
                 status: "Inquiry",
                 inquiryDate: new Date(),
                 dayCount: 1,
-                days: consultation.requirements.date 
-                    ? [{ 
-                        date: consultation.requirements.date, 
-                        type: consultation.package.selectedPackageId === 'custom' ? 'custom' : 'package',
-                        packageId: consultation.package.selectedPackageId !== 'custom' ? consultation.package.selectedPackageId : undefined,
-                        cost: consultation.package.totalEstimate,
-                        customItems: [] 
-                      }] 
-                    : [],
+                days: consultation.requirements.date ? [{ 
+                    date: consultation.requirements.date, 
+                    type: consultation.package.selectedPackageId === 'custom' ? 'custom' : 'package',
+                    packageId: consultation.package.selectedPackageId !== 'custom' ? consultation.package.selectedPackageId : undefined,
+                    cost: consultation.package.totalEstimate,
+                    customItems: [] 
+                }] : [],
                 totalBudget: consultation.package.totalEstimate,
                 discountType: 'fixed',
                 discount: 0,
@@ -282,7 +297,7 @@ export default function ConsultationPage() {
                 assignedCrew: [],
                 assignedEquipment: [],
                 tags: consultation.requirements.styleTags,
-                notes: `Consultation Notes:\n${consultation.requirements.notes || "None"}\n\nDeliverables Required:\n${Object.entries(consultation.requirements.deliverables).filter(([k,v]) => v).map(([k]) => k).join(', ')}`,
+                notes: `Consultation Notes:\n${consultation.requirements.notes || "None"}`,
                 additionalServices: consultation.package.customItems.map(item => ({
                     id: crypto.randomUUID(),
                     name: item.name,
@@ -296,20 +311,21 @@ export default function ConsultationPage() {
             await createEvent(userData.studioID, newEvent);
             if (consultation.id) await convertConsultationStatus(userData.studioID, consultation.id);
 
-            Swal.fire({ title: 'Success!', text: 'Event created successfully.', icon: 'success', timer: 1500 });
+            Swal.fire({ title: 'Success!', text: 'Event created.', icon: 'success', timer: 1500 });
             router.push('/app/events');
         } catch (e) {
-            console.error(e);
             Swal.fire('Error', 'Failed to convert consultation.', 'error');
         } finally {
             setLoading(false);
         }
     };
 
+    const currentLightboxEvent = lightboxIndex !== null ? matchedEvents[lightboxIndex] : null;
+
     if (loading) return <div className="h-screen flex items-center justify-center"><Loader2 className="w-8 h-8 animate-spin text-[#1C4D8D]" /></div>;
 
     return (
-        <div className={cn("h-screen bg-slate-50 flex flex-col overflow-hidden w-full", isFullScreen ? "p-0" : "")}>
+        <div className={cn("h-full bg-slate-50 flex flex-col overflow-hidden w-full", isFullScreen ? "p-0" : "")}>
             
             {/* 1. HEADER (Fixed) */}
             <header className="shrink-0 h-16 bg-white border-b border-slate-200 px-6 flex items-center justify-between shadow-sm z-50">
@@ -334,10 +350,10 @@ export default function ConsultationPage() {
                 </div>
             </header>
 
-            {/* 2. BODY LAYOUT (Fixed Flex) */}
+            {/* 2. BODY LAYOUT */}
             <div className="flex flex-1 overflow-hidden w-full">
                 
-                {/* 2A. LEFT: Main Content (Flexible Width) */}
+                {/* 2A. LEFT: Main Content */}
                 <main className="flex-1 flex flex-col overflow-hidden relative bg-slate-50/50">
                     <ScrollArea className="flex-1 w-full">
                         <div className="p-6 pb-24 max-w-6xl mx-auto w-full"> 
@@ -353,7 +369,6 @@ export default function ConsultationPage() {
                                         <Card 
                                             className="cursor-pointer hover:border-blue-500 hover:shadow-lg transition-all group"
                                             onClick={() => {
-                                                // Reset state for new
                                                 setConsultation({
                                                     studioId: userData?.studioID || "",
                                                     status: "draft",
@@ -383,7 +398,7 @@ export default function ConsultationPage() {
                                             </CardContent>
                                         </Card>
                                         <Card 
-                                            className="cursor-pointer hover:border-blue-500 hover:shadow-lg transition-all group"
+                                            className="cursor-pointer hover:border-slate-400 hover:shadow-md transition-all group"
                                             onClick={handleLoadDrafts}
                                         >
                                             <CardContent className="p-8 flex flex-col items-center text-center gap-4">
@@ -410,7 +425,7 @@ export default function ConsultationPage() {
 
                                     <Card className="border-0 shadow-md">
                                         <CardContent className="p-8 space-y-8">
-                                            {/* Requirements Form Content */}
+                                            {/* Form */}
                                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                                 <div className="space-y-2">
                                                     <Label>Client Name *</Label>
@@ -529,77 +544,32 @@ export default function ConsultationPage() {
 
                                     {matchedEvents.length > 0 ? (
                                         <div className="columns-2 md:columns-3 lg:columns-4 gap-4 space-y-4">
-                                            {matchedEvents.map(event => (
-                                                <Dialog key={event.id}>
-                                                    <DialogTrigger asChild>
-                                                        <div 
-                                                            className={cn(
-                                                                "break-inside-avoid relative group rounded-xl overflow-hidden cursor-pointer border-2 transition-all bg-slate-100",
-                                                                consultation.inspiration.selectedEventIds.includes(event.id!) 
-                                                                    ? "border-blue-500 ring-2 ring-blue-200" 
-                                                                    : "border-transparent"
-                                                            )}
-                                                        >
-                                                            <img 
-                                                                src={event.couplePhotoUrl || "/placeholder.jpg"} 
-                                                                className="w-full h-auto object-cover transition-transform duration-700 group-hover:scale-105" 
-                                                                alt={event.eventName}
-                                                            />
-                                                            {/* Selection Checkmark */}
-                                                            {consultation.inspiration.selectedEventIds.includes(event.id!) && (
-                                                                <div className="absolute top-2 right-2 bg-blue-600 text-white p-1 rounded-full shadow-md z-10">
-                                                                    <CheckCircle className="w-4 h-4" />
-                                                                </div>
-                                                            )}
-                                                            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-3">
-                                                                <p className="text-white font-bold text-xs truncate">{event.eventName}</p>
-                                                            </div>
+                                            {matchedEvents.map((event, idx) => (
+                                                <div 
+                                                    key={event.id}
+                                                    onClick={() => setLightboxIndex(idx)} 
+                                                    className={cn(
+                                                        "break-inside-avoid relative group rounded-xl overflow-hidden cursor-pointer border-2 transition-all bg-slate-100",
+                                                        consultation.inspiration.selectedEventIds.includes(event.id!) 
+                                                            ? "border-blue-500 ring-2 ring-blue-200" 
+                                                            : "border-transparent"
+                                                    )}
+                                                >
+                                                    <img 
+                                                        src={event.couplePhotoUrl || "/placeholder.jpg"} 
+                                                        className="w-full h-auto object-cover transition-transform duration-700 group-hover:scale-105" 
+                                                        alt={event.eventName}
+                                                    />
+                                                    {/* Selection Checkmark */}
+                                                    {consultation.inspiration.selectedEventIds.includes(event.id!) && (
+                                                        <div className="absolute top-2 right-2 bg-blue-600 text-white p-1 rounded-full shadow-md z-10">
+                                                            <CheckCircle className="w-4 h-4" />
                                                         </div>
-                                                    </DialogTrigger>
-                                                    
-                                                    {/* Lightbox Content */}
-                                                    <DialogContent className="max-w-5xl p-0 overflow-hidden bg-black/95 border-none text-white h-[85vh] flex flex-col md:flex-row">
-                                                        <DialogTitle className="sr-only">Event Lightbox</DialogTitle>
-                                                        <div className="flex-1 flex items-center justify-center relative bg-black">
-                                                            <img src={event.couplePhotoUrl} className="max-h-full max-w-full object-contain" alt="Full View"/>
-                                                        </div>
-                                                        <div className="w-full md:w-80 bg-white text-slate-900 p-6 flex flex-col shrink-0 overflow-y-auto">
-                                                            <h3 className="font-bold text-xl text-[#0F2854] leading-tight">{event.eventName}</h3>
-                                                            <Badge className="w-fit mt-2 bg-blue-50 text-blue-700 hover:bg-blue-50 border-none">{event.eventType}</Badge>
-                                                            
-                                                            <div className="mt-6 space-y-5 flex-1">
-                                                                <div className="flex gap-3 text-sm items-center">
-                                                                    <CalendarIcon className="w-4 h-4 text-slate-400" />
-                                                                    <span>{event.days && event.days[0] ? format(event.days[0].date instanceof Date ? event.days[0].date : new Date(event.days[0].date), "PPP") : "Date N/A"}</span>
-                                                                </div>
-                                                                {event.locations && event.locations[0] && (
-                                                                    <div className="flex gap-3 text-sm items-start">
-                                                                        <MapPin className="w-4 h-4 text-slate-400 mt-0.5" />
-                                                                        <span className="truncate whitespace-normal">{event.locations[0].name}</span>
-                                                                    </div>
-                                                                )}
-                                                            </div>
-                                                            
-                                                            <div className="mt-auto pt-4 space-y-2">
-                                                                <Button 
-                                                                    className={cn("w-full gap-2", consultation.inspiration.selectedEventIds.includes(event.id!) ? "bg-red-50 text-red-600 hover:bg-red-100" : "bg-[#1C4D8D]")}
-                                                                    onClick={() => {
-                                                                        const current = consultation.inspiration.selectedEventIds;
-                                                                        const newIds = current.includes(event.id!) 
-                                                                            ? current.filter(id => id !== event.id) 
-                                                                            : [...current, event.id!];
-                                                                        setConsultation({...consultation, inspiration: {...consultation.inspiration, selectedEventIds: newIds}});
-                                                                    }}
-                                                                >
-                                                                    {consultation.inspiration.selectedEventIds.includes(event.id!) 
-                                                                        ? <><Trash2 className="w-4 h-4" /> Remove from Selection</> 
-                                                                        : <><CheckCircle className="w-4 h-4" /> Select as Inspiration</>
-                                                                    }
-                                                                </Button>
-                                                            </div>
-                                                        </div>
-                                                    </DialogContent>
-                                                </Dialog>
+                                                    )}
+                                                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-3">
+                                                        <p className="text-white font-bold text-xs truncate">{event.eventName}</p>
+                                                    </div>
+                                                </div>
                                             ))}
                                         </div>
                                     ) : (
@@ -757,7 +727,7 @@ export default function ConsultationPage() {
                         </div>
                     </ScrollArea>
 
-                    {/* Footer Actions (Sticky Bottom inside Main Flex) */}
+                    {/* Fixed Footer Actions */}
                     {step > 0 && (
                         <div className="absolute bottom-0 left-0 right-0 bg-white border-t border-slate-200 p-4 flex justify-between items-center z-40 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
                             <div>
@@ -785,7 +755,7 @@ export default function ConsultationPage() {
                     )}
                 </main>
 
-                {/* 2B. RIGHT: Sidebar Summary (Fixed Width, Fixed Position) */}
+                {/* 2B. RIGHT: Sidebar Summary (Fixed Width & Position) */}
                 {step > 0 && (
                     <aside className="w-80 bg-white border-l border-slate-200 shadow-xl hidden lg:flex flex-col z-40 h-full">
                         <div className="p-6 border-b shrink-0">
@@ -840,7 +810,7 @@ export default function ConsultationPage() {
                 )}
             </div>
 
-            {/* DIALOG FOR LOADING DRAFTS */}
+            {/* DIALOG: LOAD DRAFTS */}
             <Dialog open={isLoadDialogOpen} onOpenChange={setIsLoadDialogOpen}>
                 <DialogContent>
                     <DialogHeader>
@@ -863,6 +833,87 @@ export default function ConsultationPage() {
                     </div>
                 </DialogContent>
             </Dialog>
+
+            {/* CUSTOM LIGHTBOX UI (Absolute Overlay) */}
+            {lightboxIndex !== null && currentLightboxEvent && (
+                <div className="fixed inset-0 z-[100] bg-black/95 flex animate-in fade-in duration-200">
+                    <div className="flex-1 relative flex items-center justify-center h-full w-full">
+                        {/* Toolbar */}
+                        <div className="absolute top-4 right-4 z-50 flex items-center gap-2">
+                            <Button variant="secondary" size="icon" className="bg-black/50 text-white hover:bg-black/70 border-0 rounded-full" onClick={() => setZoomLevel(z => Math.min(z + 0.5, 3))}>
+                                <ZoomIn className="w-5 h-5" />
+                            </Button>
+                            <Button variant="secondary" size="icon" className="bg-black/50 text-white hover:bg-black/70 border-0 rounded-full" onClick={() => setZoomLevel(1)}>
+                                <ZoomOut className="w-5 h-5" />
+                            </Button>
+                            <Button variant="secondary" size="icon" className={`bg-black/50 text-white hover:bg-black/70 border-0 rounded-full ${showInfoPanel ? "text-blue-400" : ""}`} onClick={() => setShowInfoPanel(!showInfoPanel)}>
+                                <Info className="w-5 h-5" />
+                            </Button>
+                            <Button variant="secondary" size="icon" className="bg-white/10 text-white hover:bg-white/20 border-0 rounded-full" onClick={() => setLightboxIndex(null)}>
+                                <X className="w-6 h-6" />
+                            </Button>
+                        </div>
+
+                        {/* Arrows */}
+                        <Button variant="ghost" size="icon" className="absolute left-4 z-40 text-white hover:bg-white/10 rounded-full w-12 h-12" onClick={(e) => { e.stopPropagation(); handleLightboxPrev(); }}>
+                            <ChevronLeft className="w-8 h-8" />
+                        </Button>
+                        <Button variant="ghost" size="icon" className="absolute right-4 z-40 text-white hover:bg-white/10 rounded-full w-12 h-12" onClick={(e) => { e.stopPropagation(); handleLightboxNext(); }}>
+                            <ChevronRight className="w-8 h-8" />
+                        </Button>
+
+                        {/* Image */}
+                        <div className="w-full h-full flex items-center justify-center p-4 overflow-hidden" onClick={() => setZoomLevel(1)}>
+                            <img 
+                                src={currentLightboxEvent.couplePhotoUrl} 
+                                alt="Full View" 
+                                className="max-h-full max-w-full object-contain transition-transform duration-200"
+                                style={{ transform: `scale(${zoomLevel})` }}
+                            />
+                        </div>
+                    </div>
+
+                    {/* Sidebar */}
+                    {showInfoPanel && (
+                        <div className="w-80 bg-white border-l border-slate-200 shrink-0 h-full overflow-y-auto animate-in slide-in-from-right duration-300 p-6 flex flex-col">
+                            <div>
+                                <h2 className="text-xl font-bold text-[#0F2854] leading-tight mb-1">{currentLightboxEvent.eventName}</h2>
+                                <Badge variant="secondary" className="mt-2 bg-blue-50 text-blue-700 border-blue-100">{currentLightboxEvent.eventType}</Badge>
+                            </div>
+                            <div className="space-y-4 mt-6">
+                                <div className="flex items-start gap-3">
+                                    <CalendarIcon className="w-5 h-5 text-slate-400 mt-0.5" />
+                                    <div><p className="text-sm font-medium text-slate-700">Date</p><p className="text-sm text-slate-500">{currentLightboxEvent.days && currentLightboxEvent.days[0] ? format(safeDate(currentLightboxEvent.days[0].date), "PPP") : "N/A"}</p></div>
+                                </div>
+                                {currentLightboxEvent.locations?.[0] && (
+                                    <div className="flex items-start gap-3">
+                                        <MapPin className="w-5 h-5 text-slate-400 mt-0.5" />
+                                        <div><p className="text-sm font-medium text-slate-700">Location</p><p className="text-sm text-slate-500 truncate w-56">{currentLightboxEvent.locations[0].name}</p></div>
+                                    </div>
+                                )}
+                            </div>
+                            
+                            <Separator className="my-6" />
+                            
+                            <Button 
+                                className={cn("w-full gap-2", consultation.inspiration.selectedEventIds.includes(currentLightboxEvent.id!) ? "bg-red-50 text-red-600 hover:bg-red-100" : "bg-[#1C4D8D]")}
+                                onClick={() => {
+                                    const current = consultation.inspiration.selectedEventIds;
+                                    const newIds = current.includes(currentLightboxEvent.id!) 
+                                        ? current.filter(id => id !== currentLightboxEvent.id) 
+                                        : [...current, currentLightboxEvent.id!];
+                                    setConsultation({...consultation, inspiration: {...consultation.inspiration, selectedEventIds: newIds}});
+                                }}
+                            >
+                                {consultation.inspiration.selectedEventIds.includes(currentLightboxEvent.id!) 
+                                    ? <><Trash2 className="w-4 h-4" /> Remove</> 
+                                    : <><CheckCircle className="w-4 h-4" /> Select as Inspiration</>
+                                }
+                            </Button>
+                        </div>
+                    )}
+                </div>
+            )}
         </div>
     )
 }
