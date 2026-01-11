@@ -19,13 +19,12 @@ import {
     MapPin,
     User,
     ChevronRight,
-    Briefcase,
     Clock,
     ImageIcon,
     ExternalLink,
-    Phone,              // [!code ++]
-    MessageCircle,      // [!code ++] Used for WhatsApp
-    MessageSquareText   // [!code ++] Used for SMS
+    Phone,
+    MessageCircle,
+    MessageSquareText
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -113,18 +112,22 @@ export default function CalendarPage() {
     if (loading && events.length === 0) return <div className="h-screen flex items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-[#1C4D8D]" /></div>
 
     return (
-        <div className="max-w-7xl mx-auto p-4 md:p-8 space-y-8 animate-in fade-in duration-500 min-h-screen pb-20">
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
-
-                {/* 1. CALENDAR SECTION (Sticky) */}
-                <div className="md:col-span-1 md:sticky md:top-24 z-100" >
+        <div className="max-w-7xl mx-auto p-4 lg:p-8 space-y-8 animate-in fade-in duration-500 min-h-screen pb-20">
+            
+            {/* MAIN GRID LAYOUT */}
+            {/* [!code highlight] Fixed Layout: 1 col mobile, 3 cols desktop (1 for cal, 2 for list) */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start relative">
+                
+                {/* 1. CALENDAR SECTION (Sticky on Desktop) */}
+                {/* [!code highlight] lg:sticky lg:top-24 keeps it fixed while scrolling list */}
+                <div className="lg:col-span-1 lg:sticky lg:top-24 h-fit z-10">
                     {/* HEADER */}
                     <div className="flex flex-col gap-2 mb-6">
                         <h1 className="text-3xl font-bold text-[#0F2854]">Schedule</h1>
                         <p className="text-slate-500">Manage your upcoming events</p>
                     </div>
 
-                    <Card className="shadow-lg border-slate-200 overflow-hidden">
+                    <Card className="shadow-lg border-slate-200 overflow-hidden bg-white">
                         <CardContent className="p-0">
                             <Calendar
                                 mode="single"
@@ -150,25 +153,25 @@ export default function CalendarPage() {
                     </Card>
                 </div>
 
-                {/* 2. EVENTS LIST SECTION */}
-                <div className="md:col-span-2 space-y-4">
-                            <Card className="mt-6 bg-white border-slate-200 shadow-lg p-0">
-                        <CardContent className="flex items-center gap-4 p-4">
-                            <CalendarIcon className="w-6 h-6 text-blue-500" />
-                            <div className="flex items-center justify-between bg-white py-4 sticky px-auto">
-                                <h2 className="text-lg font-bold text-slate-700 flex items-center gap-2">
+                {/* 2. EVENTS LIST SECTION (Scrollable) */}
+                <div className="lg:col-span-2 space-y-4">
+                    
+                    {/* Sticky Date Header for Mobile/List context */}
+                    <Card className="bg-white border-slate-200 shadow-sm p-0 sticky top-0 z-20">
+                        <CardContent className="flex items-center justify-between p-4">
+                            <div className="flex items-center gap-3">
+                                <CalendarIcon className="w-5 h-5 text-blue-600" />
+                                <h2 className="text-lg font-bold text-slate-800">
                                     {selectedDate ? format(selectedDate, "EEEE, MMMM do") : "Select a date"}
                                 </h2>
-                                <Badge variant="secondary" className="bg-white border-slate-200 text-slate-700">
-                                    {selectedDayEvents.length} Events
-                                </Badge>
-
                             </div>
+                            <Badge variant="secondary" className="bg-slate-100 text-slate-600 border-slate-200">
+                                {selectedDayEvents.length} Events
+                            </Badge>
                         </CardContent>
                     </Card>
 
-
-                    <div className="grid grid-cols-1 gap-4">
+                    <div className="grid grid-cols-1 gap-4 pb-20">
                         {selectedDayEvents.length > 0 ? (
                             selectedDayEvents.map((event) => {
                                 // Filter locations specific to the selected date
@@ -231,8 +234,8 @@ export default function CalendarPage() {
                                                     </div>
                                                 </div>
 
-                                                {/* [!code highlight] QUICK ACTION BUTTONS */}
-                                                <div className="flex items-center gap-2">
+                                                {/* QUICK ACTION BUTTONS */}
+                                                <div className="flex items-center gap-2 flex-wrap">
                                                     <Button
                                                         variant="outline"
                                                         size="sm"
