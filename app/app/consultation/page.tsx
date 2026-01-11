@@ -7,7 +7,10 @@ import {
     fetchEvents, fetchPackagesList, fetchStudioSettingsList, 
     createEvent, EventData, PackageData 
 } from "@/services/event-service"
-import { saveConsultation, convertConsultationStatus, ConsultationData } from "@/services/consultation-service"
+import { 
+    saveConsultation, fetchConsultations, convertConsultationStatus, 
+    ConsultationData 
+} from "@/services/consultation-service"
 import { format } from "date-fns"
 
 // UI Components
@@ -20,7 +23,7 @@ import { Slider } from "@/components/ui/slider"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
 import { Textarea } from "@/components/ui/textarea"
-import { Dialog, DialogContent, DialogTrigger, DialogTitle } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogTrigger, DialogTitle, DialogHeader, DialogDescription } from "@/components/ui/dialog"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
@@ -30,7 +33,7 @@ import { Calendar } from "@/components/ui/calendar"
 import {
     Loader2, ChevronRight, ChevronLeft, Save, CheckCircle, 
     Maximize2, Minimize2, MapPin, Calendar as CalendarIcon, DollarSign,
-    Image as ImageIcon, Plus, Trash2, User, Video, Camera, LayoutTemplate, ArrowRight, Play, X
+    Image as ImageIcon, Plus, Trash2, User, Video, Camera, LayoutTemplate, ArrowRight, Play, X, Clock, FileText
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import Swal from "sweetalert2"
@@ -73,16 +76,16 @@ export default function ConsultationPage() {
     // --- STATE ---
     const [loading, setLoading] = useState(true)
     
-    // STEP STATE:
-    // 0 = Welcome / Entry
-    // 1 = Requirements
-    // 2 = Inspiration
-    // 3 = Packages
-    // 4 = Review
+    // STEP STATE: 0 = Welcome, 1 = Req, 2 = Insp, 3 = Pkg, 4 = Review
     const [step, setStep] = useState(0) 
     
     const [isSaving, setIsSaving] = useState(false)
     const [isFullScreen, setIsFullScreen] = useState(false)
+
+    // Draft Loading State
+    const [isLoadDialogOpen, setIsLoadDialogOpen] = useState(false)
+    const [drafts, setDrafts] = useState<ConsultationData[]>([])
+    const [loadingDrafts, setLoadingDrafts] = useState(false)
 
     // Master Data
     const [events, setEvents] = useState<EventData[]>([])
@@ -169,6 +172,7 @@ export default function ConsultationPage() {
     }, [consultation.package.selectedPackageId, consultation.package.customItems, packages]);
 
     // --- ACTIONS ---
+
     const handleAutoSave = async (silent = true) => {
         if (!userData?.studioID) return;
         setIsSaving(true);
@@ -184,7 +188,7 @@ export default function ConsultationPage() {
                     timer: 2000,
                     timerProgressBar: true,
                 });
-                Toast.fire({ icon: 'success', title: 'Consultation saved successfully' });
+                Toast.fire({ icon: 'success', title: 'Consultation saved' });
             }
         } catch (e) {
             console.error("Save failed", e);
@@ -192,6 +196,28 @@ export default function ConsultationPage() {
         } finally {
             setIsSaving(false);
         }
+    };
+
+    const handleLoadDrafts = async () => {
+        if (!userData?.studioID) return;
+        setLoadingDrafts(true);
+        setIsLoadDialogOpen(true);
+        try {
+            const data = await fetchConsultations(userData.studioID, 'draft');
+            setDrafts(data);
+        } catch (e) {
+            console.error(e);
+        } finally {
+            setLoadingDrafts(false);
+        }
+    };
+
+    const selectDraft = (draft: ConsultationData) => {
+        setConsultation(draft);
+        setIsLoadDialogOpen(false);
+        setStep(1); // Go to Requirements step
+        const Toast = Swal.mixin({ toast: true, position: 'top-end', showConfirmButton: false, timer: 1500 });
+        Toast.fire({ icon: 'success', title: 'Draft Loaded' });
     };
 
     const handleNext = () => {
@@ -283,7 +309,7 @@ export default function ConsultationPage() {
     if (loading) return <div className="h-screen flex items-center justify-center"><Loader2 className="w-8 h-8 animate-spin text-[#1C4D8D]" /></div>;
 
     return (
-        <div className="h-full w-full -m-6 md:-m-8 bg-slate-50 flex flex-col overflow-hidden ">
+        <div className={cn("h-screen bg-slate-50 flex flex-col overflow-hidden w-full", isFullScreen ? "p-0" : "")}>
             
             {/* 1. HEADER (Fixed) */}
             <header className="shrink-0 h-16 bg-white border-b border-slate-200 px-6 flex items-center justify-between shadow-sm z-50">
@@ -314,7 +340,7 @@ export default function ConsultationPage() {
                 {/* 2A. LEFT: Main Content (Flexible Width) */}
                 <main className="flex-1 flex flex-col overflow-hidden relative bg-slate-50/50">
                     <ScrollArea className="flex-1 w-full">
-                        <div className="p-6 pb-24 max-w-6xl mx-auto w-full"> {/* Bottom padding for fixed footer */}
+                        <div className="p-6 pb-24 max-w-6xl mx-auto w-full"> 
                             
                             {/* --- STEP 0: WELCOME --- */}
                             {step === 0 && (
@@ -326,7 +352,25 @@ export default function ConsultationPage() {
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full max-w-2xl px-4">
                                         <Card 
                                             className="cursor-pointer hover:border-blue-500 hover:shadow-lg transition-all group"
-                                            onClick={() => setStep(1)}
+                                            onClick={() => {
+                                                // Reset state for new
+                                                setConsultation({
+                                                    studioId: userData?.studioID || "",
+                                                    status: "draft",
+                                                    client: { name: "", mobile: "", email: "" },
+                                                    requirements: {
+                                                        eventType: "Weddings",
+                                                        budgetRange: [150000, 400000],
+                                                        locations: [],
+                                                        styleTags: [],
+                                                        deliverables: { photo: true, video: true, album: true, drone: false },
+                                                        notes: ""
+                                                    },
+                                                    inspiration: { matchedEventIds: [], selectedEventIds: [] },
+                                                    package: { customItems: [], totalEstimate: 0 }
+                                                });
+                                                setStep(1);
+                                            }}
                                         >
                                             <CardContent className="p-8 flex flex-col items-center text-center gap-4">
                                                 <div className="w-16 h-16 bg-blue-50 rounded-full flex items-center justify-center group-hover:bg-blue-100 transition-colors">
@@ -338,10 +382,13 @@ export default function ConsultationPage() {
                                                 </div>
                                             </CardContent>
                                         </Card>
-                                        <Card className="cursor-pointer hover:border-slate-400 hover:shadow-md transition-all opacity-60">
+                                        <Card 
+                                            className="cursor-pointer hover:border-blue-500 hover:shadow-lg transition-all group"
+                                            onClick={handleLoadDrafts}
+                                        >
                                             <CardContent className="p-8 flex flex-col items-center text-center gap-4">
-                                                <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center">
-                                                    <Save className="w-8 h-8 text-slate-400" />
+                                                <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center group-hover:bg-blue-50 transition-colors">
+                                                    <Save className="w-8 h-8 text-slate-400 group-hover:text-blue-500" />
                                                 </div>
                                                 <div>
                                                     <h3 className="text-xl font-bold text-slate-800">Load Saved</h3>
@@ -512,9 +559,7 @@ export default function ConsultationPage() {
                                                     
                                                     {/* Lightbox Content */}
                                                     <DialogContent className="max-w-5xl p-0 overflow-hidden bg-black/95 border-none text-white h-[85vh] flex flex-col md:flex-row">
-                                                        {/* Fix for Accessibility */}
-                                                        <DialogTitle className="sr-only">Event Lightbox: {event.eventName}</DialogTitle>
-                                                        
+                                                        <DialogTitle className="sr-only">Event Lightbox</DialogTitle>
                                                         <div className="flex-1 flex items-center justify-center relative bg-black">
                                                             <img src={event.couplePhotoUrl} className="max-h-full max-w-full object-contain" alt="Full View"/>
                                                         </div>
@@ -794,6 +839,30 @@ export default function ConsultationPage() {
                     </aside>
                 )}
             </div>
+
+            {/* DIALOG FOR LOADING DRAFTS */}
+            <Dialog open={isLoadDialogOpen} onOpenChange={setIsLoadDialogOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Load Saved Consultation</DialogTitle>
+                        <DialogDescription>Pick a draft to resume.</DialogDescription>
+                    </DialogHeader>
+                    <div className="max-h-[300px] overflow-y-auto space-y-2">
+                        {loadingDrafts ? <div className="p-4 text-center"><Loader2 className="w-6 h-6 animate-spin mx-auto"/></div> : (
+                            drafts.length === 0 ? <p className="text-center text-slate-400 py-4">No drafts found.</p> :
+                            drafts.map(draft => (
+                                <div key={draft.id} className="p-3 border rounded hover:bg-slate-50 cursor-pointer" onClick={() => selectDraft(draft)}>
+                                    <div className="font-medium">{draft.client.name || "Untitled Draft"}</div>
+                                    <div className="text-xs text-slate-500 flex justify-between">
+                                        <span>{draft.requirements.eventType}</span>
+                                        <span>{draft.updatedAt ? format(draft.updatedAt instanceof Date ? draft.updatedAt : new Date(), "MMM dd") : ""}</span>
+                                    </div>
+                                </div>
+                            ))
+                        )}
+                    </div>
+                </DialogContent>
+            </Dialog>
         </div>
     )
 }
