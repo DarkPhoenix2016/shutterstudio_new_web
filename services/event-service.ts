@@ -426,3 +426,31 @@ export const checkResourceAvailability = async (
         return { available: false, message: "Error checking schedule availability." };
     }
 };
+
+export const fetchEventsForDateRange = async (studioId: string, centerDate: Date) => {
+    try {
+        // Calculate range: Start of Previous Month to End of Next Month
+        const startDate = startOfMonth(subMonths(centerDate, 1));
+        const endDate = endOfMonth(addMonths(centerDate, 1));
+
+        // 1. Fetch All Events (Optimized: In a real production app with thousands of events, 
+        // you would add a root-level 'searchDate' field to Firestore to enable .where('searchDate', '>=', startDate) querying)
+        const allEvents = await fetchEvents(studioId);
+
+        // 2. Filter in Memory
+        const filtered = allEvents.filter(event => {
+            if (!event.days || event.days.length === 0) return false;
+            
+            // Check if ANY day of the event falls within our 3-month window
+            return event.days.some(day => {
+                const d = day.date instanceof Timestamp ? day.date.toDate() : new Date(day.date);
+                return isWithinInterval(d, { start: startDate, end: endDate });
+            });
+        });
+
+        return filtered;
+    } catch (e) {
+        console.error("Error fetching events range:", e);
+        return [];
+    }
+};
