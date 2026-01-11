@@ -11,6 +11,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Calendar } from "@/components/ui/calendar"
+import { Separator } from "@/components/ui/separator"
 
 // Icons
 import {
@@ -23,13 +24,15 @@ import {
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
-// Helper to safely parse dates
+// Helper to safely parse dates (handles Firestore Timestamp vs JS Date)
 const safeDate = (dateInput: any): Date => {
     try {
         if (!dateInput) return new Date();
+        // Check if it has a toDate function (Firestore Timestamp)
         if (typeof dateInput.toDate === 'function') {
             return dateInput.toDate();
         }
+        // If it's already a Date object or string/number
         return new Date(dateInput);
     } catch (e) {
         return new Date();
@@ -37,51 +40,56 @@ const safeDate = (dateInput: any): Date => {
 };
 
 export default function CalendarPage() {
-    const { userData, loading: authLoading } = useAuth() // Assuming useAuth exposes a loading state, if not, we rely on userData check
+    const { userData } = useAuth()
     const router = useRouter()
 
     // State
     const [date, setDate] = useState<Date | undefined>(new Date())
     const [events, setEvents] = useState<EventData[]>([])
-    const [dataLoading, setDataLoading] = useState(true)
+    const [loading, setLoading] = useState(true)
 
     useEffect(() => {
+        let isMounted = true;
 
-        
-    if (authLoading) {
-        console.log("CalendarPage: waiting for auth...");
-        return;
-    }
-    if (!userData?.studioID) {
-        console.log("CalendarPage: no studio ID");
-        setDataLoading(false);
-        return;
-    }
+        const loadData = async () => {
+            // Case 1: No User Data (Logged out or Error) -> Stop Loading
+            if (!userData) {
+                if (isMounted) setLoading(false);
+                return;
+            }
 
-    const studioID = userData.studioID;
-    let isMounted = true;
+            // Case 2: User exists but no Studio ID -> Stop Loading
+            if (!userData.studioID) {
+                if (isMounted) setLoading(false);
+                return;
+            }
 
-    const loadData = async () => {
-        console.log("CalendarPage: fetching events for", studioID);
-        try {
-            const data = await fetchEvents(studioID);
-            if (isMounted) setEvents(data);
-        } catch (err) {
-            console.error("CalendarPage: fetch failed", err);
-        } finally {
-            if (isMounted) setDataLoading(false);
-        }
-    };
+            // Case 3: Valid Studio ID -> Fetch
+            try {
+                const data = await fetchEvents(userData.studioID);
+                if (isMounted) {
+                    setEvents(data);
+                }
+            } catch (error) {
+                console.error("Failed to load events", error);
+            } finally {
+                if (isMounted) {
+                    setLoading(false);
+                }
+            }
+        };
 
-    loadData();
+        loadData();
 
-    return () => {
-        isMounted = false;
-    };
-}, [authLoading, userData?.studioID]);
+        return () => {
+            isMounted = false;
+        };
+    }, [userData]); // Depend on userData object
 
 
     // --- COMPUTED DATA ---
+
+    // 1. Get dates that contain events (for Calendar indicators)
     const eventDates = useMemo(() => {
         const dates: Date[] = []
         events.forEach(event => {
@@ -94,6 +102,7 @@ export default function CalendarPage() {
         return dates
     }, [events])
 
+    // 2. Filter events for the selected date
     const selectedDayEvents = useMemo(() => {
         if (!date) return []
         return events.filter(event =>
@@ -105,6 +114,7 @@ export default function CalendarPage() {
     }, [events, date])
 
     // --- HELPERS ---
+
     const getStatusColor = (status: string) => {
         const s = status?.toLowerCase() || ""
         if (s.includes('inquiry')) return 'bg-blue-100 text-blue-700 border-blue-200'
@@ -114,10 +124,7 @@ export default function CalendarPage() {
         return 'bg-slate-100 text-slate-700 border-slate-200'
     }
 
-    // Combine loading states
-    const isLoading = authLoading || dataLoading;
-
-    if (isLoading) return <div className="h-screen flex items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-[#1C4D8D]" /></div>
+    if (loading) return <div className="h-screen flex items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-[#1C4D8D]" /></div>
 
     return (
         <div className="max-w-3xl mx-auto p-4 md:p-8 space-y-8 animate-in fade-in duration-500 min-h-screen pb-20">
@@ -173,16 +180,18 @@ export default function CalendarPage() {
                 <div className="grid grid-cols-1 gap-4">
                     {selectedDayEvents.length > 0 ? (
                         selectedDayEvents.map((event) => {
+                            // Find the specific day config for the selected date to get specific details if any
                             const dayConfig = event.days?.find(d => d.date && isSameDay(safeDate(d.date), date!));
-
+                            
                             return (
-                                <Card
-                                    key={event.id}
+                                <Card 
+                                    key={event.id} 
                                     className="group cursor-pointer hover:shadow-md transition-all border-slate-200 hover:border-blue-300"
                                     onClick={() => router.push(`/app/events/${event.id}`)}
                                 >
                                     <CardContent className="p-5 flex items-center justify-between">
                                         <div className="flex-1 space-y-3">
+                                            {/* Top Row: Badge & ID */}
                                             <div className="flex items-center gap-3">
                                                 <Badge variant="outline" className={cn("font-medium", getStatusColor(event.status))}>
                                                     {event.status}
@@ -192,6 +201,7 @@ export default function CalendarPage() {
                                                 </span>
                                             </div>
 
+                                            {/* Main Info */}
                                             <div>
                                                 <h3 className="text-lg font-bold text-[#0F2854] group-hover:text-[#1C4D8D] transition-colors">
                                                     {event.eventName}
@@ -208,7 +218,8 @@ export default function CalendarPage() {
                                                 </div>
                                             </div>
 
-                                            <div className="flex items-center gap-4 pt-1">
+                                            {/* Specific Day Details */}
+                                            <div className="flex flex-wrap items-center gap-2 pt-1">
                                                 <Badge variant="secondary" className={cn(
                                                     "text-xs font-normal border",
                                                     dayConfig?.type === 'package' ? "bg-blue-50 text-blue-700 border-blue-100" : "bg-amber-50 text-amber-700 border-amber-100"
@@ -216,10 +227,11 @@ export default function CalendarPage() {
                                                     {dayConfig?.type === 'package' ? "Package Plan" : "Custom Plan"}
                                                 </Badge>
                                                 
+                                                {/* If location info matches this date, show it */}
                                                 {event.locations?.map((loc, idx) => {
                                                     if (loc.date && isSameDay(safeDate(loc.date), date!)) {
                                                         return (
-                                                            <div key={idx} className="flex items-center gap-1.5 text-xs text-slate-600 bg-slate-50 px-2 py-1 rounded-full">
+                                                            <div key={idx} className="flex items-center gap-1.5 text-xs text-slate-600 bg-slate-50 px-2 py-1 rounded-full border border-slate-100">
                                                                 <MapPin className="w-3 h-3" />
                                                                 <span className="truncate max-w-[150px]">{loc.name} {loc.time && `@ ${loc.time}`}</span>
                                                             </div>
