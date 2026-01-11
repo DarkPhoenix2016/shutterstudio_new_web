@@ -46,46 +46,37 @@ export default function CalendarPage() {
     const [dataLoading, setDataLoading] = useState(true)
 
     useEffect(() => {
-        // 1. Wait for Auth to initialize
-        if (userData === undefined && authLoading !== false) {
-            console.log("CalendarPage: Auth loading...");
-            return;
+    if (authLoading) {
+        console.log("CalendarPage: waiting for auth...");
+        return;
+    }
+    if (!userData?.studioID) {
+        console.log("CalendarPage: no studio ID");
+        setDataLoading(false);
+        return;
+    }
+
+    const studioID = userData.studioID;
+    let isMounted = true;
+
+    const loadData = async () => {
+        console.log("CalendarPage: fetching events for", studioID);
+        try {
+            const data = await fetchEvents(studioID);
+            if (isMounted) setEvents(data);
+        } catch (err) {
+            console.error("CalendarPage: fetch failed", err);
+        } finally {
+            if (isMounted) setDataLoading(false);
         }
+    };
 
-        // 2. If no user data after auth load, stop data loading
-        if (!userData || !userData.studioID) {
-            console.log("CalendarPage: No User/Studio ID found.");
-            setDataLoading(false);
-            return;
-        }
+    loadData();
 
-        const studioID = userData.studioID;
-        let isMounted = true;
-
-        const loadData = async () => {
-            console.log("CalendarPage: Fetching events for Studio:", studioID);
-            try {
-                const data = await fetchEvents(studioID);
-                if (isMounted) {
-                    console.log("CalendarPage: Events fetched:", data.length);
-                    setEvents(data);
-                }
-            } catch (error) {
-                console.error("CalendarPage: Failed to load events", error);
-            } finally {
-                if (isMounted) {
-                    setDataLoading(false);
-                }
-            }
-        };
-
-        loadData();
-
-        return () => {
-            isMounted = false;
-        };
-        // [!code highlight] Dependency: Only re-run if studioID changes
-    }, [userData?.studioID, authLoading]); 
+    return () => {
+        isMounted = false;
+    };
+}, [authLoading, userData?.studioID]);
 
 
     // --- COMPUTED DATA ---
@@ -122,7 +113,7 @@ export default function CalendarPage() {
     }
 
     // Combine loading states
-    const isLoading = dataLoading || (userData === undefined);
+    const isLoading = authLoading || dataLoading;
 
     if (isLoading) return <div className="h-screen flex items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-[#1C4D8D]" /></div>
 
