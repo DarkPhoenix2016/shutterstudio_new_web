@@ -100,12 +100,12 @@ export const saveConsultation = async (studioId: string, data: ConsultationData)
 
     try {
         if (data.id) {
-            const docRef = doc(db, "consultations", data.id);
+            const docRef = doc(db,"Studios", studioId, "Consultations", data.id);
             await updateDoc(docRef, payload);
             return { ...data, updatedAt: new Date() };
         } else {
             const payloadWithCreated = { ...payload, createdAt: serverTimestamp(), status: 'draft' };
-            const colRef = collection(db, "consultations");
+            const colRef = collection(db, "Studios", studioId, "Consultations");
             const docRef = await addDoc(colRef, payloadWithCreated);
             return { ...data, id: docRef.id, updatedAt: new Date() };
         }
@@ -118,8 +118,7 @@ export const saveConsultation = async (studioId: string, data: ConsultationData)
 export const fetchConsultations = async (studioId: string, status: string = 'draft'): Promise<ConsultationData[]> => {
     try {
         const q = query(
-            collection(db, "consultations"),
-            where("studioId", "==", studioId),
+            collection(db,"Studios", studioId, "Consultations"),
             where("status", "==", status),
             orderBy("updatedAt", "desc")
         );
@@ -146,7 +145,7 @@ export const fetchConsultations = async (studioId: string, status: string = 'dra
 
 export const deleteConsultation = async (studioId: string, consultationId: string): Promise<void> => {
     try {
-        const docRef = doc(db, "studios", studioId, "consultations", consultationId);
+        const docRef = doc(db, "Studios", studioId, "Consultations", consultationId);
         await deleteDoc(docRef);
     } catch (error) {
         console.error("Error deleting consultation:", error);
@@ -228,7 +227,6 @@ export const convertToEvent = async (studioId: string, consultation: Consultatio
             },
             approval: {
                 customerConfirmed: false,
-                confirmedAt: undefined,
                 customerEmail: consultation.client.email,
                 customerPhone: consultation.client.mobile
             },
@@ -239,7 +237,7 @@ export const convertToEvent = async (studioId: string, consultation: Consultatio
         };
 
         // 2. Save to "events" collection
-        const eventsCol = collection(db, "studios", studioId, "events"); // Adjust collection path if "studios/{id}/events"
+        const eventsCol = collection(db, "Studios", studioId, "Events"); // Adjust collection path if "studios/{id}/events"
         // Note: If you use subcollections per studio, use `collection(db, "studios", studioId, "events")`
         // Assuming global events collection based on context, otherwise adjust accordingly.
         // For safety, based on `fetchEvents(userData.studioID)`, it implies fetching by studioID filter on global or subcollection.
@@ -252,7 +250,7 @@ export const convertToEvent = async (studioId: string, consultation: Consultatio
 
         // 3. Update Consultation Status
         if (consultation.id) {
-            const consRef = doc(db, "studios", studioId, "consultations", consultation.id);
+            const consRef = doc(db, "Studios", studioId, "Consultations", consultation.id);
             await updateDoc(consRef, {
                 status: 'converted',
                 updatedAt: serverTimestamp()
