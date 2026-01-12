@@ -9,7 +9,7 @@ import {
 } from "@/services/event-service"
 import {
     saveConsultation, fetchConsultations, deleteConsultation, convertToEvent,
-    ConsultationData
+    ConsultationData, CustomItem
 } from "@/services/consultation-service"
 import { format } from "date-fns"
 
@@ -28,7 +28,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Calendar } from "@/components/ui/calendar"
 import { Pagination, PaginationContent, PaginationItem, PaginationNext, PaginationPrevious } from "@/components/ui/pagination"
-import { Switch } from "@/components/ui/switch"
 
 // Icons
 import {
@@ -40,8 +39,14 @@ import { cn } from "@/lib/utils"
 import Swal from "sweetalert2"
 
 // --- TYPES ---
-interface ExtendedConfigParam extends PackageConfigParameter {
-    type?: 'boolean' | 'numeric' | 'text';
+// Extend the base interface to support the new 'customBaseItems' field locally
+interface ExtendedConsultationData extends Omit<ConsultationData, 'package'> {
+    package: {
+        selectedPackageId?: string;
+        customItems: CustomItem[]; // This acts as "Add-ons"
+        customBaseItems: CustomItem[]; // This acts as "Custom Package Configuration"
+        totalEstimate: number;
+    }
 }
 
 // --- COMPONENTS ---
@@ -107,12 +112,12 @@ export default function ConsultationPage() {
     // Master Data
     const [events, setEvents] = useState<EventData[]>([])
     const [packages, setPackages] = useState<PackageData[]>([])
-    const [configParams, setConfigParams] = useState<ExtendedConfigParam[]>([])
+    const [configParams, setConfigParams] = useState<PackageConfigParameter[]>([])
     const [eventTypes, setEventTypes] = useState<string[]>([])
     const [availableTags, setAvailableTags] = useState<string[]>([])
 
-    // Consultation Data
-    const [consultation, setConsultation] = useState<ConsultationData>({
+    // Consultation Data (Using Extended Interface)
+    const [consultation, setConsultation] = useState<ExtendedConsultationData>({
         studioId: "",
         status: "draft",
         client: { name: "", mobile: "", email: "" },
@@ -125,7 +130,7 @@ export default function ConsultationPage() {
             notes: ""
         },
         inspiration: { matchedEventIds: [], selectedEventIds: [] },
-        package: { customItems: [], totalEstimate: 0 }
+        package: { customItems: [], customBaseItems: [], totalEstimate: 0 }
     });
 
     // --- INITIALIZATION ---
@@ -138,13 +143,12 @@ export default function ConsultationPage() {
                     fetchPackagesList(userData.studioID),
                     fetchStudioSettingsList(userData.studioID, 'EVENT_TYPES'),
                     fetchPackageConfig(userData.studioID),
-                    // [!code highlight] Fix 2: Cast literal to 'any' to bypass TS error
-                    fetchStudioSettingsList(userData.studioID, 'CURRENCY' as any) 
+                    fetchStudioSettingsList(userData.studioID, 'CURRENCY' as any)
                 ]);
 
                 setEvents(evtList);
                 setPackages(pkgList);
-                setConfigParams(params as ExtendedConfigParam[]);
+                setConfigParams(params);
                 setEventTypes(types.length ? types : ["Weddings", "Homecoming", "Preshoot", "Birthday", "Corporate"]);
                 
                 if (currencySetting && currencySetting.length > 0) {
@@ -185,33 +189,44 @@ export default function ConsultationPage() {
 
     useEffect(() => {
         let basePrice = 0;
-        if (consultation.package.selectedPackageId && consultation.package.selectedPackageId !== 'custom') {
+        
+        // Calculate Base Price
+        if (consultation.package.selectedPackageId === 'custom') {
+            // Sum of Custom Base Items
+            basePrice = consultation.package.customBaseItems.reduce((acc, item) => acc + (item.price * item.qty), 0);
+        } else if (consultation.package.selectedPackageId) {
+            // Standard Package Price
             const p = packages.find(pkg => pkg.id === consultation.package.selectedPackageId);
             if (p) basePrice = Number(p.price);
         }
+
+        // Add Add-ons
         const addons = consultation.package.customItems.reduce((acc, item) => acc + (item.price * item.qty), 0);
+        
         setConsultation(prev => ({
             ...prev,
             package: { ...prev.package, totalEstimate: basePrice + addons }
         }));
-    }, [consultation.package.selectedPackageId, consultation.package.customItems, packages]);
+    }, [consultation.package.selectedPackageId, consultation.package.customItems, consultation.package.customBaseItems, packages]);
 
-    // --- CUSTOM ITEM HANDLERS ---
-    const addCustomItem = (param?: PackageConfigParameter) => {
-        const newItem = param
+    // --- ITEM HANDLERS (Generic) ---
+    // Helper to create a new item
+    const createNewItem = (param?: PackageConfigParameter): CustomItem => {
+        return param
             ? { name: param.name, qty: 1, unit: param.unit || "", price: param.defaultPrice || 0 }
             : { name: "", qty: 1, unit: "", price: 0 };
+    };
 
+    // 1. ADD-ONS HANDLERS (Using 'customItems' state)
+    const addAddonItem = (param?: PackageConfigParameter) => {
+        const newItem = createNewItem(param);
         setConsultation(prev => ({
             ...prev,
-            package: {
-                ...prev.package,
-                customItems: [...prev.package.customItems, newItem]
-            }
+            package: { ...prev.package, customItems: [...prev.package.customItems, newItem] }
         }));
     };
 
-    const updateCustomItem = (index: number, field: string, value: any) => {
+    const updateAddonItem = (index: number, field: string, value: any) => {
         const newItems = [...consultation.package.customItems];
         // @ts-ignore
         newItems[index][field] = value;
@@ -221,7 +236,7 @@ export default function ConsultationPage() {
         }));
     };
 
-    const removeCustomItem = (index: number) => {
+    const removeAddonItem = (index: number) => {
         const newItems = consultation.package.customItems.filter((_, i) => i !== index);
         setConsultation(prev => ({
             ...prev,
@@ -229,137 +244,33 @@ export default function ConsultationPage() {
         }));
     };
 
-    const toggleConfigParam = (param: ExtendedConfigParam, active: boolean) => {
-        if (active) {
-            const newItem = { 
-                name: param.name, 
-                qty: 1, 
-                unit: param.unit || "", 
-                price: param.defaultPrice || 0 
-            };
-            setConsultation(prev => ({
-                ...prev,
-                package: { ...prev.package, customItems: [...prev.package.customItems, newItem] }
-            }));
-        } else {
-            setConsultation(prev => ({
-                ...prev,
-                package: { ...prev.package, customItems: prev.package.customItems.filter(i => i.name !== param.name) }
-            }));
-        }
-    };
-
-    const updateConfigParamValue = (paramName: string, field: 'qty' | 'price', value: number) => {
+    // 2. CUSTOM BASE PACKAGE HANDLERS (Using 'customBaseItems' state)
+    const addBaseItem = (param?: PackageConfigParameter) => {
+        const newItem = createNewItem(param);
         setConsultation(prev => ({
             ...prev,
-            package: { 
-                ...prev.package, 
-                customItems: prev.package.customItems.map(item => 
-                    item.name === paramName ? { ...item, [field]: value } : item
-                )
-            }
+            package: { ...prev.package, customBaseItems: [...prev.package.customBaseItems, newItem] }
         }));
     };
 
-    // --- ACTIONS ---
-    const handleAutoSave = async (silent = true) => {
-        if (!userData?.studioID) return;
-        setIsSaving(true);
-        try {
-            const saved = await saveConsultation(userData.studioID, consultation);
-            if (!consultation.id) setConsultation(prev => ({ ...prev, id: saved.id }));
-            if (!silent) {
-                const Toast = Swal.mixin({ toast: true, position: 'top-end', showConfirmButton: false, timer: 2000, timerProgressBar: true });
-                Toast.fire({ icon: 'success', title: 'Consultation saved' });
-            }
-        } catch (e) {
-            console.error("Save failed", e);
-            if (!silent) Swal.fire({ icon: 'error', title: 'Save Failed', text: 'Could not save the draft.' });
-        } finally {
-            setIsSaving(false);
-        }
+    const updateBaseItem = (index: number, field: string, value: any) => {
+        const newItems = [...consultation.package.customBaseItems];
+        // @ts-ignore
+        newItems[index][field] = value;
+        setConsultation(prev => ({
+            ...prev,
+            package: { ...prev.package, customBaseItems: newItems }
+        }));
     };
 
-    const handleLoadDrafts = async () => {
-        if (!userData?.studioID) return;
-        setLoadingDrafts(true);
-        setIsLoadDialogOpen(true);
-        setDraftPage(1);
-        try {
-            const data = await fetchConsultations(userData.studioID, 'draft');
-            setDrafts(data);
-        } catch (e) { console.error(e); }
-        finally { setLoadingDrafts(false); }
+    const removeBaseItem = (index: number) => {
+        const newItems = consultation.package.customBaseItems.filter((_, i) => i !== index);
+        setConsultation(prev => ({
+            ...prev,
+            package: { ...prev.package, customBaseItems: newItems }
+        }));
     };
 
-    const handleDeleteDraft = async (e: React.MouseEvent, draftId: string) => {
-        e.stopPropagation();
-        if (!userData?.studioID) return;
-
-        const confirm = await Swal.fire({
-            title: 'Delete Draft?',
-            text: "You won't be able to revert this!",
-            icon: 'warning',
-            showCancelButton: true,
-            confirmButtonColor: '#d33',
-            confirmButtonText: 'Yes, delete it!'
-        });
-
-        if (confirm.isConfirmed) {
-            try {
-                await deleteConsultation(userData.studioID, draftId);
-                setDrafts(prev => prev.filter(d => d.id !== draftId));
-                Swal.fire('Deleted!', 'Draft has been deleted.', 'success');
-            } catch (error) {
-                Swal.fire('Error', 'Failed to delete draft.', 'error');
-            }
-        }
-    };
-
-    const selectDraft = (draft: ConsultationData) => {
-        setConsultation(draft);
-        setIsLoadDialogOpen(false);
-        setStep(1);
-        const Toast = Swal.mixin({ toast: true, position: 'top-end', showConfirmButton: false, timer: 1500 });
-        Toast.fire({ icon: 'success', title: 'Draft Loaded' });
-    };
-
-    const handleConvertToEvent = async () => {
-        const result = await Swal.fire({
-            title: 'Convert to Event?',
-            text: `Create "${consultation.requirements.eventType}" event for ${consultation.client.name}?`,
-            icon: 'question',
-            showCancelButton: true,
-            confirmButtonText: 'Yes, Create',
-            confirmButtonColor: '#1C4D8D'
-        });
-
-        if (!result.isConfirmed || !userData?.studioID) return;
-
-        setLoading(true);
-        try {
-            await convertToEvent(userData.studioID, consultation, packages);
-            Swal.fire({ title: 'Success!', text: 'Event created successfully.', icon: 'success', timer: 1500 });
-            router.push('/app/events');
-        } catch (e) {
-            console.error(e);
-            Swal.fire('Error', 'Failed to convert consultation.', 'error');
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const paginatedDrafts = useMemo(() => {
-        const startIndex = (draftPage - 1) * DRAFTS_PER_PAGE;
-        return drafts.slice(startIndex, startIndex + DRAFTS_PER_PAGE);
-    }, [drafts, draftPage]);
-    const totalPages = Math.ceil(drafts.length / DRAFTS_PER_PAGE);
-
-    const handleNext = () => {
-        if (step === 1 && !consultation.client.name) return Swal.fire({ icon: 'warning', title: 'Required', text: 'Client name is missing.' });
-        if (step > 0) handleAutoSave();
-        setStep(s => Math.min(s + 1, 4));
-    };
 
     // --- LIGHTBOX ACTIONS ---
     const handleLightboxNext = useCallback(() => {
@@ -383,6 +294,117 @@ export default function ConsultationPage() {
         window.addEventListener("keydown", handleKeyDown);
         return () => window.removeEventListener("keydown", handleKeyDown);
     }, [handleKeyDown]);
+
+
+    // --- MAIN ACTIONS ---
+    const handleAutoSave = async (silent = true) => {
+        if (!userData?.studioID) return;
+        setIsSaving(true);
+        try {
+            // Note: customBaseItems will be saved because we are passing the extended object.
+            // Firestore is schemaless so it accepts the extra field.
+            // When converting later, the service needs to know about this field.
+            const saved = await saveConsultation(userData.studioID, consultation as unknown as ConsultationData);
+            if (!consultation.id) setConsultation(prev => ({ ...prev, id: saved.id }));
+            if (!silent) {
+                const Toast = Swal.mixin({ toast: true, position: 'top-end', showConfirmButton: false, timer: 2000, timerProgressBar: true });
+                Toast.fire({ icon: 'success', title: 'Consultation saved' });
+            }
+        } catch (e) {
+            console.error("Save failed", e);
+            if (!silent) Swal.fire({ icon: 'error', title: 'Save Failed', text: 'Could not save the draft.' });
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    const handleLoadDrafts = async () => {
+        if (!userData?.studioID) return;
+        setLoadingDrafts(true);
+        setIsLoadDialogOpen(true);
+        setDraftPage(1);
+        try {
+            const data = await fetchConsultations(userData.studioID, 'draft');
+            // Cast loaded data to extended type. If customBaseItems is missing (old drafts), default to []
+            const extendedData = data.map(d => ({
+                ...d,
+                package: {
+                    ...d.package,
+                    customBaseItems: (d.package as any).customBaseItems || []
+                }
+            }));
+            setDrafts(extendedData);
+        } catch (e) { console.error(e); }
+        finally { setLoadingDrafts(false); }
+    };
+
+    const handleDeleteDraft = async (e: React.MouseEvent, draftId: string) => {
+        e.stopPropagation();
+        if (!userData?.studioID) return;
+        const confirm = await Swal.fire({ title: 'Delete Draft?', text: "You won't be able to revert this!", icon: 'warning', showCancelButton: true, confirmButtonColor: '#d33', confirmButtonText: 'Yes, delete it!' });
+        if (confirm.isConfirmed) {
+            try {
+                await deleteConsultation(userData.studioID, draftId);
+                setDrafts(prev => prev.filter(d => d.id !== draftId));
+                Swal.fire('Deleted!', 'Draft has been deleted.', 'success');
+            } catch (error) { Swal.fire('Error', 'Failed to delete draft.', 'error'); }
+        }
+    };
+
+    const selectDraft = (draft: ConsultationData) => {
+        const extendedDraft = {
+            ...draft,
+            package: {
+                ...draft.package,
+                customBaseItems: (draft.package as any).customBaseItems || []
+            }
+        } as ExtendedConsultationData;
+        
+        setConsultation(extendedDraft);
+        setIsLoadDialogOpen(false);
+        setStep(1);
+        const Toast = Swal.mixin({ toast: true, position: 'top-end', showConfirmButton: false, timer: 1500 });
+        Toast.fire({ icon: 'success', title: 'Draft Loaded' });
+    };
+
+    const handleConvertToEvent = async () => {
+        const result = await Swal.fire({
+            title: 'Convert to Event?',
+            text: `Create "${consultation.requirements.eventType}" event for ${consultation.client.name}?`,
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonText: 'Yes, Create',
+            confirmButtonColor: '#1C4D8D'
+        });
+
+        if (!result.isConfirmed || !userData?.studioID) return;
+
+        setLoading(true);
+        try {
+            // Pass extended consultation data (casted) to service.
+            // NOTE: You will need to update the service to map 'customBaseItems' to the event 'days[0].customItems'
+            await convertToEvent(userData.studioID, consultation as unknown as ConsultationData, packages);
+            Swal.fire({ title: 'Success!', text: 'Event created successfully.', icon: 'success', timer: 1500 });
+            router.push('/app/events');
+        } catch (e) {
+            console.error(e);
+            Swal.fire('Error', 'Failed to convert consultation.', 'error');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const paginatedDrafts = useMemo(() => {
+        const startIndex = (draftPage - 1) * DRAFTS_PER_PAGE;
+        return drafts.slice(startIndex, startIndex + DRAFTS_PER_PAGE);
+    }, [drafts, draftPage]);
+    const totalPages = Math.ceil(drafts.length / DRAFTS_PER_PAGE);
+
+    const handleNext = () => {
+        if (step === 1 && !consultation.client.name) return Swal.fire({ icon: 'warning', title: 'Required', text: 'Client name is missing.' });
+        if (step > 0) handleAutoSave();
+        setStep(s => Math.min(s + 1, 4));
+    };
 
     const currentLightboxEvent = lightboxIndex !== null ? matchedEvents[lightboxIndex] : null;
 
@@ -417,7 +439,7 @@ export default function ConsultationPage() {
                                     <h2 className="text-4xl font-bold text-[#0F2854]">Welcome</h2>
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full max-w-2xl px-4">
                                         <Card className="cursor-pointer hover:border-blue-500 hover:shadow-lg transition-all group" onClick={() => {
-                                            setConsultation({ studioId: userData?.studioID || "", status: "draft", client: { name: "", mobile: "", email: "" }, requirements: { eventType: "Weddings", budgetRange: [150000, 400000], locations: [], styleTags: [], deliverables: { photo: true, video: true, album: true, drone: false }, notes: "" }, inspiration: { matchedEventIds: [], selectedEventIds: [] }, package: { customItems: [], totalEstimate: 0 } });
+                                            setConsultation({ studioId: userData?.studioID || "", status: "draft", client: { name: "", mobile: "", email: "" }, requirements: { eventType: "Weddings", budgetRange: [150000, 400000], locations: [], styleTags: [], deliverables: { photo: true, video: true, album: true, drone: false }, notes: "" }, inspiration: { matchedEventIds: [], selectedEventIds: [] }, package: { customItems: [], customBaseItems: [], totalEstimate: 0 } });
                                             setStep(1);
                                         }}>
                                             <CardContent className="p-8 flex flex-col items-center text-center gap-4"><div className="w-16 h-16 bg-blue-50 rounded-full flex items-center justify-center group-hover:bg-blue-100"><Play className="w-8 h-8 text-blue-600 ml-1" /></div><h3 className="text-xl font-bold text-slate-800">New Consultation</h3></CardContent>
@@ -436,6 +458,7 @@ export default function ConsultationPage() {
                                     <Card className="border-0 shadow-md">
                                         <CardContent className="p-8 space-y-8">
                                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                                {/* Placeholders Restored */}
                                                 <div className="space-y-2"><Label>Client Name *</Label><Input value={consultation.client.name} onChange={e => setConsultation({ ...consultation, client: { ...consultation.client, name: e.target.value } })} className="h-12 text-lg bg-slate-50" placeholder="e.g. Amantha & Nethmi" /></div>
                                                 <div className="space-y-2"><Label>Event Type</Label><Select value={consultation.requirements.eventType} onValueChange={v => setConsultation({ ...consultation, requirements: { ...consultation.requirements, eventType: v } })}><SelectTrigger className="h-12 text-lg bg-slate-50"><SelectValue /></SelectTrigger><SelectContent>{eventTypes.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent></Select></div>
                                             </div>
@@ -460,13 +483,14 @@ export default function ConsultationPage() {
                                             <div key={event.id} onClick={() => setLightboxIndex(idx)} className={cn("break-inside-avoid relative group rounded-xl overflow-hidden cursor-pointer border-2 transition-all bg-slate-100", consultation.inspiration.selectedEventIds.includes(event.id!) ? "border-blue-500 ring-2 ring-blue-200" : "border-transparent")}>
                                                 <img src={event.couplePhotoUrl || "/placeholder.jpg"} className="w-full h-auto object-cover transition-transform duration-700 group-hover:scale-105" />
                                                 
+                                                {/* Select Button Over Image */}
                                                 <div 
                                                     className={cn(
                                                         "absolute top-2 right-2 rounded-full p-1.5 shadow-md z-10 transition-colors",
                                                         consultation.inspiration.selectedEventIds.includes(event.id!) ? "bg-blue-600 text-white" : "bg-white/80 text-slate-400 hover:bg-white hover:text-blue-600"
                                                     )}
                                                     onClick={(e) => {
-                                                        e.stopPropagation(); // Prevent Lightbox open
+                                                        e.stopPropagation(); // Stop lightbox from opening
                                                         const current = consultation.inspiration.selectedEventIds;
                                                         const newIds = current.includes(event.id!) ? current.filter(id => id !== event.id) : [...current, event.id!];
                                                         setConsultation({ ...consultation, inspiration: { ...consultation.inspiration, selectedEventIds: newIds } });
@@ -483,133 +507,141 @@ export default function ConsultationPage() {
                             )}
 
                             {/* Step 3: Packages */}
-{step === 3 && (
-    <div className="space-y-6 animate-in slide-in-from-right-4 fade-in duration-300">
-        <h2 className="text-2xl font-bold text-[#0F2854]">Package Selection</h2>
-        
-        {/* Package Slider */}
-        <div className="flex gap-4 overflow-x-auto pb-6 snap-x no-scrollbar">
-            {matchedPackages.map(pkg => (
-                <Card key={pkg.id} className={cn("min-w-[300px] w-[320px] snap-center cursor-pointer transition-all border-2 relative hover:shadow-lg flex flex-col", consultation.package.selectedPackageId === pkg.id ? "border-blue-500 shadow-xl scale-95 z-10" : "border-slate-100 hover:border-blue-200")} onClick={() => setConsultation({ ...consultation, package: { ...consultation.package, selectedPackageId: pkg.id } })}>
-                    <CardHeader className="pb-2 bg-slate-50/50"><CardTitle className="text-xl font-bold text-slate-800">{pkg.name}</CardTitle><div className="font-mono text-blue-700 font-bold text-2xl">{Number(pkg.price).toLocaleString()} <span className="text-xs text-slate-400 font-normal">{currency}</span></div></CardHeader>
-                    <CardContent className="text-sm space-y-4 pt-4 flex-1"><ul className="space-y-2">{pkg.featuresList?.slice(0, 6).map((f, i) => (<li key={i} className="flex items-start gap-2 text-slate-600"><CheckCircle className="w-4 h-4 text-green-500 mt-0.5 shrink-0" /><span className="text-xs font-medium">{f}</span></li>))}</ul></CardContent>
-                </Card>
-            ))}
-            <Card className={cn("min-w-[300px] w-[320px] snap-center cursor-pointer border-dashed border-2 flex items-center justify-center bg-slate-50 hover:bg-slate-100 transition-colors", consultation.package.selectedPackageId === 'custom' ? "border-blue-500 bg-blue-50" : "border-slate-300")} onClick={() => setConsultation({ ...consultation, package: { ...consultation.package, selectedPackageId: 'custom' } })}>
-                <div className="text-center p-6 text-slate-400"><div className="bg-white p-4 rounded-full inline-flex mb-3 shadow-sm"><Plus className="w-8 h-8 text-slate-400" /></div><p className="font-bold text-slate-600">Build Custom Package</p></div>
-            </Card>
-        </div>
+                            {step === 3 && (
+                                <div className="space-y-6 animate-in slide-in-from-right-4 fade-in duration-300">
+                                    <h2 className="text-2xl font-bold text-[#0F2854]">Package Selection</h2>
+                                    <div className="flex gap-4 overflow-x-auto pb-6 snap-x no-scrollbar">
+                                        {matchedPackages.map(pkg => (
+                                            <Card key={pkg.id} className={cn("min-w-[300px] w-[320px] snap-center cursor-pointer transition-all border-2 relative hover:shadow-lg flex flex-col", consultation.package.selectedPackageId === pkg.id ? "border-blue-500 shadow-xl scale-95 z-10" : "border-slate-100 hover:border-blue-200")} onClick={() => setConsultation({ ...consultation, package: { ...consultation.package, selectedPackageId: pkg.id } })}>
+                                                <CardHeader className="pb-2 bg-slate-50/50"><CardTitle className="text-xl font-bold text-slate-800">{pkg.name}</CardTitle><div className="font-mono text-blue-700 font-bold text-2xl">{Number(pkg.price).toLocaleString()} <span className="text-xs text-slate-400 font-normal">{currency}</span></div></CardHeader>
+                                                <CardContent className="text-sm space-y-4 pt-4 flex-1"><ul className="space-y-2">{pkg.featuresList?.slice(0, 6).map((f, i) => (<li key={i} className="flex items-start gap-2 text-slate-600"><CheckCircle className="w-4 h-4 text-green-500 mt-0.5 shrink-0" /><span className="text-xs font-medium">{f}</span></li>))}</ul></CardContent>
+                                            </Card>
+                                        ))}
+                                        <Card className={cn("min-w-[300px] w-[320px] snap-center cursor-pointer border-dashed border-2 flex items-center justify-center bg-slate-50 hover:bg-slate-100 transition-colors", consultation.package.selectedPackageId === 'custom' ? "border-blue-500 bg-blue-50" : "border-slate-300")} onClick={() => setConsultation({ ...consultation, package: { ...consultation.package, selectedPackageId: 'custom' } })}>
+                                            <div className="text-center p-6 text-slate-400"><div className="bg-white p-4 rounded-full inline-flex mb-3 shadow-sm"><Plus className="w-8 h-8 text-slate-400" /></div><p className="font-bold text-slate-600">Build Custom Package</p></div>
+                                        </Card>
+                                    </div>
 
-        {/* SECTION 1: Package Configuration (Only visible for Custom Packages) */}
-        {consultation.package.selectedPackageId === 'custom' && (
-            <div className="bg-slate-50 border border-slate-200 p-6 rounded-xl space-y-4 animate-in fade-in slide-in-from-top-2">
-                <div className="flex items-center gap-2 mb-2">
-                    <LayoutTemplate className="w-5 h-5 text-blue-600" />
-                    <h3 className="font-bold text-slate-800 text-lg">Package Configuration</h3>
-                </div>
-                <p className="text-xs text-slate-500 mb-4">Select the base components for your custom package.</p>
-                
-                <div className="space-y-3">
-                    {configParams.map((param, idx) => {
-                        const isActive = consultation.package.customItems.some(i => i.name === param.name);
-                        const currentItem = consultation.package.customItems.find(i => i.name === param.name);
-                        const isBoolean = param.type === 'boolean' || param.name.toLowerCase().startsWith('include');
+                                    {/* SECTION 1: Package Configuration (For Custom Packages) - Matches EventForm UI */}
+                                    {consultation.package.selectedPackageId === 'custom' && (
+                                        <div className="bg-slate-50 border border-slate-200 p-6 rounded-xl space-y-4 animate-in fade-in slide-in-from-top-2">
+                                            <div className="flex items-center gap-2 mb-2">
+                                                <LayoutTemplate className="w-5 h-5 text-blue-600" />
+                                                <h3 className="font-bold text-slate-800 text-lg">Package Configuration</h3>
+                                            </div>
+                                            <p className="text-xs text-slate-500 mb-4">Define the items included in the main package.</p>
+                                            
+                                            <div className="space-y-2">
+                                                {/* ITEM GRID */}
+                                                {consultation.package.customBaseItems.map((item, idx) => (
+                                                    <div key={idx} className="grid grid-cols-12 gap-2 items-center">
+                                                        <div className="col-span-5">
+                                                            <Input value={item.name} onChange={(e) => updateBaseItem(idx, 'name', e.target.value)} className="h-8 text-xs" placeholder="Item Name" />
+                                                        </div>
+                                                        <div className="col-span-2">
+                                                            <Input type="number" value={item.qty ?? 1} onChange={(e) => updateBaseItem(idx, 'qty', Number(e.target.value))} className="h-8 text-xs text-center" />
+                                                        </div>
+                                                        <div className="col-span-4">
+                                                            <Input type="number" value={item.price ?? 0} onChange={(e) => updateBaseItem(idx, 'price', Number(e.target.value))} className="h-8 text-xs text-right" />
+                                                        </div>
+                                                        <div className="col-span-1 flex justify-center">
+                                                            <Button variant="ghost" size="icon" className="h-7 w-7 text-red-400 hover:text-red-600" onClick={() => removeBaseItem(idx)}>
+                                                                <Trash2 className="h-3 w-3" />
+                                                            </Button>
+                                                        </div>
+                                                    </div>
+                                                ))}
 
-                        return (
-                            <div key={idx} className={cn("flex items-center justify-between p-3 rounded-lg border transition-all", isActive ? "bg-white border-blue-200 shadow-sm" : "bg-slate-100/50 border-transparent hover:bg-white hover:border-slate-200")}>
-                                <div className="flex-1">
-                                    <div className="font-medium text-sm text-slate-700">{param.name}</div>
-                                    <div className="text-xs text-slate-400">Base Price: {param.defaultPrice?.toLocaleString()} {currency}</div>
-                                </div>
-                                
-                                <div className="flex items-center gap-4">
-                                    {isActive && !isBoolean && (
-                                        <div className="flex items-center gap-2 animate-in fade-in">
-                                            <Input 
-                                                type="number" 
-                                                className="w-16 h-8 text-center text-xs" 
-                                                value={currentItem?.qty ?? 1}
-                                                onChange={(e) => updateConfigParamValue(param.name, 'qty', Number(e.target.value))}
-                                            />
-                                            <span className="text-xs text-slate-400">x</span>
-                                            <Input 
-                                                type="number" 
-                                                className="w-24 h-8 text-right text-xs" 
-                                                value={currentItem?.price ?? param.defaultPrice ?? 0}
-                                                onChange={(e) => updateConfigParamValue(param.name, 'price', Number(e.target.value))}
-                                            />
+                                                {/* ADD PARAMETER DROPDOWN */}
+                                                <div className="flex gap-2">
+                                                    <Select onValueChange={(val) => {
+                                                        if (val === 'custom_new') {
+                                                            addBaseItem();
+                                                        } else {
+                                                            const param = configParams.find(p => p.name === val);
+                                                            addBaseItem(param);
+                                                        }
+                                                    }}>
+                                                        <SelectTrigger className="h-8 text-xs bg-white border-dashed w-full text-left justify-start px-3 text-slate-500 hover:text-slate-800">
+                                                            <span className="flex items-center"><Plus className="h-3 w-3 mr-2" /> Add Package Item</span>
+                                                        </SelectTrigger>
+                                                        <SelectContent>
+                                                            {configParams.map((p, idx) => (
+                                                                <SelectItem key={idx} value={p.name}>{p.name} {p.unit ? `(${p.unit})` : ''}</SelectItem>
+                                                            ))}
+                                                            <Separator className="my-1" />
+                                                            <SelectItem value="custom_new">Other (Custom)...</SelectItem>
+                                                        </SelectContent>
+                                                    </Select>
+                                                </div>
+                                            </div>
+                                            <div className="bg-white p-2 rounded text-xs text-slate-700 flex justify-between px-3 border">
+                                                <span>Base Package Total:</span>
+                                                <span className="font-bold">{currency} {consultation.package.customBaseItems.reduce((acc, i) => acc + (i.price * i.qty), 0).toLocaleString()}</span>
+                                            </div>
                                         </div>
                                     )}
-                                    
-                                    {isBoolean ? (
-                                            <Switch 
-                                            checked={isActive} 
-                                            onCheckedChange={(checked) => toggleConfigParam(param, checked)} 
-                                            />
-                                    ) : (
-                                        !isActive && <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => toggleConfigParam(param, true)}>Add</Button>
-                                    )}
-                                    
-                                    {isActive && !isBoolean && (
-                                            <Button size="icon" variant="ghost" className="h-8 w-8 text-red-400 hover:text-red-600" onClick={() => toggleConfigParam(param, false)}><Trash2 className="w-4 h-4" /></Button>
-                                    )}
+
+                                    {/* SECTION 2: Add-ons & Extras - Matches EventForm UI */}
+                                    <div className="bg-white border border-slate-200 p-6 rounded-xl shadow-sm space-y-6">
+                                        <div className="flex justify-between items-center border-b pb-4">
+                                            <h3 className="font-bold text-slate-800 text-lg flex items-center gap-2"><Plus className="w-5 h-5 text-blue-600" /> Add-ons & Extras</h3>
+                                        </div>
+                                        
+                                        <div className="space-y-2">
+                                            {/* ITEM GRID */}
+                                            {consultation.package.customItems.map((item, idx) => (
+                                                <div key={idx} className="grid grid-cols-12 gap-2 items-center">
+                                                    <div className="col-span-5">
+                                                        <Input value={item.name} onChange={(e) => updateAddonItem(idx, 'name', e.target.value)} className="h-8 text-xs" placeholder="Add-on Name" />
+                                                    </div>
+                                                    <div className="col-span-2">
+                                                        <Input type="number" value={item.qty ?? 1} onChange={(e) => updateAddonItem(idx, 'qty', Number(e.target.value))} className="h-8 text-xs text-center" />
+                                                    </div>
+                                                    <div className="col-span-4">
+                                                        <Input type="number" value={item.price ?? 0} onChange={(e) => updateAddonItem(idx, 'price', Number(e.target.value))} className="h-8 text-xs text-right" />
+                                                    </div>
+                                                    <div className="col-span-1 flex justify-center">
+                                                        <Button variant="ghost" size="icon" className="h-7 w-7 text-red-400 hover:text-red-600" onClick={() => removeAddonItem(idx)}>
+                                                            <Trash2 className="h-3 w-3" />
+                                                        </Button>
+                                                    </div>
+                                                </div>
+                                            ))}
+
+                                            {/* ADD PARAMETER DROPDOWN */}
+                                            <div className="flex gap-2">
+                                                <Select onValueChange={(val) => {
+                                                    if (val === 'custom_new') {
+                                                        addAddonItem();
+                                                    } else {
+                                                        const param = configParams.find(p => p.name === val);
+                                                        addAddonItem(param);
+                                                    }
+                                                }}>
+                                                    <SelectTrigger className="h-8 text-xs bg-slate-50 border-dashed w-full text-left justify-start px-3 text-slate-500 hover:text-slate-800">
+                                                        <span className="flex items-center"><Plus className="h-3 w-3 mr-2" /> Add Extra Item</span>
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        {configParams.map((p, idx) => (
+                                                            <SelectItem key={idx} value={p.name}>{p.name} {p.unit ? `(${p.unit})` : ''}</SelectItem>
+                                                        ))}
+                                                        <Separator className="my-1" />
+                                                        <SelectItem value="custom_new">Other (Custom)...</SelectItem>
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+                                        </div>
+
+                                        <div className="flex justify-end pt-4 border-t">
+                                            <div className="text-right">
+                                                <p className="text-xs text-slate-500 uppercase">Add-ons Total</p>
+                                                <p className="font-bold text-slate-800 text-lg">{consultation.package.customItems.reduce((acc, i) => acc + (i.price * i.qty), 0).toLocaleString()} {currency}</p>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
-                            </div>
-                        );
-                    })}
-                </div>
-            </div>
-        )}
-
-        {/* SECTION 2: Add-ons & Extras (Filtered to exclude Config items) */}
-        <div className="bg-white border border-slate-200 p-6 rounded-xl shadow-sm space-y-6">
-            <div className="flex justify-between items-center border-b pb-4">
-                <h3 className="font-bold text-slate-800 text-lg flex items-center gap-2"><Plus className="w-5 h-5 text-blue-600" /> Add-ons & Extras</h3>
-                <Select onValueChange={(val) => { if (val === 'custom_new') addCustomItem(); else { const param = configParams.find(p => p.name === val); addCustomItem(param); } }}>
-                    <SelectTrigger className="w-[200px] h-9 text-xs bg-slate-50 border-slate-300"><SelectValue placeholder="Add Item..." /></SelectTrigger>
-                    <SelectContent>
-                        <SelectItem value="custom_new" className="text-blue-600 font-medium">Create Custom Item...</SelectItem>
-                        <Separator className="my-1" />
-                        {/* Only show params in dropdown that are NOT boolean/config types (optional, but cleaner) */}
-                        {configParams.filter(p => !p.name.toLowerCase().startsWith('include')).map((p, idx) => (<SelectItem key={idx} value={p.name}>{p.name}</SelectItem>))}
-                    </SelectContent>
-                </Select>
-            </div>
-            
-            <div className="space-y-3">
-                <div className="grid grid-cols-12 gap-4 text-xs font-semibold text-slate-500 uppercase tracking-wider px-2"><div className="col-span-5">Item Name</div><div className="col-span-2 text-center">Qty</div><div className="col-span-4 text-right">Price ({currency})</div><div className="col-span-1"></div></div>
-                
-                {consultation.package.customItems.map((item, idx) => {
-                    // [!code highlight] FILTER LOGIC:
-                    // If this item is already handled by the "Package Configuration" section above, DO NOT render it here.
-                    const isConfigItem = configParams.some(p => p.name === item.name);
-                    if (isConfigItem && consultation.package.selectedPackageId === 'custom') return null;
-
-                    return (
-                        <div key={idx} className="grid grid-cols-12 gap-4 items-center animate-in slide-in-from-left-2 duration-300">
-                            <div className="col-span-5"><Input value={item.name} onChange={(e) => updateCustomItem(idx, 'name', e.target.value)} className="h-9" placeholder="Item name" /></div>
-                            <div className="col-span-2">
-                                <Input type="number" value={item.qty ?? 1} onChange={(e) => updateCustomItem(idx, 'qty', Number(e.target.value))} className="h-9 text-center" />
-                            </div>
-                            <div className="col-span-4">
-                                <Input type="number" value={item.price ?? 0} onChange={(e) => updateCustomItem(idx, 'price', Number(e.target.value))} className="h-9 text-right font-mono" />
-                            </div>
-                            <div className="col-span-1 flex justify-center"><Button size="icon" variant="ghost" className="h-9 w-9 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-full" onClick={() => removeCustomItem(idx)}><Trash2 className="w-4 h-4" /></Button></div>
-                        </div>
-                    );
-                })}
-                
-                {/* Total Calculation */}
-                <div className="flex justify-end pt-4 border-t">
-                    <div className="text-right">
-                        <p className="text-xs text-slate-500 uppercase">{consultation.package.selectedPackageId === 'custom' ? "Total Cost (Config + Add-ons)" : "Add-ons Total"}</p>
-                        <p className="font-bold text-slate-800 text-lg">{consultation.package.customItems.reduce((acc, i) => acc + (i.price * i.qty), 0).toLocaleString()} {currency}</p>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-)}
+                            )}
 
                             {/* Step 4: Review */}
                             {step === 4 && (
@@ -643,6 +675,21 @@ export default function ConsultationPage() {
                         <div className="p-6 border-b shrink-0"><h3 className="font-bold text-[#0F2854] text-sm uppercase tracking-wide">Live Summary</h3></div>
                         <div className="flex-1 overflow-y-auto p-6 space-y-6">
                             <div className="bg-slate-50 p-3 rounded-lg border border-slate-100"><p className="text-[10px] text-slate-400 uppercase font-bold tracking-wider mb-1">Budget Limit</p><p className="text-sm font-mono text-slate-700">{consultation.requirements.budgetRange[1].toLocaleString()} {currency}</p></div>
+                            
+                            {/* Summary for Custom Package Base Items */}
+                            {consultation.package.selectedPackageId === 'custom' && consultation.package.customBaseItems.length > 0 && (
+                                <div className="space-y-1 border-t pt-2">
+                                    <p className="text-[10px] text-slate-400 uppercase font-bold tracking-wider mb-1">Base Package</p>
+                                    {consultation.package.customBaseItems.map((item, i) => (
+                                        <div key={i} className="flex justify-between text-xs text-slate-500">
+                                            <span>{item.name} (x{item.qty})</span>
+                                            <span>+{(item.price * item.qty).toLocaleString()}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+
+                            {/* Summary for Add-ons */}
                             {consultation.package.customItems.length > 0 && (<div className="space-y-1 border-t pt-2"><p className="text-[10px] text-slate-400 uppercase font-bold tracking-wider mb-1">Add-ons</p>{consultation.package.customItems.map((add, i) => (<div key={i} className="flex justify-between text-xs text-slate-500"><span>{add.name} (x{add.qty})</span><span>+{(add.price * add.qty).toLocaleString()}</span></div>))}</div>)}
                         </div>
                         <div className="p-6 border-t bg-slate-50 shrink-0"><div className="flex justify-between items-end mb-2"><span className="text-xs font-medium text-slate-500">Estimated Total</span><span className="text-xl font-bold text-[#1C4D8D]">{consultation.package.totalEstimate.toLocaleString()} {currency}</span></div></div>
