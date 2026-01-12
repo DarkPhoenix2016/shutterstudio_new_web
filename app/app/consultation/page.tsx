@@ -383,7 +383,7 @@ export default function ConsultationPage() {
         window.addEventListener("keydown", handleKeyDown);
         return () => window.removeEventListener("keydown", handleKeyDown);
     }, [handleKeyDown]);
-    
+
     const currentLightboxEvent = lightboxIndex !== null ? matchedEvents[lightboxIndex] : null;
 
     if (loading) return <div className="h-screen flex items-center justify-center"><Loader2 className="w-8 h-8 animate-spin text-[#1C4D8D]" /></div>;
@@ -483,117 +483,133 @@ export default function ConsultationPage() {
                             )}
 
                             {/* Step 3: Packages */}
-                            {step === 3 && (
-                                <div className="space-y-6 animate-in slide-in-from-right-4 fade-in duration-300">
-                                    <h2 className="text-2xl font-bold text-[#0F2854]">Package Selection</h2>
-                                    <div className="flex gap-4 overflow-x-auto pb-6 snap-x no-scrollbar">
-                                        {matchedPackages.map(pkg => (
-                                            <Card key={pkg.id} className={cn("min-w-[300px] w-[320px] snap-center cursor-pointer transition-all border-2 relative hover:shadow-lg flex flex-col", consultation.package.selectedPackageId === pkg.id ? "border-blue-500 shadow-xl scale-95 z-10" : "border-slate-100 hover:border-blue-200")} onClick={() => setConsultation({ ...consultation, package: { ...consultation.package, selectedPackageId: pkg.id } })}>
-                                                <CardHeader className="pb-2 bg-slate-50/50"><CardTitle className="text-xl font-bold text-slate-800">{pkg.name}</CardTitle><div className="font-mono text-blue-700 font-bold text-2xl">{Number(pkg.price).toLocaleString()} <span className="text-xs text-slate-400 font-normal">{currency}</span></div></CardHeader>
-                                                <CardContent className="text-sm space-y-4 pt-4 flex-1"><ul className="space-y-2">{pkg.featuresList?.slice(0, 6).map((f, i) => (<li key={i} className="flex items-start gap-2 text-slate-600"><CheckCircle className="w-4 h-4 text-green-500 mt-0.5 shrink-0" /><span className="text-xs font-medium">{f}</span></li>))}</ul></CardContent>
-                                            </Card>
-                                        ))}
-                                        <Card className={cn("min-w-[300px] w-[320px] snap-center cursor-pointer border-dashed border-2 flex items-center justify-center bg-slate-50 hover:bg-slate-100 transition-colors", consultation.package.selectedPackageId === 'custom' ? "border-blue-500 bg-blue-50" : "border-slate-300")} onClick={() => setConsultation({ ...consultation, package: { ...consultation.package, selectedPackageId: 'custom' } })}>
-                                            <div className="text-center p-6 text-slate-400"><div className="bg-white p-4 rounded-full inline-flex mb-3 shadow-sm"><Plus className="w-8 h-8 text-slate-400" /></div><p className="font-bold text-slate-600">Build Custom Package</p></div>
-                                        </Card>
-                                    </div>
+{step === 3 && (
+    <div className="space-y-6 animate-in slide-in-from-right-4 fade-in duration-300">
+        <h2 className="text-2xl font-bold text-[#0F2854]">Package Selection</h2>
+        
+        {/* Package Slider */}
+        <div className="flex gap-4 overflow-x-auto pb-6 snap-x no-scrollbar">
+            {matchedPackages.map(pkg => (
+                <Card key={pkg.id} className={cn("min-w-[300px] w-[320px] snap-center cursor-pointer transition-all border-2 relative hover:shadow-lg flex flex-col", consultation.package.selectedPackageId === pkg.id ? "border-blue-500 shadow-xl scale-95 z-10" : "border-slate-100 hover:border-blue-200")} onClick={() => setConsultation({ ...consultation, package: { ...consultation.package, selectedPackageId: pkg.id } })}>
+                    <CardHeader className="pb-2 bg-slate-50/50"><CardTitle className="text-xl font-bold text-slate-800">{pkg.name}</CardTitle><div className="font-mono text-blue-700 font-bold text-2xl">{Number(pkg.price).toLocaleString()} <span className="text-xs text-slate-400 font-normal">{currency}</span></div></CardHeader>
+                    <CardContent className="text-sm space-y-4 pt-4 flex-1"><ul className="space-y-2">{pkg.featuresList?.slice(0, 6).map((f, i) => (<li key={i} className="flex items-start gap-2 text-slate-600"><CheckCircle className="w-4 h-4 text-green-500 mt-0.5 shrink-0" /><span className="text-xs font-medium">{f}</span></li>))}</ul></CardContent>
+                </Card>
+            ))}
+            <Card className={cn("min-w-[300px] w-[320px] snap-center cursor-pointer border-dashed border-2 flex items-center justify-center bg-slate-50 hover:bg-slate-100 transition-colors", consultation.package.selectedPackageId === 'custom' ? "border-blue-500 bg-blue-50" : "border-slate-300")} onClick={() => setConsultation({ ...consultation, package: { ...consultation.package, selectedPackageId: 'custom' } })}>
+                <div className="text-center p-6 text-slate-400"><div className="bg-white p-4 rounded-full inline-flex mb-3 shadow-sm"><Plus className="w-8 h-8 text-slate-400" /></div><p className="font-bold text-slate-600">Build Custom Package</p></div>
+            </Card>
+        </div>
 
-                                    {consultation.package.selectedPackageId === 'custom' && (
-                                        <div className="bg-slate-50 border border-slate-200 p-6 rounded-xl space-y-4 animate-in fade-in slide-in-from-top-2">
-                                            <div className="flex items-center gap-2 mb-2">
-                                                <LayoutTemplate className="w-5 h-5 text-blue-600" />
-                                                <h3 className="font-bold text-slate-800 text-lg">Package Configuration</h3>
-                                            </div>
-                                            <p className="text-xs text-slate-500 mb-4">Select the base components for your custom package.</p>
-                                            
-                                            <div className="space-y-3">
-                                                {configParams.map((param, idx) => {
-                                                    const isActive = consultation.package.customItems.some(i => i.name === param.name);
-                                                    const currentItem = consultation.package.customItems.find(i => i.name === param.name);
-                                                    const isBoolean = param.type === 'boolean' || param.name.toLowerCase().startsWith('include');
+        {/* SECTION 1: Package Configuration (Only visible for Custom Packages) */}
+        {consultation.package.selectedPackageId === 'custom' && (
+            <div className="bg-slate-50 border border-slate-200 p-6 rounded-xl space-y-4 animate-in fade-in slide-in-from-top-2">
+                <div className="flex items-center gap-2 mb-2">
+                    <LayoutTemplate className="w-5 h-5 text-blue-600" />
+                    <h3 className="font-bold text-slate-800 text-lg">Package Configuration</h3>
+                </div>
+                <p className="text-xs text-slate-500 mb-4">Select the base components for your custom package.</p>
+                
+                <div className="space-y-3">
+                    {configParams.map((param, idx) => {
+                        const isActive = consultation.package.customItems.some(i => i.name === param.name);
+                        const currentItem = consultation.package.customItems.find(i => i.name === param.name);
+                        const isBoolean = param.type === 'boolean' || param.name.toLowerCase().startsWith('include');
 
-                                                    return (
-                                                        <div key={idx} className={cn("flex items-center justify-between p-3 rounded-lg border transition-all", isActive ? "bg-white border-blue-200 shadow-sm" : "bg-slate-100/50 border-transparent hover:bg-white hover:border-slate-200")}>
-                                                            <div className="flex-1">
-                                                                <div className="font-medium text-sm text-slate-700">{param.name}</div>
-                                                                <div className="text-xs text-slate-400">Base Price: {param.defaultPrice?.toLocaleString()} {currency}</div>
-                                                            </div>
-                                                            
-                                                            <div className="flex items-center gap-4">
-                                                                {isActive && !isBoolean && (
-                                                                    <div className="flex items-center gap-2 animate-in fade-in">
-                                                                        {/* [!code highlight] Fix 1: Use Nullish Coalescing (??) instead of OR (||) */}
-                                                                        <Input 
-                                                                            type="number" 
-                                                                            className="w-16 h-8 text-center text-xs" 
-                                                                            value={currentItem?.qty ?? 1}
-                                                                            onChange={(e) => updateConfigParamValue(param.name, 'qty', Number(e.target.value))}
-                                                                        />
-                                                                        <span className="text-xs text-slate-400">x</span>
-                                                                        <Input 
-                                                                            type="number" 
-                                                                            className="w-24 h-8 text-right text-xs" 
-                                                                            value={currentItem?.price ?? param.defaultPrice ?? 0}
-                                                                            onChange={(e) => updateConfigParamValue(param.name, 'price', Number(e.target.value))}
-                                                                        />
-                                                                    </div>
-                                                                )}
-                                                                
-                                                                {isBoolean ? (
-                                                                     <Switch 
-                                                                        checked={isActive} 
-                                                                        onCheckedChange={(checked) => toggleConfigParam(param, checked)} 
-                                                                     />
-                                                                ) : (
-                                                                    !isActive && <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => toggleConfigParam(param, true)}>Add</Button>
-                                                                )}
-                                                                
-                                                                {isActive && !isBoolean && (
-                                                                     <Button size="icon" variant="ghost" className="h-8 w-8 text-red-400 hover:text-red-600" onClick={() => toggleConfigParam(param, false)}><Trash2 className="w-4 h-4" /></Button>
-                                                                )}
-                                                            </div>
-                                                        </div>
-                                                    );
-                                                })}
-                                            </div>
+                        return (
+                            <div key={idx} className={cn("flex items-center justify-between p-3 rounded-lg border transition-all", isActive ? "bg-white border-blue-200 shadow-sm" : "bg-slate-100/50 border-transparent hover:bg-white hover:border-slate-200")}>
+                                <div className="flex-1">
+                                    <div className="font-medium text-sm text-slate-700">{param.name}</div>
+                                    <div className="text-xs text-slate-400">Base Price: {param.defaultPrice?.toLocaleString()} {currency}</div>
+                                </div>
+                                
+                                <div className="flex items-center gap-4">
+                                    {isActive && !isBoolean && (
+                                        <div className="flex items-center gap-2 animate-in fade-in">
+                                            <Input 
+                                                type="number" 
+                                                className="w-16 h-8 text-center text-xs" 
+                                                value={currentItem?.qty ?? 1}
+                                                onChange={(e) => updateConfigParamValue(param.name, 'qty', Number(e.target.value))}
+                                            />
+                                            <span className="text-xs text-slate-400">x</span>
+                                            <Input 
+                                                type="number" 
+                                                className="w-24 h-8 text-right text-xs" 
+                                                value={currentItem?.price ?? param.defaultPrice ?? 0}
+                                                onChange={(e) => updateConfigParamValue(param.name, 'price', Number(e.target.value))}
+                                            />
                                         </div>
                                     )}
-
-                                    <div className="bg-white border border-slate-200 p-6 rounded-xl shadow-sm space-y-6">
-                                        <div className="flex justify-between items-center border-b pb-4">
-                                            <h3 className="font-bold text-slate-800 text-lg flex items-center gap-2"><Plus className="w-5 h-5 text-blue-600" /> Add-ons & Extras</h3>
-                                            <Select onValueChange={(val) => { if (val === 'custom_new') addCustomItem(); else { const param = configParams.find(p => p.name === val); addCustomItem(param); } }}>
-                                                <SelectTrigger className="w-[200px] h-9 text-xs bg-slate-50 border-slate-300"><SelectValue placeholder="Add Item..." /></SelectTrigger>
-                                                <SelectContent>
-                                                    <SelectItem value="custom_new" className="text-blue-600 font-medium">Create Custom Item...</SelectItem>
-                                                    <Separator className="my-1" />
-                                                    {configParams.map((p, idx) => (<SelectItem key={idx} value={p.name}>{p.name}</SelectItem>))}
-                                                </SelectContent>
-                                            </Select>
-                                        </div>
-                                        {consultation.package.customItems.length > 0 ? (
-                                            <div className="space-y-3">
-                                                <div className="grid grid-cols-12 gap-4 text-xs font-semibold text-slate-500 uppercase tracking-wider px-2"><div className="col-span-5">Item Name</div><div className="col-span-2 text-center">Qty</div><div className="col-span-4 text-right">Price ({currency})</div><div className="col-span-1"></div></div>
-                                                {consultation.package.customItems.map((item, idx) => (
-                                                    <div key={idx} className="grid grid-cols-12 gap-4 items-center animate-in slide-in-from-left-2 duration-300">
-                                                        <div className="col-span-5"><Input value={item.name} onChange={(e) => updateCustomItem(idx, 'name', e.target.value)} className="h-9" placeholder="Item name" /></div>
-                                                        <div className="col-span-2">
-                                                            {/* [!code highlight] Fix 1 (continued) */}
-                                                            <Input type="number" value={item.qty ?? 1} onChange={(e) => updateCustomItem(idx, 'qty', Number(e.target.value))} className="h-9 text-center" />
-                                                        </div>
-                                                        <div className="col-span-4">
-                                                            {/* [!code highlight] Fix 1 (continued) */}
-                                                            <Input type="number" value={item.price ?? 0} onChange={(e) => updateCustomItem(idx, 'price', Number(e.target.value))} className="h-9 text-right font-mono" />
-                                                        </div>
-                                                        <div className="col-span-1 flex justify-center"><Button size="icon" variant="ghost" className="h-9 w-9 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-full" onClick={() => removeCustomItem(idx)}><Trash2 className="w-4 h-4" /></Button></div>
-                                                    </div>
-                                                ))}
-                                                <div className="flex justify-end pt-4 border-t"><div className="text-right"><p className="text-xs text-slate-500 uppercase">{consultation.package.selectedPackageId === 'custom' ? "Total Cost" : "Add-ons Total"}</p><p className="font-bold text-slate-800 text-lg">{consultation.package.customItems.reduce((acc, i) => acc + (i.price * i.qty), 0).toLocaleString()} {currency}</p></div></div>
-                                            </div>
-                                        ) : (<div className="text-center py-8 bg-slate-50 rounded-lg border border-dashed border-slate-200"><p className="text-slate-400 text-sm">No extra items added yet.</p></div>)}
-                                    </div>
+                                    
+                                    {isBoolean ? (
+                                            <Switch 
+                                            checked={isActive} 
+                                            onCheckedChange={(checked) => toggleConfigParam(param, checked)} 
+                                            />
+                                    ) : (
+                                        !isActive && <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => toggleConfigParam(param, true)}>Add</Button>
+                                    )}
+                                    
+                                    {isActive && !isBoolean && (
+                                            <Button size="icon" variant="ghost" className="h-8 w-8 text-red-400 hover:text-red-600" onClick={() => toggleConfigParam(param, false)}><Trash2 className="w-4 h-4" /></Button>
+                                    )}
                                 </div>
-                            )}
+                            </div>
+                        );
+                    })}
+                </div>
+            </div>
+        )}
+
+        {/* SECTION 2: Add-ons & Extras (Filtered to exclude Config items) */}
+        <div className="bg-white border border-slate-200 p-6 rounded-xl shadow-sm space-y-6">
+            <div className="flex justify-between items-center border-b pb-4">
+                <h3 className="font-bold text-slate-800 text-lg flex items-center gap-2"><Plus className="w-5 h-5 text-blue-600" /> Add-ons & Extras</h3>
+                <Select onValueChange={(val) => { if (val === 'custom_new') addCustomItem(); else { const param = configParams.find(p => p.name === val); addCustomItem(param); } }}>
+                    <SelectTrigger className="w-[200px] h-9 text-xs bg-slate-50 border-slate-300"><SelectValue placeholder="Add Item..." /></SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="custom_new" className="text-blue-600 font-medium">Create Custom Item...</SelectItem>
+                        <Separator className="my-1" />
+                        {/* Only show params in dropdown that are NOT boolean/config types (optional, but cleaner) */}
+                        {configParams.filter(p => !p.name.toLowerCase().startsWith('include')).map((p, idx) => (<SelectItem key={idx} value={p.name}>{p.name}</SelectItem>))}
+                    </SelectContent>
+                </Select>
+            </div>
+            
+            <div className="space-y-3">
+                <div className="grid grid-cols-12 gap-4 text-xs font-semibold text-slate-500 uppercase tracking-wider px-2"><div className="col-span-5">Item Name</div><div className="col-span-2 text-center">Qty</div><div className="col-span-4 text-right">Price ({currency})</div><div className="col-span-1"></div></div>
+                
+                {consultation.package.customItems.map((item, idx) => {
+                    // [!code highlight] FILTER LOGIC:
+                    // If this item is already handled by the "Package Configuration" section above, DO NOT render it here.
+                    const isConfigItem = configParams.some(p => p.name === item.name);
+                    if (isConfigItem && consultation.package.selectedPackageId === 'custom') return null;
+
+                    return (
+                        <div key={idx} className="grid grid-cols-12 gap-4 items-center animate-in slide-in-from-left-2 duration-300">
+                            <div className="col-span-5"><Input value={item.name} onChange={(e) => updateCustomItem(idx, 'name', e.target.value)} className="h-9" placeholder="Item name" /></div>
+                            <div className="col-span-2">
+                                <Input type="number" value={item.qty ?? 1} onChange={(e) => updateCustomItem(idx, 'qty', Number(e.target.value))} className="h-9 text-center" />
+                            </div>
+                            <div className="col-span-4">
+                                <Input type="number" value={item.price ?? 0} onChange={(e) => updateCustomItem(idx, 'price', Number(e.target.value))} className="h-9 text-right font-mono" />
+                            </div>
+                            <div className="col-span-1 flex justify-center"><Button size="icon" variant="ghost" className="h-9 w-9 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-full" onClick={() => removeCustomItem(idx)}><Trash2 className="w-4 h-4" /></Button></div>
+                        </div>
+                    );
+                })}
+                
+                {/* Total Calculation */}
+                <div className="flex justify-end pt-4 border-t">
+                    <div className="text-right">
+                        <p className="text-xs text-slate-500 uppercase">{consultation.package.selectedPackageId === 'custom' ? "Total Cost (Config + Add-ons)" : "Add-ons Total"}</p>
+                        <p className="font-bold text-slate-800 text-lg">{consultation.package.customItems.reduce((acc, i) => acc + (i.price * i.qty), 0).toLocaleString()} {currency}</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+)}
 
                             {/* Step 4: Review */}
                             {step === 4 && (
