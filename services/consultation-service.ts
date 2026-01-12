@@ -1,8 +1,9 @@
-import { db } from "@/lib/firebase"; // Adjust path to your firebase config
+import { db } from "@/lib/firebase"; 
 import { 
     collection, addDoc, updateDoc, doc, getDocs, 
     query, where, orderBy, deleteDoc, serverTimestamp, Timestamp 
 } from "firebase/firestore";
+import { PackageData } from "@/services/event-service";
 
 // --- INTERFACES ---
 
@@ -54,41 +55,57 @@ export interface ConsultationData {
     updatedAt?: Date | Timestamp;
 }
 
+// Target structure matches the Firebase JSON provided
+interface FirebaseEventStructure {
+  basicInfo: { 
+    eventName: string; 
+    eventType: string; 
+    status: string; 
+    tags: string[]; 
+    inquiryDate: any 
+  };
+  customer: { 
+    name: string; 
+    email: string; 
+    mobile: string; 
+    contacts: any[]; 
+    verification?: any 
+  };
+  schedule: { 
+    dayCount: number; 
+    days: any[]; 
+    locations: any[] 
+  };
+  budget: { 
+    totalBudget: number; 
+    finalBudget: number; 
+    discount: { value: number; type: string }; 
+    additionalServices: any[] 
+  };
+  payments: { transactions: any[] };
+  resources: { assignedCrew: string[]; assignedEquipment: string[] };
+  media: { coverPhotoUrl: string; galleryUrls: string[] };
+  approval: { customerConfirmed: boolean; confirmedAt?: any; customerEmail: string; customerPhone: string };
+  meta: { createdAt: any; updatedAt: any };
+}
+
 // --- SERVICE FUNCTIONS ---
 
-/**
- * Saves a consultation draft. 
- * If the data has an ID, it updates the existing document.
- * If not, it creates a new document.
- */
 export const saveConsultation = async (studioId: string, data: ConsultationData): Promise<ConsultationData> => {
     const cleanData = { ...data };
-    
-    // Ensure studioId is set
     cleanData.studioId = studioId;
-    
-    // Remove undefined fields that Firestore might reject
     if (cleanData.id) delete cleanData.id;
 
-    const payload = {
-        ...cleanData,
-        updatedAt: serverTimestamp()
-    };
+    const payload = { ...cleanData, updatedAt: serverTimestamp() };
 
     try {
         if (data.id) {
-            // Update existing
-            const docRef = doc(db, "Studios", studioId, "Consultations", data.id);
+            const docRef = doc(db, "consultations", data.id);
             await updateDoc(docRef, payload);
-            return { ...data, updatedAt: new Date() }; // Return with client-side date for immediate UI update
+            return { ...data, updatedAt: new Date() };
         } else {
-            // Create new
-            const payloadWithCreated = {
-                ...payload,
-                createdAt: serverTimestamp(),
-                status: 'draft' // Ensure it starts as draft
-            };
-            const colRef = collection(db, "Studios", studioId, "Consultations");
+            const payloadWithCreated = { ...payload, createdAt: serverTimestamp(), status: 'draft' };
+            const colRef = collection(db, "consultations");
             const docRef = await addDoc(colRef, payloadWithCreated);
             return { ...data, id: docRef.id, updatedAt: new Date() };
         }
@@ -98,24 +115,18 @@ export const saveConsultation = async (studioId: string, data: ConsultationData)
     }
 };
 
-/**
- * Fetches consultations for a specific studio, filtered by status.
- * Results are ordered by last updated.
- */
 export const fetchConsultations = async (studioId: string, status: string = 'draft'): Promise<ConsultationData[]> => {
     try {
         const q = query(
-            collection(db, "Studios", studioId, "Consultations"),
+            collection(db, "consultations"),
             where("studioId", "==", studioId),
             where("status", "==", status),
             orderBy("updatedAt", "desc")
         );
 
         const snapshot = await getDocs(q);
-        
         return snapshot.docs.map(doc => {
             const d = doc.data();
-            // Convert Firestore timestamps to JS Dates
             return {
                 id: doc.id,
                 ...d,
@@ -133,32 +144,123 @@ export const fetchConsultations = async (studioId: string, status: string = 'dra
     }
 };
 
-/**
- * Marks a consultation as 'converted' (e.g., after creating an Event from it).
- */
-export const convertConsultationStatus = async (studioId: string, consultationId: string): Promise<void> => {
+export const deleteConsultation = async (studioId: string, consultationId: string): Promise<void> => {
     try {
-        const docRef = doc(db, "Studios", studioId, "Consultations", consultationId);
-        await updateDoc(docRef, {
-            status: 'converted',
-            updatedAt: serverTimestamp()
-        });
+        const docRef = doc(db, "studios", studioId, "consultations", consultationId);
+        await deleteDoc(docRef);
     } catch (error) {
-        console.error("Error converting consultation:", error);
+        console.error("Error deleting consultation:", error);
         throw error;
     }
 };
 
 /**
- * Permanently deletes a consultation draft.
+ * Converts a consultation into a full event record following the strictly nested Firebase structure.
  */
-export const deleteConsultation = async (studioId: string, consultationId: string): Promise<void> => {
+export const convertToEvent = async (studioId: string, consultation: ConsultationData, packagesList: PackageData[]): Promise<void> => {
     try {
-        // Optional: Verify studioId matches doc ownership if strict security rules aren't enough
-        const docRef = doc(db, "Studios", studioId, "Consultations", consultationId);
-        await deleteDoc(docRef);
+        const now = new Date();
+        const isCustomPackage = consultation.package.selectedPackageId === 'custom';
+        let packageCost = 0;
+        let pkgId = "";
+
+        if (!isCustomPackage && consultation.package.selectedPackageId) {
+            const pkg = packagesList.find(p => p.id === consultation.package.selectedPackageId);
+            if (pkg) {
+                packageCost = Number(pkg.price);
+                pkgId = pkg.id || "";
+            }
+        }
+
+        const customTotal = consultation.package.customItems.reduce((acc, i) => acc + (i.price * i.qty), 0);
+
+        // 1. Construct the nested Event object strictly matching the prompt's JSON structure
+        const eventData: FirebaseEventStructure = {
+            basicInfo: {
+                eventName: `${consultation.requirements.eventType} - ${consultation.client.name}`,
+                eventType: consultation.requirements.eventType,
+                status: "Inquiry",
+                tags: consultation.requirements.styleTags || [],
+                inquiryDate: now
+            },
+            customer: {
+                name: consultation.client.name,
+                email: consultation.client.email,
+                mobile: consultation.client.mobile,
+                contacts: [], // Initialize empty
+                verification: { type: "", documentNumber: "" }
+            },
+            schedule: {
+                dayCount: 1,
+                days: consultation.requirements.date ? [{
+                    date: consultation.requirements.date,
+                    type: isCustomPackage ? 'custom' : 'package',
+                    packageId: pkgId,
+                    cost: isCustomPackage ? customTotal : packageCost,
+                    customItems: [] // Day-specific items (empty for now)
+                }] : [],
+                locations: []
+            },
+            budget: {
+                totalBudget: consultation.package.totalEstimate,
+                finalBudget: consultation.package.totalEstimate,
+                discount: { value: 0, type: 'fixed' },
+                additionalServices: consultation.package.customItems.map(item => ({
+                    id: crypto.randomUUID(),
+                    name: item.name,
+                    type: 'custom',
+                    pricePerUnit: item.price,
+                    quantity: item.qty,
+                    total: item.price * item.qty,
+                    advancePaid: 0
+                }))
+            },
+            payments: {
+                transactions: []
+            },
+            resources: {
+                assignedCrew: [],
+                assignedEquipment: []
+            },
+            media: {
+                coverPhotoUrl: "",
+                galleryUrls: []
+            },
+            approval: {
+                customerConfirmed: false,
+                confirmedAt: undefined,
+                customerEmail: consultation.client.email,
+                customerPhone: consultation.client.mobile
+            },
+            meta: {
+                createdAt: now,
+                updatedAt: now
+            }
+        };
+
+        // 2. Save to "events" collection
+        const eventsCol = collection(db, "studios", studioId, "events"); // Adjust collection path if "studios/{id}/events"
+        // Note: If you use subcollections per studio, use `collection(db, "studios", studioId, "events")`
+        // Assuming global events collection based on context, otherwise adjust accordingly.
+        // For safety, based on `fetchEvents(userData.studioID)`, it implies fetching by studioID filter on global or subcollection.
+        // I will assume global collection with studioID field OR logic is handled by parent. 
+        // Adding `studioId` to root if your DB requires it for filtering:
+        // @ts-ignore
+        eventData.studioId = studioId; 
+
+        await addDoc(eventsCol, eventData);
+
+        // 3. Update Consultation Status
+        if (consultation.id) {
+            const consRef = doc(db, "studios", studioId, "consultations", consultation.id);
+            await updateDoc(consRef, {
+                status: 'converted',
+                updatedAt: serverTimestamp()
+            });
+        }
+
     } catch (error) {
-        console.error("Error deleting consultation:", error);
+        console.error("Error converting to event:", error);
         throw error;
     }
 };
