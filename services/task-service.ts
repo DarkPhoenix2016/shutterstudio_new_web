@@ -1,17 +1,35 @@
 import { db } from "@/lib/firebase";
 import { 
-  collection, doc, getDocs, addDoc, updateDoc, deleteDoc, 
-  query, where, orderBy, serverTimestamp, Timestamp, arrayUnion 
+  collection, doc, getDocs, addDoc, updateDoc, 
+  query, orderBy, serverTimestamp, arrayUnion, limit, startAfter 
 } from "firebase/firestore";
+// [!code highlight] Import from existing services
+import { fetchCrewMembers, Member } from "@/services/crew-service"; 
 
 // --- TYPES ---
 
 export interface TaskActivity {
-  type: "created" | "assigned" | "status_changed" | "comment";
+  type: "created" | "assigned" | "status_changed" | "comment" | "update";
   message: string;
   userId: string;
   userName: string;
-  timestamp: Timestamp | Date;
+  timestamp: any; // Firestore Timestamp
+}
+
+export interface WorkNote {
+  id: string;
+  message: string;
+  userId: string;
+  userName: string;
+  timestamp: any;
+}
+
+export interface TaskUser {
+  uid: string;
+  name: string;
+  role?: string;
+  email?: string;
+  photoURL?: string; // Added for Avatar
 }
 
 export interface StudioTask {
@@ -21,34 +39,53 @@ export interface StudioTask {
   status: "todo" | "in_progress" | "review" | "completed" | "cancelled";
   priority: "low" | "medium" | "high" | "urgent";
   
-  createdBy: {
-    uid: string;
-    name: string;
-    role: string;
-  };
+  createdBy: TaskUser;
+  assignedTo: TaskUser[]; // Array of users
   
-  assignedTo: {
-    uid: string;
-    name: string;
-  };
-  
+  linkedEventId?: string; // Optional Event Link
+  linkedEventName?: string;
+
   dueDate?: Date;
   createdAt?: Date;
   updatedAt?: Date;
   
+  workNotes: WorkNote[]; // Timeline
   activityLog: TaskActivity[];
 }
 
 // --- FUNCTIONS ---
 
-export const fetchStudioTasks = async (studioId: string) => {
+// [!code highlight] Wrapper to fetch members using crew-service logic but return TaskUser format
+export const getStudioMembersForTasks = async (studioId: string): Promise<TaskUser[]> => {
+    try {
+        const members: Member[] = await fetchCrewMembers(studioId);
+        return members.map(m => ({
+            uid: m.id, // crew-service returns 'id' as the doc ID (uid)
+            name: m.displayName,
+            role: m.role || 'Member',
+            email: m.email,
+            photoURL: m.photoURL
+        }));
+    } catch (e) {
+        console.error("Error getting task members:", e);
+        return [];
+    }
+};
+
+export const fetchStudioTasks = async (studioId: string, pageSize = 50, lastDoc = null) => {
   try {
-    const q = query(
+    let q = query(
       collection(db, "Studios", studioId, "tasks"),
-      orderBy("createdAt", "desc")
+      orderBy("createdAt", "desc"),
+      limit(pageSize)
     );
+
+    if (lastDoc) {
+        q = query(q, startAfter(lastDoc));
+    }
+
     const snapshot = await getDocs(q);
-    return snapshot.docs.map(doc => {
+    const tasks = snapshot.docs.map(doc => {
       const data = doc.data();
       return {
         id: doc.id,
@@ -56,35 +93,42 @@ export const fetchStudioTasks = async (studioId: string) => {
         dueDate: data.dueDate?.toDate(),
         createdAt: data.createdAt?.toDate(),
         updatedAt: data.updatedAt?.toDate(),
+        workNotes: data.workNotes?.map((n: any) => ({...n, timestamp: n.timestamp?.toDate()})) || [],
         activityLog: data.activityLog?.map((log: any) => ({
             ...log,
             timestamp: log.timestamp?.toDate()
         }))
       } as StudioTask;
     });
+    
+    return { tasks, lastDoc: snapshot.docs[snapshot.docs.length - 1] };
   } catch (error) {
     console.error("Error fetching tasks:", error);
-    return [];
+    return { tasks: [], lastDoc: null };
   }
 };
 
-export const createTask = async (studioId: string, task: Omit<StudioTask, 'id' | 'createdAt' | 'updatedAt' | 'activityLog'>, currentUser: { uid: string, name: string, role: string }) => {
+export const createTask = async (studioId: string, task: any, currentUser: TaskUser) => {
   try {
+    if (!currentUser.uid || !currentUser.name) throw new Error("Invalid User Data");
+
     const newTask = {
       ...task,
       createdBy: {
         uid: currentUser.uid,
         name: currentUser.name,
-        role: currentUser.role
+        role: currentUser.role || 'Member',
+        photoURL: currentUser.photoURL || ""
       },
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
+      workNotes: [],
       activityLog: [{
         type: "created",
         message: `Task created by ${currentUser.name}`,
         userId: currentUser.uid,
         userName: currentUser.name,
-        timestamp: new Date() // Client side optmistic, server will overwrite
+        timestamp: new Date()
       }]
     };
     
@@ -95,10 +139,9 @@ export const createTask = async (studioId: string, task: Omit<StudioTask, 'id' |
   }
 };
 
-export const updateTaskStatus = async (studioId: string, taskId: string, newStatus: string, currentUser: { uid: string, name: string }) => {
+export const updateTaskStatus = async (studioId: string, taskId: string, newStatus: string, currentUser: TaskUser) => {
   try {
     const taskRef = doc(db, "Studios", studioId, "tasks", taskId);
-    
     await updateDoc(taskRef, {
       status: newStatus,
       updatedAt: serverTimestamp(),
@@ -125,6 +168,27 @@ export const updateTaskDetails = async (studioId: string, taskId: string, update
         });
     } catch (error) {
         console.error("Error updating task:", error);
+        throw error;
+    }
+};
+
+export const addWorkNote = async (studioId: string, taskId: string, message: string, currentUser: TaskUser) => {
+    try {
+        const taskRef = doc(db, "Studios", studioId, "tasks", taskId);
+        const newNote: WorkNote = {
+            id: crypto.randomUUID(),
+            message,
+            userId: currentUser.uid,
+            userName: currentUser.name,
+            timestamp: new Date()
+        };
+
+        await updateDoc(taskRef, {
+            workNotes: arrayUnion(newNote),
+            updatedAt: serverTimestamp()
+        });
+    } catch (error) {
+        console.error("Error adding note:", error);
         throw error;
     }
 };
