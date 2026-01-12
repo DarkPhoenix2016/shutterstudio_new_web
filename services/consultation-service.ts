@@ -180,7 +180,7 @@ export const convertToEvent = async (studioId: string, consultation: Consultatio
       galleryUrls: [],
       
       // Meta
-      eventName: `${consultation.requirements.eventType} - ${consultation.client.name}`,
+      eventName: `${consultation.client.name} ${consultation.requirements.eventType}`,
       eventType: consultation.requirements.eventType,
       status: "Inquiry",
       inquiryDate: serverTimestamp(), // Will be processed by Firestore
@@ -209,7 +209,7 @@ export const convertToEvent = async (studioId: string, consultation: Consultatio
       assignedEquipment: [],
       
       // Extra
-      notes: consultation.requirements.notes || ""
+      notes: `"Consutation Notes:" ${consultation.requirements.notes || ""}`
     };
 
     // 3. Call Event Service to Create (Handles Transaction & ID Generation)
