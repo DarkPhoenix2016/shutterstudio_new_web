@@ -383,9 +383,6 @@ export default function ConsultationPage() {
                     <Button variant="ghost" size="icon" onClick={toggleFullScreen} title="Toggle Focus Mode">
                         {isFullScreen ? <Minimize2 className="w-4 h-4 text-slate-500" /> : <Maximize2 className="w-4 h-4 text-slate-500" />}
                     </Button>
-                    <Button variant="ghost" size="icon" onClick={() => router.push('/app/dashboard')}>
-                        <X className="w-4 h-4 text-slate-500" />
-                    </Button>
                 </div>
             </header>
 
