@@ -28,15 +28,21 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Calendar } from "@/components/ui/calendar"
 import { Pagination, PaginationContent, PaginationItem, PaginationNext, PaginationPrevious } from "@/components/ui/pagination"
+import { Switch } from "@/components/ui/switch" // Assuming you have this component, else use standard input checkbox
 
 // Icons
 import {
     Loader2, ChevronRight, ChevronLeft, Save, CheckCircle,
     Maximize2, Minimize2, MapPin, Calendar as CalendarIcon, DollarSign,
-    Image as ImageIcon, Plus, Trash2, User, Play, X, ZoomIn, ZoomOut, Info, LayoutTemplate
+    Image as ImageIcon, Plus, Trash2, User, Play, X, ZoomIn, ZoomOut, Info, LayoutTemplate, Check
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import Swal from "sweetalert2"
+
+// --- TYPES ---
+interface ExtendedConfigParam extends PackageConfigParameter {
+    type?: 'boolean' | 'numeric' | 'text'; // Extend if your backend type differs
+}
 
 // --- COMPONENTS ---
 
@@ -84,6 +90,7 @@ export default function ConsultationPage() {
     const [step, setStep] = useState(0)
     const [isSaving, setIsSaving] = useState(false)
     const [isFullScreen, setIsFullScreen] = useState(false)
+    const [currency, setCurrency] = useState("LKR") // [!code highlight] Added Currency State
 
     // Draft Loading & Pagination
     const [isLoadDialogOpen, setIsLoadDialogOpen] = useState(false)
@@ -100,7 +107,7 @@ export default function ConsultationPage() {
     // Master Data
     const [events, setEvents] = useState<EventData[]>([])
     const [packages, setPackages] = useState<PackageData[]>([])
-    const [configParams, setConfigParams] = useState<PackageConfigParameter[]>([])
+    const [configParams, setConfigParams] = useState<ExtendedConfigParam[]>([])
     const [eventTypes, setEventTypes] = useState<string[]>([])
     const [availableTags, setAvailableTags] = useState<string[]>([])
 
@@ -126,17 +133,23 @@ export default function ConsultationPage() {
         if (!userData?.studioID) return;
         const init = async () => {
             try {
-                const [evtList, pkgList, types, params] = await Promise.all([
+                const [evtList, pkgList, types, params, currencySetting] = await Promise.all([
                     fetchEvents(userData.studioID),
                     fetchPackagesList(userData.studioID),
                     fetchStudioSettingsList(userData.studioID, 'EVENT_TYPES'),
-                    fetchPackageConfig(userData.studioID)
+                    fetchPackageConfig(userData.studioID),
+                    fetchStudioSettingsList(userData.studioID, 'CURRENCY') // [!code highlight] Fetch Currency
                 ]);
 
                 setEvents(evtList);
                 setPackages(pkgList);
-                setConfigParams(params as PackageConfigParameter[]);
+                setConfigParams(params as ExtendedConfigParam[]);
                 setEventTypes(types.length ? types : ["Weddings", "Homecoming", "Preshoot", "Birthday", "Corporate"]);
+                
+                // [!code highlight] Set Currency
+                if (currencySetting && currencySetting.length > 0) {
+                    setCurrency(currencySetting[0]); 
+                }
 
                 const tags = new Set<string>();
                 evtList.forEach(e => e.tags?.forEach(t => tags.add(t)));
@@ -213,6 +226,41 @@ export default function ConsultationPage() {
         setConsultation(prev => ({
             ...prev,
             package: { ...prev.package, customItems: newItems }
+        }));
+    };
+
+    // [!code highlight] Logic for Custom Package Builder (toggling base params)
+    const toggleConfigParam = (param: ExtendedConfigParam, active: boolean) => {
+        if (active) {
+            // Add item
+            const newItem = { 
+                name: param.name, 
+                qty: 1, 
+                unit: param.unit || "", 
+                price: param.defaultPrice || 0 
+            };
+            setConsultation(prev => ({
+                ...prev,
+                package: { ...prev.package, customItems: [...prev.package.customItems, newItem] }
+            }));
+        } else {
+            // Remove item
+            setConsultation(prev => ({
+                ...prev,
+                package: { ...prev.package, customItems: prev.package.customItems.filter(i => i.name !== param.name) }
+            }));
+        }
+    };
+
+    const updateConfigParamValue = (paramName: string, field: 'qty' | 'price', value: number) => {
+        setConsultation(prev => ({
+            ...prev,
+            package: { 
+                ...prev.package, 
+                customItems: prev.package.customItems.map(item => 
+                    item.name === paramName ? { ...item, [field]: value } : item
+                )
+            }
         }));
     };
 
@@ -293,9 +341,7 @@ export default function ConsultationPage() {
 
         setLoading(true);
         try {
-            // [!code highlight] Call Service to handle conversion strictly
             await convertToEvent(userData.studioID, consultation, packages);
-
             Swal.fire({ title: 'Success!', text: 'Event created successfully.', icon: 'success', timer: 1500 });
             router.push('/app/events');
         } catch (e) {
@@ -306,7 +352,6 @@ export default function ConsultationPage() {
         }
     };
 
-    // Pagination
     const paginatedDrafts = useMemo(() => {
         const startIndex = (draftPage - 1) * DRAFTS_PER_PAGE;
         return drafts.slice(startIndex, startIndex + DRAFTS_PER_PAGE);
@@ -345,6 +390,7 @@ export default function ConsultationPage() {
                 <main className="flex-1 flex flex-col overflow-y-auto relative bg-slate-50/50">
                     <ScrollArea className="flex-1 w-full">
                         <div className="p-6 pb-24 max-w-6xl mx-auto w-full">
+                            
                             {/* Step 0: Welcome */}
                             {step === 0 && (
                                 <div className="flex flex-col items-center justify-center min-h-[60vh] py-10 space-y-8 animate-in fade-in zoom-in-95 duration-500">
@@ -370,16 +416,17 @@ export default function ConsultationPage() {
                                     <Card className="border-0 shadow-md">
                                         <CardContent className="p-8 space-y-8">
                                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                                <div className="space-y-2"><Label>Client Name *</Label><Input value={consultation.client.name} onChange={e => setConsultation({ ...consultation, client: { ...consultation.client, name: e.target.value } })} className="h-12 text-lg bg-slate-50" /></div>
+                                                {/* [!code highlight] Re-added placeholders */}
+                                                <div className="space-y-2"><Label>Client Name *</Label><Input value={consultation.client.name} onChange={e => setConsultation({ ...consultation, client: { ...consultation.client, name: e.target.value } })} className="h-12 text-lg bg-slate-50" placeholder="e.g. Amantha & Nethmi" /></div>
                                                 <div className="space-y-2"><Label>Event Type</Label><Select value={consultation.requirements.eventType} onValueChange={v => setConsultation({ ...consultation, requirements: { ...consultation.requirements, eventType: v } })}><SelectTrigger className="h-12 text-lg bg-slate-50"><SelectValue /></SelectTrigger><SelectContent>{eventTypes.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent></Select></div>
                                             </div>
                                             <Separator />
                                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                                 <div className="space-y-2"><Label>Date</Label><Popover><PopoverTrigger asChild><Button variant="outline" className="w-full h-12 justify-start text-left font-normal text-lg"><CalendarIcon className="mr-2 h-4 w-4" />{consultation.requirements.date ? format(consultation.requirements.date, "PPP") : "Select Date"}</Button></PopoverTrigger><PopoverContent className="w-auto p-0"><Calendar mode="single" selected={consultation.requirements.date} onSelect={(d) => setConsultation({ ...consultation, requirements: { ...consultation.requirements, date: d } })} initialFocus /></PopoverContent></Popover></div>
-                                                <div className="space-y-2"><Label>Mobile</Label><Input value={consultation.client.mobile} onChange={e => setConsultation({ ...consultation, client: { ...consultation.client, mobile: e.target.value } })} className="h-12 text-lg bg-slate-50" /></div>
-                                                <div className="space-y-2 md:col-span-2"><Label>Email</Label><Input value={consultation.client.email} onChange={e => setConsultation({ ...consultation, client: { ...consultation.client, email: e.target.value } })} className="h-12 text-lg bg-slate-50" /></div>
+                                                <div className="space-y-2"><Label>Mobile</Label><Input value={consultation.client.mobile} onChange={e => setConsultation({ ...consultation, client: { ...consultation.client, mobile: e.target.value } })} className="h-12 text-lg bg-slate-50" placeholder="07x xxxxxxx" /></div>
+                                                <div className="space-y-2 md:col-span-2"><Label>Email</Label><Input value={consultation.client.email} onChange={e => setConsultation({ ...consultation, client: { ...consultation.client, email: e.target.value } })} className="h-12 text-lg bg-slate-50" placeholder="email@example.com" /></div>
                                             </div>
-                                            <div className="space-y-6"><div className="flex justify-between items-end"><Label>Budget Range</Label><span className="font-mono text-blue-700 font-bold bg-blue-50 px-2 py-1 rounded">Up to {consultation.requirements.budgetRange[1].toLocaleString()} LKR</span></div><Slider defaultValue={[consultation.requirements.budgetRange[1]]} max={2000000} step={25000} onValueChange={(val) => setConsultation({ ...consultation, requirements: { ...consultation.requirements, budgetRange: [0, val[0]] } })} className="py-4" /></div>
+                                            <div className="space-y-6"><div className="flex justify-between items-end"><Label>Budget Range</Label><span className="font-mono text-blue-700 font-bold bg-blue-50 px-2 py-1 rounded">Up to {consultation.requirements.budgetRange[1].toLocaleString()} {currency}</span></div><Slider defaultValue={[consultation.requirements.budgetRange[1]]} max={2000000} step={25000} onValueChange={(val) => setConsultation({ ...consultation, requirements: { ...consultation.requirements, budgetRange: [0, val[0]] } })} className="py-4" /></div>
                                         </CardContent>
                                     </Card>
                                 </div>
@@ -393,7 +440,24 @@ export default function ConsultationPage() {
                                         {matchedEvents.map((event, idx) => (
                                             <div key={event.id} onClick={() => setLightboxIndex(idx)} className={cn("break-inside-avoid relative group rounded-xl overflow-hidden cursor-pointer border-2 transition-all bg-slate-100", consultation.inspiration.selectedEventIds.includes(event.id!) ? "border-blue-500 ring-2 ring-blue-200" : "border-transparent")}>
                                                 <img src={event.couplePhotoUrl || "/placeholder.jpg"} className="w-full h-auto object-cover transition-transform duration-700 group-hover:scale-105" />
-                                                {consultation.inspiration.selectedEventIds.includes(event.id!) && <div className="absolute top-2 right-2 bg-blue-600 text-white p-1 rounded-full"><CheckCircle className="w-4 h-4" /></div>}
+                                                
+                                                {/* [!code highlight] Re-added Mark Option (Select Button) */}
+                                                <div 
+                                                    className={cn(
+                                                        "absolute top-2 right-2 rounded-full p-1.5 shadow-md z-10 transition-colors",
+                                                        consultation.inspiration.selectedEventIds.includes(event.id!) ? "bg-blue-600 text-white" : "bg-white/80 text-slate-400 hover:bg-white hover:text-blue-600"
+                                                    )}
+                                                    onClick={(e) => {
+                                                        e.stopPropagation(); // Prevent Lightbox open
+                                                        const current = consultation.inspiration.selectedEventIds;
+                                                        const newIds = current.includes(event.id!) ? current.filter(id => id !== event.id) : [...current, event.id!];
+                                                        setConsultation({ ...consultation, inspiration: { ...consultation.inspiration, selectedEventIds: newIds } });
+                                                    }}
+                                                >
+                                                    <CheckCircle className="w-5 h-5" />
+                                                </div>
+                                                
+                                                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-3"><p className="text-white font-bold text-xs truncate">{event.eventName}</p></div>
                                             </div>
                                         ))}
                                     </div>
@@ -407,7 +471,7 @@ export default function ConsultationPage() {
                                     <div className="flex gap-4 overflow-x-auto pb-6 snap-x no-scrollbar">
                                         {matchedPackages.map(pkg => (
                                             <Card key={pkg.id} className={cn("min-w-[300px] w-[320px] snap-center cursor-pointer transition-all border-2 relative hover:shadow-lg flex flex-col", consultation.package.selectedPackageId === pkg.id ? "border-blue-500 shadow-xl scale-95 z-10" : "border-slate-100 hover:border-blue-200")} onClick={() => setConsultation({ ...consultation, package: { ...consultation.package, selectedPackageId: pkg.id } })}>
-                                                <CardHeader className="pb-2 bg-slate-50/50"><CardTitle className="text-xl font-bold text-slate-800">{pkg.name}</CardTitle><div className="font-mono text-blue-700 font-bold text-2xl">{Number(pkg.price).toLocaleString()} <span className="text-xs text-slate-400 font-normal">LKR</span></div></CardHeader>
+                                                <CardHeader className="pb-2 bg-slate-50/50"><CardTitle className="text-xl font-bold text-slate-800">{pkg.name}</CardTitle><div className="font-mono text-blue-700 font-bold text-2xl">{Number(pkg.price).toLocaleString()} <span className="text-xs text-slate-400 font-normal">{currency}</span></div></CardHeader>
                                                 <CardContent className="text-sm space-y-4 pt-4 flex-1"><ul className="space-y-2">{pkg.featuresList?.slice(0, 6).map((f, i) => (<li key={i} className="flex items-start gap-2 text-slate-600"><CheckCircle className="w-4 h-4 text-green-500 mt-0.5 shrink-0" /><span className="text-xs font-medium">{f}</span></li>))}</ul></CardContent>
                                             </Card>
                                         ))}
@@ -416,17 +480,83 @@ export default function ConsultationPage() {
                                         </Card>
                                     </div>
 
+                                    {/* [!code highlight] Custom Package Configuration Section */}
+                                    {consultation.package.selectedPackageId === 'custom' && (
+                                        <div className="bg-slate-50 border border-slate-200 p-6 rounded-xl space-y-4 animate-in fade-in slide-in-from-top-2">
+                                            <div className="flex items-center gap-2 mb-2">
+                                                <LayoutTemplate className="w-5 h-5 text-blue-600" />
+                                                <h3 className="font-bold text-slate-800 text-lg">Package Configuration</h3>
+                                            </div>
+                                            <p className="text-xs text-slate-500 mb-4">Select the base components for your custom package.</p>
+                                            
+                                            <div className="space-y-3">
+                                                {configParams.map((param, idx) => {
+                                                    const isActive = consultation.package.customItems.some(i => i.name === param.name);
+                                                    const currentItem = consultation.package.customItems.find(i => i.name === param.name);
+                                                    const isBoolean = param.type === 'boolean' || param.name.toLowerCase().startsWith('include');
+
+                                                    return (
+                                                        <div key={idx} className={cn("flex items-center justify-between p-3 rounded-lg border transition-all", isActive ? "bg-white border-blue-200 shadow-sm" : "bg-slate-100/50 border-transparent hover:bg-white hover:border-slate-200")}>
+                                                            <div className="flex-1">
+                                                                <div className="font-medium text-sm text-slate-700">{param.name}</div>
+                                                                <div className="text-xs text-slate-400">Base Price: {param.defaultPrice?.toLocaleString()} {currency}</div>
+                                                            </div>
+                                                            
+                                                            <div className="flex items-center gap-4">
+                                                                {isActive && !isBoolean && (
+                                                                    <div className="flex items-center gap-2 animate-in fade-in">
+                                                                        <Input 
+                                                                            type="number" 
+                                                                            className="w-16 h-8 text-center text-xs" 
+                                                                            value={currentItem?.qty || 1}
+                                                                            onChange={(e) => updateConfigParamValue(param.name, 'qty', Number(e.target.value))}
+                                                                        />
+                                                                        <span className="text-xs text-slate-400">x</span>
+                                                                        <Input 
+                                                                            type="number" 
+                                                                            className="w-24 h-8 text-right text-xs" 
+                                                                            value={currentItem?.price || param.defaultPrice}
+                                                                            onChange={(e) => updateConfigParamValue(param.name, 'price', Number(e.target.value))}
+                                                                        />
+                                                                    </div>
+                                                                )}
+                                                                
+                                                                {isBoolean ? (
+                                                                     <Switch 
+                                                                        checked={isActive} 
+                                                                        onCheckedChange={(checked) => toggleConfigParam(param, checked)} 
+                                                                     />
+                                                                ) : (
+                                                                    !isActive && <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => toggleConfigParam(param, true)}>Add</Button>
+                                                                )}
+                                                                
+                                                                {isActive && !isBoolean && (
+                                                                     <Button size="icon" variant="ghost" className="h-8 w-8 text-red-400 hover:text-red-600" onClick={() => toggleConfigParam(param, false)}><Trash2 className="w-4 h-4" /></Button>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Add-ons & Extras (Always Visible) */}
                                     <div className="bg-white border border-slate-200 p-6 rounded-xl shadow-sm space-y-6">
                                         <div className="flex justify-between items-center border-b pb-4">
-                                            <h3 className="font-bold text-slate-800 text-lg flex items-center gap-2">{consultation.package.selectedPackageId === 'custom' ? <><LayoutTemplate className="w-5 h-5 text-blue-600" /> Custom Package Items</> : <><Plus className="w-5 h-5 text-blue-600" /> Add-ons & Extras</>}</h3>
+                                            <h3 className="font-bold text-slate-800 text-lg flex items-center gap-2"><Plus className="w-5 h-5 text-blue-600" /> Add-ons & Extras</h3>
                                             <Select onValueChange={(val) => { if (val === 'custom_new') addCustomItem(); else { const param = configParams.find(p => p.name === val); addCustomItem(param); } }}>
                                                 <SelectTrigger className="w-[200px] h-9 text-xs bg-slate-50 border-slate-300"><SelectValue placeholder="Add Item..." /></SelectTrigger>
-                                                <SelectContent>{configParams.map((p, idx) => (<SelectItem key={idx} value={p.name}>{p.name} {p.unit ? `(${p.unit})` : ''} (+{p.defaultPrice})</SelectItem>))}<Separator className="my-1" /><SelectItem value="custom_new" className="text-blue-600 font-medium">Create New...</SelectItem></SelectContent>
+                                                <SelectContent>
+                                                    <SelectItem value="custom_new" className="text-blue-600 font-medium">Create Custom Item...</SelectItem>
+                                                    <Separator className="my-1" />
+                                                    {configParams.map((p, idx) => (<SelectItem key={idx} value={p.name}>{p.name}</SelectItem>))}
+                                                </SelectContent>
                                             </Select>
                                         </div>
                                         {consultation.package.customItems.length > 0 ? (
                                             <div className="space-y-3">
-                                                <div className="grid grid-cols-12 gap-4 text-xs font-semibold text-slate-500 uppercase tracking-wider px-2"><div className="col-span-5">Item Name</div><div className="col-span-2 text-center">Qty</div><div className="col-span-4 text-right">Price (LKR)</div><div className="col-span-1"></div></div>
+                                                <div className="grid grid-cols-12 gap-4 text-xs font-semibold text-slate-500 uppercase tracking-wider px-2"><div className="col-span-5">Item Name</div><div className="col-span-2 text-center">Qty</div><div className="col-span-4 text-right">Price ({currency})</div><div className="col-span-1"></div></div>
                                                 {consultation.package.customItems.map((item, idx) => (
                                                     <div key={idx} className="grid grid-cols-12 gap-4 items-center animate-in slide-in-from-left-2 duration-300">
                                                         <div className="col-span-5"><Input value={item.name} onChange={(e) => updateCustomItem(idx, 'name', e.target.value)} className="h-9" placeholder="Item name" /></div>
@@ -435,7 +565,7 @@ export default function ConsultationPage() {
                                                         <div className="col-span-1 flex justify-center"><Button size="icon" variant="ghost" className="h-9 w-9 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-full" onClick={() => removeCustomItem(idx)}><Trash2 className="w-4 h-4" /></Button></div>
                                                     </div>
                                                 ))}
-                                                <div className="flex justify-end pt-4 border-t"><div className="text-right"><p className="text-xs text-slate-500 uppercase">{consultation.package.selectedPackageId === 'custom' ? "Custom Total" : "Add-ons Total"}</p><p className="font-bold text-slate-800 text-lg">{consultation.package.customItems.reduce((acc, i) => acc + (i.price * i.qty), 0).toLocaleString()} LKR</p></div></div>
+                                                <div className="flex justify-end pt-4 border-t"><div className="text-right"><p className="text-xs text-slate-500 uppercase">{consultation.package.selectedPackageId === 'custom' ? "Total Cost" : "Add-ons Total"}</p><p className="font-bold text-slate-800 text-lg">{consultation.package.customItems.reduce((acc, i) => acc + (i.price * i.qty), 0).toLocaleString()} {currency}</p></div></div>
                                             </div>
                                         ) : (<div className="text-center py-8 bg-slate-50 rounded-lg border border-dashed border-slate-200"><p className="text-slate-400 text-sm">No extra items added yet.</p></div>)}
                                     </div>
@@ -448,7 +578,7 @@ export default function ConsultationPage() {
                                     <div className="text-center"><h2 className="text-3xl font-bold text-[#0F2854]">Final Review</h2><p className="text-slate-500 mt-2">Ready to convert this consultation into a confirmed event?</p></div>
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                                         <Card><CardHeader className="bg-slate-50/50 pb-4"><CardTitle className="text-base flex items-center gap-2"><User className="w-4 h-4" /> Client Details</CardTitle></CardHeader><CardContent className="space-y-4 pt-6 text-sm"><div className="flex justify-between py-2 border-b"><span className="text-slate-500">Name</span><span className="font-medium">{consultation.client.name}</span></div><div className="flex justify-between py-2 border-b"><span className="text-slate-500">Event</span><span className="font-medium">{consultation.requirements.eventType}</span></div></CardContent></Card>
-                                        <Card className="border-blue-200 shadow-md"><CardHeader className="bg-blue-50/50 pb-4"><CardTitle className="text-base flex items-center gap-2 text-blue-800"><DollarSign className="w-4 h-4" /> Estimate</CardTitle></CardHeader><CardContent className="space-y-4 pt-6 text-sm"><div className="flex justify-between items-center pt-4"><span className="font-bold text-lg text-[#0F2854]">Total</span><span className="font-mono font-bold text-2xl text-[#1C4D8D]">{consultation.package.totalEstimate.toLocaleString()} LKR</span></div></CardContent></Card>
+                                        <Card className="border-blue-200 shadow-md"><CardHeader className="bg-blue-50/50 pb-4"><CardTitle className="text-base flex items-center gap-2 text-blue-800"><DollarSign className="w-4 h-4" /> Estimate</CardTitle></CardHeader><CardContent className="space-y-4 pt-6 text-sm"><div className="flex justify-between items-center pt-4"><span className="font-bold text-lg text-[#0F2854]">Total</span><span className="font-mono font-bold text-2xl text-[#1C4D8D]">{consultation.package.totalEstimate.toLocaleString()} {currency}</span></div></CardContent></Card>
                                     </div>
                                     <div className="space-y-2"><Label>Final Notes</Label><Textarea placeholder="Notes..." value={consultation.requirements.notes} onChange={e => setConsultation({ ...consultation, requirements: { ...consultation.requirements, notes: e.target.value } })} className="h-24 bg-white" /></div>
                                 </div>
@@ -473,10 +603,10 @@ export default function ConsultationPage() {
                     <aside className="w-80 bg-white border-l border-slate-200 shadow-xl hidden lg:flex flex-col z-40 h-full">
                         <div className="p-6 border-b shrink-0"><h3 className="font-bold text-[#0F2854] text-sm uppercase tracking-wide">Live Summary</h3></div>
                         <div className="flex-1 overflow-y-auto p-6 space-y-6">
-                            <div className="bg-slate-50 p-3 rounded-lg border border-slate-100"><p className="text-[10px] text-slate-400 uppercase font-bold tracking-wider mb-1">Budget Limit</p><p className="text-sm font-mono text-slate-700">{consultation.requirements.budgetRange[1].toLocaleString()} LKR</p></div>
+                            <div className="bg-slate-50 p-3 rounded-lg border border-slate-100"><p className="text-[10px] text-slate-400 uppercase font-bold tracking-wider mb-1">Budget Limit</p><p className="text-sm font-mono text-slate-700">{consultation.requirements.budgetRange[1].toLocaleString()} {currency}</p></div>
                             {consultation.package.customItems.length > 0 && (<div className="space-y-1 border-t pt-2"><p className="text-[10px] text-slate-400 uppercase font-bold tracking-wider mb-1">Add-ons</p>{consultation.package.customItems.map((add, i) => (<div key={i} className="flex justify-between text-xs text-slate-500"><span>{add.name} (x{add.qty})</span><span>+{(add.price * add.qty).toLocaleString()}</span></div>))}</div>)}
                         </div>
-                        <div className="p-6 border-t bg-slate-50 shrink-0"><div className="flex justify-between items-end mb-2"><span className="text-xs font-medium text-slate-500">Estimated Total</span><span className="text-xl font-bold text-[#1C4D8D]">{consultation.package.totalEstimate.toLocaleString()}</span></div></div>
+                        <div className="p-6 border-t bg-slate-50 shrink-0"><div className="flex justify-between items-end mb-2"><span className="text-xs font-medium text-slate-500">Estimated Total</span><span className="text-xl font-bold text-[#1C4D8D]">{consultation.package.totalEstimate.toLocaleString()} {currency}</span></div></div>
                     </aside>
                 )}
             </div>
