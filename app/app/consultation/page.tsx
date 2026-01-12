@@ -33,7 +33,7 @@ import { Pagination, PaginationContent, PaginationItem, PaginationLink, Paginati
 import {
     Loader2, ChevronRight, ChevronLeft, Save, CheckCircle,
     Maximize2, Minimize2, MapPin, Calendar as CalendarIcon, DollarSign,
-    Image as ImageIcon, Plus, Trash2, User, Play, X, ZoomIn, ZoomOut, Info, Check
+    Image as ImageIcon, Plus, Trash2, User, Play, X, ZoomIn, ZoomOut, Info, Check, LayoutTemplate
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import Swal from "sweetalert2"

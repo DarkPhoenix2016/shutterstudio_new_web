@@ -78,7 +78,7 @@ export const saveConsultation = async (studioId: string, data: ConsultationData)
     try {
         if (data.id) {
             // Update existing
-            const docRef = doc(db, "consultations", data.id);
+            const docRef = doc(db, "Studios", studioId, "Consultations", data.id);
             await updateDoc(docRef, payload);
             return { ...data, updatedAt: new Date() }; // Return with client-side date for immediate UI update
         } else {
@@ -88,7 +88,7 @@ export const saveConsultation = async (studioId: string, data: ConsultationData)
                 createdAt: serverTimestamp(),
                 status: 'draft' // Ensure it starts as draft
             };
-            const colRef = collection(db, "consultations");
+            const colRef = collection(db, "Studios", studioId, "Consultations");
             const docRef = await addDoc(colRef, payloadWithCreated);
             return { ...data, id: docRef.id, updatedAt: new Date() };
         }
@@ -105,7 +105,7 @@ export const saveConsultation = async (studioId: string, data: ConsultationData)
 export const fetchConsultations = async (studioId: string, status: string = 'draft'): Promise<ConsultationData[]> => {
     try {
         const q = query(
-            collection(db, "consultations"),
+            collection(db, "Studios", studioId, "Consultations"),
             where("studioId", "==", studioId),
             where("status", "==", status),
             orderBy("updatedAt", "desc")
@@ -138,7 +138,7 @@ export const fetchConsultations = async (studioId: string, status: string = 'dra
  */
 export const convertConsultationStatus = async (studioId: string, consultationId: string): Promise<void> => {
     try {
-        const docRef = doc(db, "consultations", consultationId);
+        const docRef = doc(db, "Studios", studioId, "Consultations", consultationId);
         await updateDoc(docRef, {
             status: 'converted',
             updatedAt: serverTimestamp()
@@ -155,7 +155,7 @@ export const convertConsultationStatus = async (studioId: string, consultationId
 export const deleteConsultation = async (studioId: string, consultationId: string): Promise<void> => {
     try {
         // Optional: Verify studioId matches doc ownership if strict security rules aren't enough
-        const docRef = doc(db, "consultations", consultationId);
+        const docRef = doc(db, "Studios", studioId, "Consultations", consultationId);
         await deleteDoc(docRef);
     } catch (error) {
         console.error("Error deleting consultation:", error);
