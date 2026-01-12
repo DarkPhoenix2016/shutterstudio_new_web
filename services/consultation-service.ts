@@ -1,135 +1,164 @@
-import { db } from "@/lib/firebase";
+import { db } from "@/lib/firebase"; // Adjust path to your firebase config
 import { 
-  collection, doc, getDoc, setDoc, updateDoc, 
-  serverTimestamp, query, where, getDocs, orderBy 
+    collection, addDoc, updateDoc, doc, getDocs, 
+    query, where, orderBy, deleteDoc, serverTimestamp, Timestamp 
 } from "firebase/firestore";
 
-// --- TYPES ---
+// --- INTERFACES ---
 
-export interface ConsultationData {
-  id?: string;
-  studioId: string;
-  status: "draft" | "completed" | "converted";
-  
-  client: {
+export interface CustomItem {
     name: string;
-    mobile: string;
-    email?: string;
-  };
-
-  requirements: {
-    eventType: string;
-    date?: any; // Timestamp or Date
-    guestCount?: number;
-    budgetRange: [number, number]; // [min, max]
-    locations: string[]; // City names
-    styleTags: string[];
-    notes?: string;
-    deliverables: {
-        photo: boolean;
-        video: boolean;
-        album: boolean;
-        drone: boolean;
-    };
-  };
-
-  inspiration: {
-    matchedEventIds: string[];
-    selectedEventIds: string[]; // IDs of events the client liked
-  };
-
-  package: {
-    selectedPackageId?: string; // ID from Packages collection or 'custom'
-    customItems: { name: string; price: number; qty: number }[];
-    totalEstimate: number;
-  };
-
-  createdAt?: any;
-  updatedAt?: any;
+    qty: number;
+    price: number;
+    unit?: string;
 }
 
-// --- FUNCTIONS ---
-
-// 1. Save or Update a Consultation Draft
-export const saveConsultation = async (studioId: string, data: ConsultationData) => {
-  try {
-    const colRef = collection(db, "Studios", studioId, "Consultations");
-    // If ID exists, use it; otherwise create new doc ref
-    const docRef = data.id ? doc(colRef, data.id) : doc(colRef); 
+export interface ConsultationData {
+    id?: string;
+    studioId: string;
+    status: 'draft' | 'converted' | 'archived';
     
-    const payload = {
-      ...data,
-      id: docRef.id,
-      studioId,
-      updatedAt: serverTimestamp(),
-      createdAt: data.createdAt || serverTimestamp()
+    client: {
+        name: string;
+        mobile: string;
+        email: string;
     };
 
-    // Use setDoc with merge to handle both create and update scenarios seamlessly
-    await setDoc(docRef, payload, { merge: true });
-    return payload;
-  } catch (error) {
-    console.error("Error saving consultation:", error);
-    throw error;
-  }
-};
+    requirements: {
+        eventType: string;
+        budgetRange: number[]; // [min, max]
+        date?: Date;
+        locations: string[];
+        styleTags: string[];
+        deliverables: {
+            photo: boolean;
+            video: boolean;
+            album: boolean;
+            drone: boolean;
+        };
+        notes: string;
+    };
 
-// 2. Fetch a specific consultation by ID
-export const getConsultation = async (studioId: string, consultationId: string) => {
-  try {
-    const docRef = doc(db, "Studios", studioId, "Consultations", consultationId);
-    const snap = await getDoc(docRef);
-    if (snap.exists()) {
-        const data = snap.data();
-        // Convert Timestamps to Dates safely
-        if (data.requirements?.date?.toDate) {
-            data.requirements.date = data.requirements.date.toDate();
-        }
-        return data as ConsultationData;
-    }
-    return null;
-  } catch (error) {
-    console.error("Error fetching consultation:", error);
-    return null;
-  }
-};
+    inspiration: {
+        matchedEventIds: string[];
+        selectedEventIds: string[];
+    };
 
-// 3. Fetch List of Consultations (Drafts or Converted)
-export const fetchConsultations = async (studioId: string, status: "draft" | "converted" | "all" = "draft") => {
+    package: {
+        selectedPackageId?: string; // 'custom' or UUID
+        customItems: CustomItem[];
+        totalEstimate: number;
+    };
+
+    createdAt?: Date | Timestamp;
+    updatedAt?: Date | Timestamp;
+}
+
+// --- SERVICE FUNCTIONS ---
+
+/**
+ * Saves a consultation draft. 
+ * If the data has an ID, it updates the existing document.
+ * If not, it creates a new document.
+ */
+export const saveConsultation = async (studioId: string, data: ConsultationData): Promise<ConsultationData> => {
+    const cleanData = { ...data };
+    
+    // Ensure studioId is set
+    cleanData.studioId = studioId;
+    
+    // Remove undefined fields that Firestore might reject
+    if (cleanData.id) delete cleanData.id;
+
+    const payload = {
+        ...cleanData,
+        updatedAt: serverTimestamp()
+    };
+
     try {
-        const colRef = collection(db, "Studios", studioId, "Consultations");
-        let q = query(colRef, orderBy("updatedAt", "desc"));
-        
-        if (status !== 'all') {
-            q = query(colRef, where("status", "==", status), orderBy("updatedAt", "desc"));
+        if (data.id) {
+            // Update existing
+            const docRef = doc(db, "consultations", data.id);
+            await updateDoc(docRef, payload);
+            return { ...data, updatedAt: new Date() }; // Return with client-side date for immediate UI update
+        } else {
+            // Create new
+            const payloadWithCreated = {
+                ...payload,
+                createdAt: serverTimestamp(),
+                status: 'draft' // Ensure it starts as draft
+            };
+            const colRef = collection(db, "consultations");
+            const docRef = await addDoc(colRef, payloadWithCreated);
+            return { ...data, id: docRef.id, updatedAt: new Date() };
         }
+    } catch (error) {
+        console.error("Error saving consultation:", error);
+        throw error;
+    }
+};
 
-        const snap = await getDocs(q);
-        return snap.docs.map(d => {
-            const data = d.data();
-            // Safe date conversion for list view
-            if (data.requirements?.date?.toDate) {
-                data.requirements.date = data.requirements.date.toDate();
-            }
-            if (data.updatedAt?.toDate) {
-                data.updatedAt = data.updatedAt.toDate();
-            }
-            return { id: d.id, ...data } as ConsultationData;
+/**
+ * Fetches consultations for a specific studio, filtered by status.
+ * Results are ordered by last updated.
+ */
+export const fetchConsultations = async (studioId: string, status: string = 'draft'): Promise<ConsultationData[]> => {
+    try {
+        const q = query(
+            collection(db, "consultations"),
+            where("studioId", "==", studioId),
+            where("status", "==", status),
+            orderBy("updatedAt", "desc")
+        );
+
+        const snapshot = await getDocs(q);
+        
+        return snapshot.docs.map(doc => {
+            const d = doc.data();
+            // Convert Firestore timestamps to JS Dates
+            return {
+                id: doc.id,
+                ...d,
+                requirements: {
+                    ...d.requirements,
+                    date: d.requirements?.date instanceof Timestamp ? d.requirements.date.toDate() : d.requirements?.date
+                },
+                createdAt: d.createdAt instanceof Timestamp ? d.createdAt.toDate() : d.createdAt,
+                updatedAt: d.updatedAt instanceof Timestamp ? d.updatedAt.toDate() : d.updatedAt,
+            } as ConsultationData;
         });
     } catch (error) {
-        console.error("Error fetching consultation list:", error);
-        return [];
+        console.error("Error fetching consultations:", error);
+        throw error;
     }
 };
 
-// 4. Mark consultation as converted
-export const convertConsultationStatus = async (studioId: string, consultationId: string) => {
+/**
+ * Marks a consultation as 'converted' (e.g., after creating an Event from it).
+ */
+export const convertConsultationStatus = async (studioId: string, consultationId: string): Promise<void> => {
     try {
-        await updateDoc(doc(db, "Studios", studioId, "Consultations", consultationId), {
-            status: "converted",
+        const docRef = doc(db, "consultations", consultationId);
+        await updateDoc(docRef, {
+            status: 'converted',
             updatedAt: serverTimestamp()
         });
     } catch (error) {
-        console.error("Error converting status:", error);
+        console.error("Error converting consultation:", error);
+        throw error;
+    }
+};
+
+/**
+ * Permanently deletes a consultation draft.
+ */
+export const deleteConsultation = async (studioId: string, consultationId: string): Promise<void> => {
+    try {
+        // Optional: Verify studioId matches doc ownership if strict security rules aren't enough
+        const docRef = doc(db, "consultations", consultationId);
+        await deleteDoc(docRef);
+    } catch (error) {
+        console.error("Error deleting consultation:", error);
+        throw error;
     }
 };
