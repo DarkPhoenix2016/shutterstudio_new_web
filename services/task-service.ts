@@ -30,7 +30,7 @@ export interface TaskUser {
   name: string;
   role?: string;
   email?: string;
-  photoURL?: string; // Added for Avatar
+  photoURL?: string; 
 }
 
 export interface StudioTask {
