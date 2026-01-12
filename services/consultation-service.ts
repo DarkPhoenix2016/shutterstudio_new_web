@@ -3,7 +3,11 @@ import {
   collection, addDoc, updateDoc, doc, getDocs,
   query, where, orderBy, deleteDoc, serverTimestamp, Timestamp
 } from "firebase/firestore";
-import { PackageData } from "@/services/event-service";
+import { 
+  PackageData, 
+  EventData, 
+  createEvent // Imported directly
+} from "@/services/event-service";
 
 // --- INTERFACES ---
 
@@ -27,7 +31,7 @@ export interface ConsultationData {
 
   requirements: {
     eventType: string;
-    budgetRange: number[]; // [min, max]
+    budgetRange: number[];
     date?: Date;
     locations: string[];
     styleTags: string[];
@@ -46,7 +50,7 @@ export interface ConsultationData {
   };
 
   package: {
-    selectedPackageId?: string; // 'custom' or UUID
+    selectedPackageId?: string; 
     customItems: CustomItem[]; // Add-ons
     customBaseItems?: CustomItem[]; // Base items for custom packages
     totalEstimate: number;
@@ -54,37 +58,6 @@ export interface ConsultationData {
 
   createdAt?: Date | Timestamp;
   updatedAt?: Date | Timestamp;
-}
-
-// Flat structure matching your Firebase record
-interface FirebaseEventStructure {
-  advancePaid: number;
-  assignedCrew: any[];
-  assignedEquipment: any[];
-  createdAt: any;
-  customerEmail: string;
-  customerMobile: string;
-  customerName: string;
-  dayCount: number;
-  days: Array<{
-    cost: number;
-    customItems: any[];
-    date: any;
-    packageId?: string;
-    type: 'package' | 'custom';
-  }>;
-  discount: number;
-  discountType: string;
-  // displayId is typically generated server-side or via trigger, omitting from creation payload if optional
-  displayId?: string; 
-  eventName: string;
-  eventType: string;
-  finalBudget: number;
-  galleryUrls: string[];
-  inquiryDate: any;
-  notes: string;
-  status: string;
-  totalBudget: number;
 }
 
 // --- SERVICE FUNCTIONS ---
@@ -152,7 +125,7 @@ export const deleteConsultation = async (studioId: string, consultationId: strin
 };
 
 /**
- * Converts a consultation into a full event record following the strictly flat Firebase structure.
+ * Converts a consultation into a full event using the Event Service.
  */
 export const convertToEvent = async (studioId: string, consultation: ConsultationData, packagesList: PackageData[]): Promise<void> => {
   try {
@@ -162,83 +135,85 @@ export const convertToEvent = async (studioId: string, consultation: Consultatio
     // 1. Calculate Costs & Items
     let dayBaseCost = 0;
     let pkgId = "";
-    let dayItems: any[] = []; // Standard items array
+    let dayItems: any[] = []; 
 
     // A. Handle Package Type
     if (!isCustomPackage && consultation.package.selectedPackageId) {
       const pkg = packagesList.find(p => p.id === consultation.package.selectedPackageId);
       if (pkg) {
         dayBaseCost = Number(pkg.price);
-        pkgId = pkg.id || "";
+        pkgId = pkg.id; // Correctly referencing PackageData interface
       }
     } 
     // B. Handle Custom Base Items
     else if (isCustomPackage && consultation.package.customBaseItems) {
-      // Sum base items
       dayBaseCost = consultation.package.customBaseItems.reduce((acc, i) => acc + (i.price * i.qty), 0);
-      // Add base items to list
+      
       dayItems = [...consultation.package.customBaseItems.map(item => ({
         name: item.name,
-        quantity: item.qty,
+        quantity: item.qty, // Mapping 'qty' to 'quantity' for CustomItem interface
         price: item.price,
         unit: item.unit || ""
       }))];
     }
 
-    // C. Handle Add-ons (Merge into dayItems)
-    // In the flat structure, add-ons usually live inside the day's customItems or simply increase the day's cost.
-    // We will append them to the day's item list so they are tracked.
+    // C. Handle Add-ons
     const addOns = (consultation.package.customItems || []).map(item => ({
         name: item.name,
-        quantity: item.qty,
+        quantity: item.qty, // Mapping 'qty' to 'quantity'
         price: item.price,
-        unit: item.unit || "" // Default to empty string if undefined
+        unit: item.unit || ""
     }));
 
-    // Merge Add-ons into Day Items
+    // Merge for flat structure
     const finalDayItems = [...dayItems, ...addOns];
-
-    // Calculate total add-on cost
     const addOnCost = addOns.reduce((acc, i) => acc + (i.price * i.quantity), 0);
-
-    // Final Day Cost = Base Package Cost + Add-ons Cost
     const totalDayCost = dayBaseCost + addOnCost;
 
-    // 2. Construct the Flat Event Object
-    const eventData: FirebaseEventStructure = {
-      advancePaid: 0,
-      assignedCrew: [],
-      assignedEquipment: [],
-      createdAt: serverTimestamp(),
-      customerEmail: consultation.client.email || "",
-      customerMobile: consultation.client.mobile || "",
+    // 2. Construct EventData Object
+    // We strictly use the EventData interface from event-service.ts
+    const eventData: EventData = {
+      // Customer Info
       customerName: consultation.client.name,
+      customerMobile: consultation.client.mobile,
+      customerEmail: consultation.client.email || "",
+      galleryUrls: [],
+      
+      // Meta
+      eventName: `${consultation.requirements.eventType} - ${consultation.client.name}`,
+      eventType: consultation.requirements.eventType,
+      status: "Inquiry",
+      inquiryDate: serverTimestamp(), // Will be processed by Firestore
+      
+      // Scheduling
       dayCount: 1,
       days: [
         {
+          date: consultation.requirements.date || now,
+          type: isCustomPackage ? 'custom' : 'package',
+          packageId: pkgId, // Optional in EventDayConfig
           cost: totalDayCost,
-          customItems: finalDayItems,
-          date: consultation.requirements.date || serverTimestamp(),
-          packageId: pkgId, // Empty string if custom
-          type: isCustomPackage ? "custom" : "package"
+          customItems: finalDayItems // Matches CustomItem[] in EventDayConfig
         }
       ],
+      
+      // Financials
+      totalBudget: totalDayCost,
+      finalBudget: totalDayCost, // No discount initially
       discount: 0,
-      discountType: "fixed",
-      // displayId is omitted; assumed generated by backend trigger or function
-      eventName: `${consultation.requirements.eventType} - ${consultation.client.name}`,
-      eventType: consultation.requirements.eventType,
-      finalBudget: totalDayCost, // No discount applied initially
-      galleryUrls: [],
-      inquiryDate: serverTimestamp(),
-      notes: consultation.requirements.notes || "",
-      status: "Inquiry",
-      totalBudget: totalDayCost
+      discountType: 'fixed',
+      advancePaid: 0,
+      
+      // Resources
+      assignedCrew: [],
+      assignedEquipment: [],
+      
+      // Extra
+      notes: consultation.requirements.notes || ""
     };
 
-    // 3. Save to "Events" collection under the Studio
-    const eventsCol = collection(db, "Studios", studioId, "Events");
-    await addDoc(eventsCol, eventData);
+    // 3. Call Event Service to Create (Handles Transaction & ID Generation)
+    await createEvent(studioId, eventData);
 
     // 4. Update Consultation Status
     if (consultation.id) {
