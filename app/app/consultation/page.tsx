@@ -28,7 +28,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Calendar } from "@/components/ui/calendar"
 import { Pagination, PaginationContent, PaginationItem, PaginationNext, PaginationPrevious } from "@/components/ui/pagination"
-import { Switch } from "@/components/ui/switch" // Assuming you have this component, else use standard input checkbox
+import { Switch } from "@/components/ui/switch"
 
 // Icons
 import {
@@ -41,7 +41,7 @@ import Swal from "sweetalert2"
 
 // --- TYPES ---
 interface ExtendedConfigParam extends PackageConfigParameter {
-    type?: 'boolean' | 'numeric' | 'text'; // Extend if your backend type differs
+    type?: 'boolean' | 'numeric' | 'text';
 }
 
 // --- COMPONENTS ---
@@ -90,7 +90,7 @@ export default function ConsultationPage() {
     const [step, setStep] = useState(0)
     const [isSaving, setIsSaving] = useState(false)
     const [isFullScreen, setIsFullScreen] = useState(false)
-    const [currency, setCurrency] = useState("LKR") // [!code highlight] Added Currency State
+    const [currency, setCurrency] = useState("LKR")
 
     // Draft Loading & Pagination
     const [isLoadDialogOpen, setIsLoadDialogOpen] = useState(false)
@@ -138,7 +138,8 @@ export default function ConsultationPage() {
                     fetchPackagesList(userData.studioID),
                     fetchStudioSettingsList(userData.studioID, 'EVENT_TYPES'),
                     fetchPackageConfig(userData.studioID),
-                    fetchStudioSettingsList(userData.studioID, 'CURRENCY') // [!code highlight] Fetch Currency
+                    // [!code highlight] Fix 2: Cast literal to 'any' to bypass TS error
+                    fetchStudioSettingsList(userData.studioID, 'CURRENCY' as any) 
                 ]);
 
                 setEvents(evtList);
@@ -146,7 +147,6 @@ export default function ConsultationPage() {
                 setConfigParams(params as ExtendedConfigParam[]);
                 setEventTypes(types.length ? types : ["Weddings", "Homecoming", "Preshoot", "Birthday", "Corporate"]);
                 
-                // [!code highlight] Set Currency
                 if (currencySetting && currencySetting.length > 0) {
                     setCurrency(currencySetting[0]); 
                 }
@@ -229,10 +229,8 @@ export default function ConsultationPage() {
         }));
     };
 
-    // [!code highlight] Logic for Custom Package Builder (toggling base params)
     const toggleConfigParam = (param: ExtendedConfigParam, active: boolean) => {
         if (active) {
-            // Add item
             const newItem = { 
                 name: param.name, 
                 qty: 1, 
@@ -244,7 +242,6 @@ export default function ConsultationPage() {
                 package: { ...prev.package, customItems: [...prev.package.customItems, newItem] }
             }));
         } else {
-            // Remove item
             setConsultation(prev => ({
                 ...prev,
                 package: { ...prev.package, customItems: prev.package.customItems.filter(i => i.name !== param.name) }
@@ -364,6 +361,29 @@ export default function ConsultationPage() {
         setStep(s => Math.min(s + 1, 4));
     };
 
+    // --- LIGHTBOX ACTIONS ---
+    const handleLightboxNext = useCallback(() => {
+        setLightboxIndex(prev => (prev !== null && prev < matchedEvents.length - 1 ? prev + 1 : 0));
+        setZoomLevel(1);
+    }, [matchedEvents.length]);
+
+    const handleLightboxPrev = useCallback(() => {
+        setLightboxIndex(prev => (prev !== null && prev > 0 ? prev - 1 : matchedEvents.length - 1));
+        setZoomLevel(1);
+    }, [matchedEvents.length]);
+
+    const handleKeyDown = useCallback((e: KeyboardEvent) => {
+        if (lightboxIndex === null) return;
+        if (e.key === "ArrowRight") handleLightboxNext();
+        if (e.key === "ArrowLeft") handleLightboxPrev();
+        if (e.key === "Escape") setLightboxIndex(null);
+    }, [lightboxIndex, handleLightboxNext, handleLightboxPrev]);
+
+    useEffect(() => {
+        window.addEventListener("keydown", handleKeyDown);
+        return () => window.removeEventListener("keydown", handleKeyDown);
+    }, [handleKeyDown]);
+    
     const currentLightboxEvent = lightboxIndex !== null ? matchedEvents[lightboxIndex] : null;
 
     if (loading) return <div className="h-screen flex items-center justify-center"><Loader2 className="w-8 h-8 animate-spin text-[#1C4D8D]" /></div>;
@@ -416,7 +436,6 @@ export default function ConsultationPage() {
                                     <Card className="border-0 shadow-md">
                                         <CardContent className="p-8 space-y-8">
                                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                                {/* [!code highlight] Re-added placeholders */}
                                                 <div className="space-y-2"><Label>Client Name *</Label><Input value={consultation.client.name} onChange={e => setConsultation({ ...consultation, client: { ...consultation.client, name: e.target.value } })} className="h-12 text-lg bg-slate-50" placeholder="e.g. Amantha & Nethmi" /></div>
                                                 <div className="space-y-2"><Label>Event Type</Label><Select value={consultation.requirements.eventType} onValueChange={v => setConsultation({ ...consultation, requirements: { ...consultation.requirements, eventType: v } })}><SelectTrigger className="h-12 text-lg bg-slate-50"><SelectValue /></SelectTrigger><SelectContent>{eventTypes.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent></Select></div>
                                             </div>
@@ -441,7 +460,6 @@ export default function ConsultationPage() {
                                             <div key={event.id} onClick={() => setLightboxIndex(idx)} className={cn("break-inside-avoid relative group rounded-xl overflow-hidden cursor-pointer border-2 transition-all bg-slate-100", consultation.inspiration.selectedEventIds.includes(event.id!) ? "border-blue-500 ring-2 ring-blue-200" : "border-transparent")}>
                                                 <img src={event.couplePhotoUrl || "/placeholder.jpg"} className="w-full h-auto object-cover transition-transform duration-700 group-hover:scale-105" />
                                                 
-                                                {/* [!code highlight] Re-added Mark Option (Select Button) */}
                                                 <div 
                                                     className={cn(
                                                         "absolute top-2 right-2 rounded-full p-1.5 shadow-md z-10 transition-colors",
@@ -480,7 +498,6 @@ export default function ConsultationPage() {
                                         </Card>
                                     </div>
 
-                                    {/* [!code highlight] Custom Package Configuration Section */}
                                     {consultation.package.selectedPackageId === 'custom' && (
                                         <div className="bg-slate-50 border border-slate-200 p-6 rounded-xl space-y-4 animate-in fade-in slide-in-from-top-2">
                                             <div className="flex items-center gap-2 mb-2">
@@ -505,17 +522,18 @@ export default function ConsultationPage() {
                                                             <div className="flex items-center gap-4">
                                                                 {isActive && !isBoolean && (
                                                                     <div className="flex items-center gap-2 animate-in fade-in">
+                                                                        {/* [!code highlight] Fix 1: Use Nullish Coalescing (??) instead of OR (||) */}
                                                                         <Input 
                                                                             type="number" 
                                                                             className="w-16 h-8 text-center text-xs" 
-                                                                            value={currentItem?.qty || 1}
+                                                                            value={currentItem?.qty ?? 1}
                                                                             onChange={(e) => updateConfigParamValue(param.name, 'qty', Number(e.target.value))}
                                                                         />
                                                                         <span className="text-xs text-slate-400">x</span>
                                                                         <Input 
                                                                             type="number" 
                                                                             className="w-24 h-8 text-right text-xs" 
-                                                                            value={currentItem?.price || param.defaultPrice}
+                                                                            value={currentItem?.price ?? param.defaultPrice ?? 0}
                                                                             onChange={(e) => updateConfigParamValue(param.name, 'price', Number(e.target.value))}
                                                                         />
                                                                     </div>
@@ -541,7 +559,6 @@ export default function ConsultationPage() {
                                         </div>
                                     )}
 
-                                    {/* Add-ons & Extras (Always Visible) */}
                                     <div className="bg-white border border-slate-200 p-6 rounded-xl shadow-sm space-y-6">
                                         <div className="flex justify-between items-center border-b pb-4">
                                             <h3 className="font-bold text-slate-800 text-lg flex items-center gap-2"><Plus className="w-5 h-5 text-blue-600" /> Add-ons & Extras</h3>
@@ -560,8 +577,14 @@ export default function ConsultationPage() {
                                                 {consultation.package.customItems.map((item, idx) => (
                                                     <div key={idx} className="grid grid-cols-12 gap-4 items-center animate-in slide-in-from-left-2 duration-300">
                                                         <div className="col-span-5"><Input value={item.name} onChange={(e) => updateCustomItem(idx, 'name', e.target.value)} className="h-9" placeholder="Item name" /></div>
-                                                        <div className="col-span-2"><Input type="number" value={item.qty} onChange={(e) => updateCustomItem(idx, 'qty', Number(e.target.value))} className="h-9 text-center" /></div>
-                                                        <div className="col-span-4"><Input type="number" value={item.price} onChange={(e) => updateCustomItem(idx, 'price', Number(e.target.value))} className="h-9 text-right font-mono" /></div>
+                                                        <div className="col-span-2">
+                                                            {/* [!code highlight] Fix 1 (continued) */}
+                                                            <Input type="number" value={item.qty ?? 1} onChange={(e) => updateCustomItem(idx, 'qty', Number(e.target.value))} className="h-9 text-center" />
+                                                        </div>
+                                                        <div className="col-span-4">
+                                                            {/* [!code highlight] Fix 1 (continued) */}
+                                                            <Input type="number" value={item.price ?? 0} onChange={(e) => updateCustomItem(idx, 'price', Number(e.target.value))} className="h-9 text-right font-mono" />
+                                                        </div>
                                                         <div className="col-span-1 flex justify-center"><Button size="icon" variant="ghost" className="h-9 w-9 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-full" onClick={() => removeCustomItem(idx)}><Trash2 className="w-4 h-4" /></Button></div>
                                                     </div>
                                                 ))}
@@ -628,9 +651,28 @@ export default function ConsultationPage() {
             {lightboxIndex !== null && currentLightboxEvent && (
                 <div className="fixed inset-0 z-[100] bg-black/95 flex animate-in fade-in duration-200">
                     <div className="flex-1 relative flex items-center justify-center h-full w-full">
-                        <div className="absolute top-4 right-4 z-50 flex items-center gap-2"><Button variant="secondary" size="icon" className="bg-black/50 text-white rounded-full" onClick={() => setZoomLevel(z => Math.min(z + 0.5, 3))}><ZoomIn className="w-5 h-5" /></Button><Button variant="secondary" size="icon" className="bg-black/50 text-white rounded-full" onClick={() => setZoomLevel(1)}><ZoomOut className="w-5 h-5" /></Button><Button variant="secondary" size="icon" className="bg-white/10 text-white rounded-full" onClick={() => setLightboxIndex(null)}><X className="w-6 h-6" /></Button></div>
-                        <div className="w-full h-full flex items-center justify-center p-4 overflow-hidden" onClick={() => setZoomLevel(1)}><img src={currentLightboxEvent.couplePhotoUrl} className="max-h-full max-w-full object-contain transition-transform duration-200" style={{ transform: `scale(${zoomLevel})` }} /></div>
+                        <div className="absolute top-4 right-4 z-50 flex items-center gap-2"><Button variant="secondary" size="icon" className="bg-black/50 text-white hover:bg-black/70 border-0 rounded-full" onClick={() => setZoomLevel(z => Math.min(z + 0.5, 3))}><ZoomIn className="w-5 h-5" /></Button><Button variant="secondary" size="icon" className="bg-black/50 text-white hover:bg-black/70 border-0 rounded-full" onClick={() => setZoomLevel(1)}><ZoomOut className="w-5 h-5" /></Button><Button variant="secondary" size="icon" className={`bg-black/50 text-white hover:bg-black/70 border-0 rounded-full ${showInfoPanel ? "text-blue-400" : ""}`} onClick={() => setShowInfoPanel(!showInfoPanel)}><Info className="w-5 h-5" /></Button><Button variant="secondary" size="icon" className="bg-white/10 text-white hover:bg-white/20 border-0 rounded-full" onClick={() => setLightboxIndex(null)}><X className="w-6 h-6" /></Button></div>
+                        <Button variant="ghost" size="icon" className="absolute left-4 z-40 text-white hover:bg-white/10 rounded-full w-12 h-12" onClick={(e) => { e.stopPropagation(); handleLightboxPrev(); }}><ChevronLeft className="w-8 h-8" /></Button>
+                        <Button variant="ghost" size="icon" className="absolute right-4 z-40 text-white hover:bg-white/10 rounded-full w-12 h-12" onClick={(e) => { e.stopPropagation(); handleLightboxNext(); }}><ChevronRight className="w-8 h-8" /></Button>
+                        <div className="w-full h-full flex items-center justify-center p-4 overflow-hidden" onClick={() => setZoomLevel(1)}><img src={currentLightboxEvent.couplePhotoUrl} alt="Full View" className="max-h-full max-w-full object-contain transition-transform duration-200" style={{ transform: `scale(${zoomLevel})` }} /></div>
                     </div>
+                    {showInfoPanel && (
+                        <div className="w-80 bg-white border-l border-slate-200 shrink-0 h-full overflow-y-auto animate-in slide-in-from-right duration-300 p-6 flex flex-col">
+                            <div><h2 className="text-xl font-bold text-[#0F2854] leading-tight mb-1">{currentLightboxEvent.eventName}</h2><Badge variant="secondary" className="mt-2 bg-blue-50 text-blue-700 border-blue-100">{currentLightboxEvent.eventType}</Badge></div>
+                            <div className="space-y-4 mt-6">
+                                <div className="flex items-start gap-3"><CalendarIcon className="w-5 h-5 text-slate-400 mt-0.5" /><div><p className="text-sm font-medium text-slate-700">Date</p><p className="text-sm text-slate-500">{currentLightboxEvent.days && currentLightboxEvent.days[0] ? format(safeDate(currentLightboxEvent.days[0].date), "PPP") : "N/A"}</p></div></div>
+                                {currentLightboxEvent.locations?.[0] && (<div className="flex items-start gap-3"><MapPin className="w-5 h-5 text-slate-400 mt-0.5" /><div><p className="text-sm font-medium text-slate-700">Location</p><p className="text-sm text-slate-500 truncate w-56">{currentLightboxEvent.locations[0].name}</p></div></div>)}
+                            </div>
+                            <Separator className="my-6" />
+                            <Button className={cn("w-full gap-2", consultation.inspiration.selectedEventIds.includes(currentLightboxEvent.id!) ? "bg-red-50 text-red-600 hover:bg-red-100" : "bg-[#1C4D8D]")} onClick={() => {
+                                const current = consultation.inspiration.selectedEventIds;
+                                const newIds = current.includes(currentLightboxEvent.id!) ? current.filter(id => id !== currentLightboxEvent.id) : [...current, currentLightboxEvent.id!];
+                                setConsultation({ ...consultation, inspiration: { ...consultation.inspiration, selectedEventIds: newIds } });
+                            }}>
+                                {consultation.inspiration.selectedEventIds.includes(currentLightboxEvent.id!) ? <><Trash2 className="w-4 h-4" /> Remove</> : <><CheckCircle className="w-4 h-4" /> Select as Inspiration</>}
+                            </Button>
+                        </div>
+                    )}
                 </div>
             )}
         </div>
