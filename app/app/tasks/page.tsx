@@ -3,7 +3,8 @@
 import { useState, useEffect, useMemo } from "react"
 import { useAuth } from "@/context/AuthContext"
 import { useRouter } from "next/navigation"
-import { fetchEvents, EventData } from "@/services/event-service"
+// [!code highlight] Added fetchEventById for the detailed card
+import { fetchEvents, fetchEventById, EventData } from "@/services/event-service" 
 import { 
     fetchStudioTasks, updateTaskStatus, createTask, updateTaskDetails, addWorkNote, getStudioMembersForTasks, deleteTask,
     StudioTask, TaskUser 
@@ -45,7 +46,7 @@ import {
     User, PartyPopper, History,
     Phone, MessageCircle, MessageSquareText,
     ImageIcon, Clock, ChevronRight,
-    Plus, ListTodo, KanbanSquare, Send, MoreHorizontal, Trash2, Edit, Eye
+    Plus, ListTodo, KanbanSquare, Send, MoreHorizontal, Trash2, Edit, Eye, RefreshCw
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import Swal from "sweetalert2"
@@ -290,13 +291,9 @@ function StudioTasksView({ userData, currentUser }: { userData: any, currentUser
     const [selectedTask, setSelectedTask] = useState<StudioTask | null>(null);
     const [activeDragId, setActiveDragId] = useState<string | null>(null);
 
-    // [!code highlight] Configured Sensors for Drag Delay
+    // [Configured Sensors for Drag Delay]
     const sensors = useSensors(
-        useSensor(PointerSensor, {
-            activationConstraint: {
-                distance: 8, // 8px movement required to start drag
-            },
-        }),
+        useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
         useSensor(KeyboardSensor)
     );
 
@@ -389,6 +386,7 @@ function StudioTasksView({ userData, currentUser }: { userData: any, currentUser
 
     return (
         <div className="space-y-6">
+            {/* Toolbar */}
             <div className="flex flex-col sm:flex-row justify-between gap-4">
                 <div className="relative max-w-xs w-full">
                     <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
@@ -399,6 +397,7 @@ function StudioTasksView({ userData, currentUser }: { userData: any, currentUser
                 </Button>
             </div>
 
+            {/* Board */}
             <DndContext sensors={sensors} onDragEnd={handleDragEnd} onDragStart={(e) => setActiveDragId(e.active.id as string)}>
                 <div className="flex gap-4 overflow-x-auto pb-4 items-start min-h-[500px]">
                     {COLUMNS.map(col => (
@@ -480,7 +479,7 @@ const DraggableTaskCard = ({ task, onClick, onEdit, onDelete }: any) => {
                 <div className="flex justify-between items-start">
                     <div className="font-medium text-sm leading-tight text-slate-800 line-clamp-2 cursor-pointer hover:text-blue-600" onClick={() => onClick(task)}>{task.title}</div>
                     
-                    {/* [!code highlight] Fixed Actions Area */}
+                    {/* Fixed Actions Area */}
                     <div 
                         className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity absolute top-2 right-2 bg-white/90 rounded p-0.5 shadow-sm"
                         onPointerDown={(e) => e.stopPropagation()} // Stop Drag Trigger
@@ -648,9 +647,21 @@ function TaskFormDialog({ open, onOpenChange, members, events, onSave, initialDa
     );
 }
 
+// [!code highlight] Updated Detail Dialog with Event Card, High Contrast Badges, and Refresh
 function TaskDetailDialog({ open, onOpenChange, task, currentUser, studioId, onUpdate, onEdit, onDelete }: any) {
+    const router = useRouter();
     const [note, setNote] = useState("");
     const [loadingNote, setLoadingNote] = useState(false);
+    const [linkedEventData, setLinkedEventData] = useState<EventData | null>(null);
+
+    // Fetch full linked event data when dialog opens
+    useEffect(() => {
+        if (task.linkedEventId && studioId) {
+            fetchEventById(studioId, task.linkedEventId).then(setLinkedEventData);
+        } else {
+            setLinkedEventData(null);
+        }
+    }, [task.linkedEventId, studioId]);
 
     const handleSendNote = async () => {
         if (!note.trim()) return;
@@ -685,20 +696,87 @@ function TaskDetailDialog({ open, onOpenChange, task, currentUser, studioId, onU
 
                         <div className="space-y-6">
                             <div className="space-y-1"><Label className="text-xs text-slate-400 uppercase">Description</Label><p className="text-sm text-slate-700 whitespace-pre-wrap">{task.description || "No description provided."}</p></div>
+                            
                             <div className="grid grid-cols-2 gap-4">
-                                <div><Label className="text-xs text-slate-400 uppercase">Assignees</Label><div className="flex flex-wrap gap-1 mt-1">{task.assignedTo.map((u: any) => (<Badge key={u.uid} variant="secondary" className="text-xs bg-white border">{u.name}</Badge>))}</div></div>
+                                <div>
+                                    <Label className="text-xs text-slate-400 uppercase">Assignees</Label>
+                                    <div className="flex flex-wrap gap-1 mt-1">
+                                        {task.assignedTo.map((u: any) => (
+                                            /* [!code highlight] Fixed: High contrast style */
+                                            <Badge key={u.uid} variant="secondary" className="text-xs bg-slate-100 border-slate-200 text-slate-700 border">{u.name}</Badge>
+                                        ))}
+                                    </div>
+                                </div>
                                 <div><Label className="text-xs text-slate-400 uppercase">Due Date</Label><div className="text-sm font-medium mt-1">{task.dueDate ? format(safeDate(task.dueDate), "PPP") : "None"}</div></div>
                             </div>
-                            {task.linkedEventName && (<div className="bg-blue-50 p-3 rounded-lg border border-blue-100"><Label className="text-xs text-blue-400 uppercase">Linked Event</Label><div className="text-sm font-medium text-blue-800 flex items-center gap-2 mt-1"><CalendarIcon className="w-4 h-4"/> {task.linkedEventName}</div></div>)}
+
+                            {/* [!code highlight] Rich Event Card */}
+                            {linkedEventData && (
+                                <div>
+                                    <Label className="text-xs text-slate-400 uppercase mb-2 block">Linked Event</Label>
+                                    <Card 
+                                        className="overflow-hidden border-slate-200 cursor-pointer group hover:border-blue-300 transition-colors"
+                                        onClick={() => router.push(`/app/events/${linkedEventData.id}`)}
+                                    >
+                                        <div className="flex h-24">
+                                            <div className="w-24 bg-slate-100 shrink-0 relative">
+                                                {linkedEventData.couplePhotoUrl ? (
+                                                    <img src={linkedEventData.couplePhotoUrl} alt="Cover" className="w-full h-full object-cover"/>
+                                                ) : (
+                                                    <div className="flex items-center justify-center h-full text-slate-300"><ImageIcon className="w-8 h-8"/></div>
+                                                )}
+                                            </div>
+                                            <div className="flex-1 p-3 flex flex-col justify-between">
+                                                <div>
+                                                    <div className="flex items-start justify-between">
+                                                        <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">{linkedEventData.eventType}</span>
+                                                        <Badge variant="outline" className="text-[10px] h-5 bg-purple-50 text-purple-700 border-purple-100">{linkedEventData.status}</Badge>
+                                                    </div>
+                                                    <h4 className="font-bold text-[#0F2854] text-sm line-clamp-1 group-hover:text-blue-700">{linkedEventData.eventName}</h4>
+                                                    <div className="flex items-center gap-1.5 text-xs text-slate-500 mt-0.5">
+                                                        <User className="w-3 h-3" /> {linkedEventData.customerName}
+                                                    </div>
+                                                </div>
+                                                <div className="flex items-center gap-2 mt-1">
+                                                    <Badge variant="secondary" className="h-5 px-1.5 text-[10px] bg-slate-50 text-slate-600 border border-slate-100 gap-1">
+                                                        <CalendarIcon className="w-3 h-3"/> {format(safeDate(linkedEventData.inquiryDate), "MMM dd")}
+                                                    </Badge>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </Card>
+                                </div>
+                            )}
                         </div>
                     </div>
 
                     {/* RIGHT: TIMELINE PANEL */}
                     <div className="md:col-span-2 flex flex-col h-full bg-white">
-                        <div className="p-4 border-b bg-slate-50 font-medium text-sm text-slate-700">Work Log</div>
+                        <div className="p-4 border-b bg-slate-50 font-medium text-sm text-slate-700 flex justify-between items-center">
+                            Work Log
+                            {/* [!code highlight] Refresh Button */}
+                            <Button variant="ghost" size="icon" className="h-6 w-6 text-slate-400 hover:text-blue-600" onClick={onUpdate} title="Refresh Notes">
+                                <RefreshCw className="w-3.5 h-3.5" />
+                            </Button>
+                        </div>
                         <ScrollArea className="flex-1 p-4">
                             <div className="space-y-6">
-                                {task.workNotes && task.workNotes.length > 0 ? (task.workNotes.map((note: any) => (<div key={note.id} className="flex gap-3 text-sm"><Avatar className="h-8 w-8 mt-1"><AvatarFallback className="bg-blue-100 text-blue-600 text-xs">{note.userName.substring(0,2)}</AvatarFallback></Avatar><div className="flex-1 space-y-1"><div className="flex justify-between items-center"><span className="font-semibold text-slate-800">{note.userName}</span><span className="text-[10px] text-slate-400">{formatDistanceToNow(safeDate(note.timestamp), { addSuffix: true })}</span></div><p className="text-slate-600 bg-slate-50 p-2 rounded-lg rounded-tl-none">{note.message}</p></div></div>))) : (<div className="text-center text-slate-400 text-xs py-10">No notes yet.</div>)}
+                                {task.workNotes && task.workNotes.length > 0 ? (task.workNotes.map((note: any) => (
+                                    <div key={note.id} className="flex gap-3 text-sm">
+                                        <Avatar className="h-8 w-8 mt-1">
+                                            <AvatarFallback className="bg-blue-100 text-blue-600 text-xs">
+                                                {note.userName.substring(0,2).toUpperCase()}
+                                            </AvatarFallback>
+                                        </Avatar>
+                                        <div className="flex-1 space-y-1">
+                                            <div className="flex justify-between items-center">
+                                                <span className="font-semibold text-slate-800">{note.userName}</span>
+                                                <span className="text-[10px] text-slate-400">{formatDistanceToNow(safeDate(note.timestamp), { addSuffix: true })}</span>
+                                            </div>
+                                            <p className="text-slate-600 bg-slate-50 p-2 rounded-lg rounded-tl-none">{note.message}</p>
+                                        </div>
+                                    </div>
+                                ))) : (<div className="text-center text-slate-400 text-xs py-10">No notes yet.</div>)}
                             </div>
                         </ScrollArea>
                         <div className="p-3 border-t bg-slate-50"><div className="flex gap-2"><Input placeholder="Add a work note..." value={note} onChange={e => setNote(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSendNote()} className="bg-white" /><Button size="icon" onClick={handleSendNote} disabled={loadingNote || !note.trim()} className="shrink-0 bg-[#1C4D8D]">{loadingNote ? <Loader2 className="w-4 h-4 animate-spin"/> : <Send className="w-4 h-4"/>}</Button></div></div>
