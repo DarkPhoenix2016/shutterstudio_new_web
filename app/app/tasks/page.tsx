@@ -3,18 +3,16 @@
 import { useState, useEffect, useMemo } from "react"
 import { useAuth } from "@/context/AuthContext"
 import { useRouter } from "next/navigation"
-// [!code highlight] Import fetchEvents from event-service
-import { fetchEvents, EventData } from "@/services/event-service" 
-// [!code highlight] Import getStudioMembersForTasks from task-service
+import { fetchEvents, EventData } from "@/services/event-service"
 import { 
-    fetchStudioTasks, updateTaskStatus, createTask, updateTaskDetails, addWorkNote, getStudioMembersForTasks,
+    fetchStudioTasks, updateTaskStatus, createTask, updateTaskDetails, addWorkNote, getStudioMembersForTasks, deleteTask,
     StudioTask, TaskUser 
 } from "@/services/task-service"
 
 import { format, isSameDay, isAfter, isBefore, startOfToday, endOfToday, formatDistanceToNow } from "date-fns"
 
 // UI Components
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -29,6 +27,12 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Checkbox } from "@/components/ui/checkbox"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 
 // DND Kit
 import { DndContext, DragEndEvent, DragOverlay, useDraggable, useDroppable } from "@dnd-kit/core"
@@ -39,7 +43,7 @@ import {
     ArrowRight, User, PartyPopper, History,
     Phone, MessageCircle, MessageSquareText,
     ImageIcon, Clock, ExternalLink, ChevronRight,
-    Plus, AlertCircle, CheckCircle2, ListTodo, KanbanSquare, Send
+    Plus, ListTodo, KanbanSquare, Send, MoreHorizontal, Trash2, Edit, Eye
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import Swal from "sweetalert2"
@@ -99,7 +103,7 @@ export default function MyTasksPage() {
 }
 
 // ==================================================================================
-// SUB-COMPONENT: MY ASSIGNMENTS VIEW (Event Based)
+// SUB-COMPONENT: MY ASSIGNMENTS VIEW (Restored Full Functionality)
 // ==================================================================================
 
 function MyAssignmentsView({ userData, currentUser }: { userData: any, currentUser: any }) {
@@ -109,12 +113,14 @@ function MyAssignmentsView({ userData, currentUser }: { userData: any, currentUs
     const [searchQuery, setSearchQuery] = useState("")
     const [activeTab, setActiveTab] = useState("today")
 
+    // 1. Load Data
     useEffect(() => {
         const loadMyTasks = async () => {
             if (userData?.studioID && currentUser?.uid) {
                 setLoading(true);
                 try {
                     const events = await fetchEvents(userData.studioID);
+                    // Filter: Only events where current user is assigned
                     const myEvents = events.filter(event => event.assignedCrew?.includes(currentUser.uid));
                     setAllEvents(myEvents);
                 } catch (error) {
@@ -127,22 +133,141 @@ function MyAssignmentsView({ userData, currentUser }: { userData: any, currentUs
         loadMyTasks();
     }, [userData, currentUser]);
 
-    // ... (Filter logic logic remains same as previous working version)
-    // To save space in this response, I'm abbreviating the internal logic which was already correct in previous step
-    // Just ensure you paste the full logic here.
-    
-    // Placeholder to show integration
+    // 2. Filter & Sort Logic
     const { todayTasks, upcomingTasks, pastTasks } = useMemo(() => {
-        // [Logic from previous successful response]
-        return { todayTasks: [], upcomingTasks: [], pastTasks: [] }; 
-    }, [allEvents]);
+        const today = startOfToday();
+        const endToday = endOfToday();
+        const todayList: any[] = [];
+        const upcomingList: any[] = [];
+        const pastList: any[] = [];
+
+        const filtered = allEvents.filter(e => {
+            const query = searchQuery.toLowerCase();
+            return (
+                e.eventName?.toLowerCase().includes(query) ||
+                e.customerName?.toLowerCase().includes(query) ||
+                e.displayId?.toLowerCase().includes(query)
+            );
+        });
+
+        filtered.forEach(event => {
+            if (!event.days || event.days.length === 0) return;
+            const sortedDays = [...event.days].sort((a, b) => safeDate(a.date).getTime() - safeDate(b.date).getTime());
+
+            sortedDays.forEach((dayConfig, index) => {
+                const dayDate = safeDate(dayConfig.date);
+                const taskItem = { event, relevantDate: dayDate, dayIndex: index + 1 };
+
+                if (isSameDay(dayDate, today)) todayList.push(taskItem);
+                else if (isAfter(dayDate, endToday)) upcomingList.push(taskItem);
+                else if (isBefore(dayDate, today)) pastList.push(taskItem);
+            });
+        });
+        
+        const sortByDate = (a: any, b: any) => a.relevantDate.getTime() - b.relevantDate.getTime();
+        const sortByDateDesc = (a: any, b: any) => b.relevantDate.getTime() - a.relevantDate.getTime();
+
+        return {
+            todayTasks: todayList.sort(sortByDate),
+            upcomingTasks: upcomingList.sort(sortByDate),
+            pastTasks: pastList.sort(sortByDateDesc)
+        };
+    }, [allEvents, searchQuery]);
+
+    const getStatusStyles = (status: string) => {
+        const s = status?.toLowerCase() || "";
+        if (s.includes('complet')) return "bg-green-100 text-green-700 border-green-200";
+        if (s.includes('progress') || s.includes('shoot')) return "bg-blue-100 text-blue-700 border-blue-200";
+        if (s.includes('edit') || s.includes('post')) return "bg-purple-100 text-purple-700 border-purple-200";
+        if (s.includes('cancel')) return "bg-red-100 text-red-700 border-red-200";
+        return "bg-slate-100 text-slate-700 border-slate-200";
+    };
+
+    // 3. Assignment Card Component
+    const AssignmentCard = ({ data }: { data: any }) => {
+        const { event, relevantDate, dayIndex } = data;
+        const cleanPhone = event.customerMobile?.replace(/[^0-9]/g, "") || "";
+        const dayLocation = event.locations?.find((l: any) => isSameDay(safeDate(l.date), relevantDate));
+        const totalDays = event.days?.length || 1;
+
+        return (
+            <Card className="group cursor-pointer hover:shadow-xl transition-all border-slate-200 hover:border-blue-300 overflow-hidden bg-white p-0" onClick={() => router.push(`/app/events/${event.id}`)}>
+                <div className="flex flex-col sm:flex-row h-full min-h-[160px]">
+                    <div className="w-full sm:w-48 h-48 sm:h-auto bg-slate-100 relative shrink-0">
+                        {event.couplePhotoUrl ? (
+                            <img src={event.couplePhotoUrl} alt="Cover" className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"/>
+                        ) : (
+                            <div className="w-full h-full flex items-center justify-center text-slate-300 bg-slate-50"><ImageIcon className="w-12 h-12 opacity-30" /></div>
+                        )}
+                        <div className="absolute top-2 right-2 sm:hidden"><Badge className={cn("shadow-sm", getStatusStyles(event.status))}>{event.status}</Badge></div>
+                    </div>
+                    <div className="flex-1 p-4 flex flex-col justify-between gap-3">
+                        <div className="flex justify-between items-start">
+                            <div className="flex flex-wrap items-center gap-2">
+                                <Badge variant="secondary" className="bg-blue-50 text-blue-700 border-blue-100 rounded-sm font-mono text-[10px] px-1.5">{event.displayId || "ID"}</Badge>
+                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{event.eventType}</span>
+                                {totalDays > 1 && <Badge className="bg-amber-100 text-amber-700 border-amber-200 h-5 text-[10px] px-1.5">Day {dayIndex} of {totalDays}</Badge>}
+                            </div>
+                            <div className="hidden sm:block"><Badge variant="outline" className={cn("font-medium", getStatusStyles(event.status))}>{event.status}</Badge></div>
+                        </div>
+                        <div>
+                            <h3 className="font-bold text-[#0F2854] text-xl leading-tight group-hover:text-[#1C4D8D] transition-colors mb-1">{event.eventName}</h3>
+                            <div className="flex items-center gap-2 text-sm text-slate-500 font-medium"><User className="w-4 h-4 text-slate-400" />{event.customerName}</div>
+                        </div>
+                        <div className="flex items-center gap-2 mt-1">
+                            <Button variant="outline" size="sm" className="h-7 px-2 text-xs gap-1.5 border-slate-200 text-slate-600 hover:text-blue-600 bg-white" onClick={(e) => { e.stopPropagation(); window.open(`tel:${event.customerMobile}`, '_self'); }} disabled={!event.customerMobile}><Phone className="h-3 w-3" /> Call</Button>
+                            <Button variant="outline" size="sm" className="h-7 px-2 text-xs gap-1.5 border-slate-200 text-slate-600 hover:text-green-600 bg-white" onClick={(e) => { e.stopPropagation(); window.open(`https://wa.me/${cleanPhone}`, '_blank'); }} disabled={!cleanPhone}><MessageCircle className="h-3 w-3" /> WhatsApp</Button>
+                        </div>
+                        <div className="mt-auto pt-3">
+                            <div className="flex items-center gap-2 px-3 py-2 bg-slate-50 border border-slate-100 rounded-md text-xs font-medium w-full text-slate-600">
+                                <CalendarIcon className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+                                <span className="font-semibold text-blue-900">{format(relevantDate, "EEE, MMM do")}</span>
+                                {dayLocation && (<><span className="text-slate-300">|</span><MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" /><span className="truncate flex-1">{dayLocation.name}</span></>)}
+                            </div>
+                        </div>
+                        <div className="hidden sm:flex absolute right-4 top-1/2 -translate-y-1/2 text-slate-200 group-hover:text-blue-100 pointer-events-none transition-colors"><ChevronRight className="w-8 h-8" /></div>
+                    </div>
+                </div>
+            </Card>
+        )
+    };
+
+    const EmptyState = ({ title, sub, icon }: any) => (
+        <div className="flex flex-col items-center justify-center py-12 text-center border-2 border-dashed border-slate-100 rounded-xl bg-slate-50/50">
+            <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center mb-3 shadow-sm border border-slate-100">{icon}</div>
+            <h3 className="text-lg font-bold text-slate-700">{title}</h3>
+            <p className="text-slate-500 text-sm mt-1">{sub}</p>
+        </div>
+    );
+
+    if (loading) return <div className="py-20 flex justify-center"><Loader2 className="h-8 w-8 animate-spin text-[#1C4D8D]" /></div>;
 
     return (
-        <div className="p-10 text-center text-slate-400 bg-white border border-dashed rounded-lg">
-            {/* Replace this div with the full return statement from the previous MyAssignmentsView */}
-            Assignments View Loaded ({allEvents.length} events found)
+        <div className="space-y-6">
+            <div className="relative max-w-md">
+                <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+                <Input placeholder="Search assigned events..." className="pl-9 bg-white border-slate-200" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
+            </div>
+
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+                <TabsList className="grid w-full grid-cols-3 mb-6 bg-slate-100/80 p-1">
+                    <TabsTrigger value="today" className="data-[state=active]:bg-white data-[state=active]:text-blue-700 data-[state=active]:shadow-sm">Today {todayTasks.length > 0 && <Badge className="ml-2 bg-blue-100 text-blue-700 border-0 h-5 px-1.5 text-[10px]">{todayTasks.length}</Badge>}</TabsTrigger>
+                    <TabsTrigger value="upcoming" className="data-[state=active]:bg-white data-[state=active]:shadow-sm">Upcoming {upcomingTasks.length > 0 && <Badge variant="secondary" className="ml-2 h-5 px-1.5 text-[10px]">{upcomingTasks.length}</Badge>}</TabsTrigger>
+                    <TabsTrigger value="past" className="data-[state=active]:bg-white data-[state=active]:shadow-sm">Past</TabsTrigger>
+                </TabsList>
+
+                <TabsContent value="today" className="space-y-4">
+                    {todayTasks.length > 0 ? todayTasks.map((item, i) => <AssignmentCard key={`${item.event.id}_t_${i}`} data={item} />) : <EmptyState title="You're all clear today!" sub="No events assigned for today." icon={<PartyPopper className="w-6 h-6 text-green-600"/>} />}
+                </TabsContent>
+                <TabsContent value="upcoming" className="space-y-4">
+                    {upcomingTasks.length > 0 ? upcomingTasks.map((item, i) => <AssignmentCard key={`${item.event.id}_u_${i}`} data={item} />) : <EmptyState title="No upcoming events" sub="Your schedule is free for now." icon={<CalendarIcon className="w-6 h-6 text-blue-400"/>} />}
+                </TabsContent>
+                <TabsContent value="past" className="space-y-4">
+                    {pastTasks.length > 0 ? pastTasks.map((item, i) => <AssignmentCard key={`${item.event.id}_p_${i}`} data={item} />) : <EmptyState title="No past events" sub="History will appear here." icon={<History className="w-6 h-6 text-slate-400"/>} />}
+                </TabsContent>
+            </Tabs>
         </div>
-    ); 
+    )
 }
 
 
@@ -186,7 +311,7 @@ function StudioTasksView({ userData, currentUser }: { userData: any, currentUser
     };
 
     const loadAuxData = async () => {
-        const mems = await getStudioMembersForTasks(userData.studioID); // Uses updated wrapper
+        const mems = await getStudioMembersForTasks(userData.studioID); 
         const evts = await fetchEvents(userData.studioID);
         setMembers(mems);
         setEvents(evts);
@@ -226,18 +351,53 @@ function StudioTasksView({ userData, currentUser }: { userData: any, currentUser
         }
     };
 
+    // Shared Handle Delete for both Card and Detail View
+    const handleDelete = async (taskId: string) => {
+        if (!userData?.studioID) return;
+        const result = await Swal.fire({
+            title: 'Delete Task?', text: 'This cannot be undone.', icon: 'warning',
+            showCancelButton: true, confirmButtonColor: '#d33', confirmButtonText: 'Yes, delete'
+        });
+
+        if (result.isConfirmed) {
+            try {
+                await deleteTask(userData.studioID, taskId);
+                setTasks(prev => prev.filter(t => t.id !== taskId));
+                setSelectedTask(null);
+                Swal.fire('Deleted', 'Task has been removed', 'success');
+            } catch (error) {
+                Swal.fire('Error', 'Failed to delete task', 'error');
+            }
+        }
+    };
+
+    // Open Edit Dialog (reuses Create Dialog with initialData)
+    const handleEdit = (task: StudioTask) => {
+        setSelectedTask(null); // Close detail view
+        // We set a flag or pass data to create dialog to know it's editing
+        // But here we need to adapt CreateTaskDialog to handle "Editing" mode properly or make a separate one.
+        // For simplicity, I'll pass the task to CreateTaskDialog.
+        setEditingTask(task); // New State needed
+        setIsCreateDialogOpen(true);
+    };
+
+    // New State to hold task being edited
+    const [editingTask, setEditingTask] = useState<StudioTask | null>(null);
+
     return (
         <div className="space-y-6">
+            {/* Toolbar */}
             <div className="flex flex-col sm:flex-row justify-between gap-4">
                 <div className="relative max-w-xs w-full">
                     <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
                     <Input placeholder="Search tasks or people..." className="pl-9 bg-white" value={search} onChange={e => setSearch(e.target.value)} />
                 </div>
-                <Button onClick={() => setIsCreateDialogOpen(true)} className="bg-[#1C4D8D]">
+                <Button onClick={() => { setEditingTask(null); setIsCreateDialogOpen(true); }} className="bg-[#1C4D8D]">
                     <Plus className="w-4 h-4 mr-2" /> Create Task
                 </Button>
             </div>
 
+            {/* Board */}
             <DndContext onDragEnd={handleDragEnd} onDragStart={(e) => setActiveDragId(e.active.id as string)}>
                 <div className="flex gap-4 overflow-x-auto pb-4 items-start min-h-[500px]">
                     {COLUMNS.map(col => (
@@ -248,6 +408,8 @@ function StudioTasksView({ userData, currentUser }: { userData: any, currentUser
                             color={col.color}
                             tasks={filteredTasks.filter(t => t.status === col.id)}
                             onTaskClick={(t: StudioTask) => setSelectedTask(t)}
+                            onEdit={(t: StudioTask) => { setEditingTask(t); setIsCreateDialogOpen(true); }}
+                            onDelete={(id: string) => handleDelete(id)}
                         />
                     ))}
                 </div>
@@ -264,22 +426,29 @@ function StudioTasksView({ userData, currentUser }: { userData: any, currentUser
                 </DragOverlay>
             </DndContext>
 
-            <CreateTaskDialog 
+            {/* Create / Edit Dialog */}
+            <TaskFormDialog 
                 open={isCreateDialogOpen} 
                 onOpenChange={setIsCreateDialogOpen} 
+                initialData={editingTask}
                 members={members}
                 events={events}
                 onSave={async (taskData: any) => {
-                    await createTask(userData.studioID, taskData, { 
-                        uid: currentUser.uid, 
-                        name: currentUser.displayName || 'User', 
-                        role: userData.role || 'Member' 
-                    });
+                    if (editingTask?.id) {
+                        await updateTaskDetails(userData.studioID, editingTask.id, taskData);
+                    } else {
+                        await createTask(userData.studioID, taskData, { 
+                            uid: currentUser.uid, 
+                            name: currentUser.displayName || 'User', 
+                            role: userData.role || 'Member' 
+                        });
+                    }
                     loadTasks();
                     setIsCreateDialogOpen(false);
                 }}
             />
 
+            {/* Detail View Dialog */}
             {selectedTask && (
                 <TaskDetailDialog 
                     open={!!selectedTask}
@@ -288,6 +457,8 @@ function StudioTasksView({ userData, currentUser }: { userData: any, currentUser
                     currentUser={{ uid: currentUser.uid, name: currentUser.displayName || 'User' }}
                     studioId={userData.studioID}
                     onUpdate={loadTasks}
+                    onEdit={() => handleEdit(selectedTask)}
+                    onDelete={() => handleDelete(selectedTask.id!)}
                 />
             )}
         </div>
@@ -295,23 +466,41 @@ function StudioTasksView({ userData, currentUser }: { userData: any, currentUser
 }
 
 // --- KANBAN CARD ---
-const DraggableTaskCard = ({ task, onClick }: { task: StudioTask, onClick: (t: StudioTask) => void }) => {
+const DraggableTaskCard = ({ task, onClick, onEdit, onDelete }: any) => {
     const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: task.id!, data: { task } });
     const style = transform ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`, zIndex: 50 } : undefined;
     
     return (
         <Card 
-            ref={setNodeRef} style={style} {...listeners} {...attributes} onClick={() => onClick(task)}
-            className={cn("cursor-grab active:cursor-grabbing hover:shadow-md transition-all bg-white border-slate-200 group", isDragging && "opacity-50")}
+            ref={setNodeRef} style={style} {...listeners} {...attributes}
+            className={cn("relative group hover:shadow-md transition-all bg-white border-slate-200", isDragging && "opacity-50")}
         >
             <CardContent className="p-3 space-y-2">
                 <div className="flex justify-between items-start">
-                    <div className="font-medium text-sm leading-tight text-slate-800 line-clamp-2">{task.title}</div>
-                    {task.linkedEventId && <Badge variant="outline" className="text-[10px] h-4 px-1 border-blue-200 text-blue-600 bg-blue-50">Event</Badge>}
+                    <div className="font-medium text-sm leading-tight text-slate-800 line-clamp-2 cursor-pointer hover:text-blue-600" onClick={() => onClick(task)}>{task.title}</div>
+                    
+                    {/* [!code highlight] Card Actions */}
+                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity absolute top-2 right-2 bg-white/90 rounded p-0.5 shadow-sm">
+                        <Button variant="ghost" size="icon" className="h-6 w-6 text-slate-400 hover:text-blue-600" onClick={(e) => { e.stopPropagation(); onClick(task); }}>
+                            <Eye className="w-3 h-3" />
+                        </Button>
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon" className="h-6 w-6 text-slate-400 hover:text-slate-700">
+                                    <MoreHorizontal className="w-3 h-3" />
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                                <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onEdit(task); }}><Edit className="w-3 h-3 mr-2"/> Edit</DropdownMenuItem>
+                                <DropdownMenuItem className="text-red-600" onClick={(e) => { e.stopPropagation(); onDelete(task.id); }}><Trash2 className="w-3 h-3 mr-2"/> Delete</DropdownMenuItem>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+                    </div>
                 </div>
-                <div className="flex items-center justify-between mt-2">
+
+                <div className="flex items-center justify-between mt-2 cursor-pointer" onClick={() => onClick(task)}>
                     <div className="flex items-center -space-x-2">
-                        {task.assignedTo.slice(0, 3).map((u, i) => (
+                        {task.assignedTo.slice(0, 3).map((u:any, i:number) => (
                             <Avatar key={i} className="h-6 w-6 border-2 border-white ring-1 ring-slate-100"><AvatarFallback className="bg-slate-200 text-slate-600 text-[9px]">{u.name.substring(0, 2).toUpperCase()}</AvatarFallback></Avatar>
                         ))}
                         {task.assignedTo.length > 3 && <div className="h-6 w-6 rounded-full bg-slate-100 border-2 border-white flex items-center justify-center text-[9px] text-slate-500">+{task.assignedTo.length - 3}</div>}
@@ -326,7 +515,7 @@ const DraggableTaskCard = ({ task, onClick }: { task: StudioTask, onClick: (t: S
     );
 };
 
-const TaskColumn = ({ id, title, tasks, color, onTaskClick }: any) => {
+const TaskColumn = ({ id, title, tasks, color, onTaskClick, onEdit, onDelete }: any) => {
     const { setNodeRef } = useDroppable({ id });
     return (
         <div ref={setNodeRef} className={cn("flex-1 min-w-[280px] rounded-xl border p-2 h-full bg-slate-50/50 flex flex-col", color)}>
@@ -336,7 +525,15 @@ const TaskColumn = ({ id, title, tasks, color, onTaskClick }: any) => {
             </div>
             <ScrollArea className="flex-1">
                 <div className="flex flex-col gap-2 min-h-[100px] p-1">
-                    {tasks.map((task: any) => <DraggableTaskCard key={task.id} task={task} onClick={onTaskClick} />)}
+                    {tasks.map((task: any) => (
+                        <DraggableTaskCard 
+                            key={task.id} 
+                            task={task} 
+                            onClick={onTaskClick}
+                            onEdit={onEdit}
+                            onDelete={onDelete}
+                        />
+                    ))}
                 </div>
             </ScrollArea>
         </div>
@@ -347,12 +544,33 @@ const TaskColumn = ({ id, title, tasks, color, onTaskClick }: any) => {
 // DIALOGS
 // ==================================================================================
 
-function CreateTaskDialog({ open, onOpenChange, members, events, onSave }: any) {
+// Updated TaskFormDialog (Handles Create & Edit)
+function TaskFormDialog({ open, onOpenChange, members, events, onSave, initialData }: any) {
     const [formData, setFormData] = useState<any>({ 
         title: "", description: "", priority: "medium", 
         assignedToIds: [], dueDate: undefined,
         linkEvent: false, linkedEventId: ""
     });
+
+    useEffect(() => {
+        if (initialData) {
+            setFormData({
+                title: initialData.title,
+                description: initialData.description || "",
+                priority: initialData.priority,
+                assignedToIds: initialData.assignedTo?.map((u:any) => u.uid) || [],
+                dueDate: initialData.dueDate ? safeDate(initialData.dueDate) : undefined,
+                linkEvent: !!initialData.linkedEventId,
+                linkedEventId: initialData.linkedEventId || ""
+            });
+        } else {
+            setFormData({ 
+                title: "", description: "", priority: "medium", 
+                assignedToIds: [], dueDate: undefined,
+                linkEvent: false, linkedEventId: ""
+            });
+        }
+    }, [initialData, open]);
 
     const handleSubmit = () => {
         if(!formData.title) return Swal.fire("Error", "Title required", "warning");
@@ -365,7 +583,7 @@ function CreateTaskDialog({ open, onOpenChange, members, events, onSave }: any) 
             title: formData.title,
             description: formData.description,
             priority: formData.priority,
-            status: "todo",
+            status: initialData ? initialData.status : "todo", // Preserve status on edit
             assignedTo: selectedMembers.map((m:any) => ({ uid: m.uid, name: m.name })),
             dueDate: formData.dueDate,
             linkedEventId: linkedEvent?.id || null,
@@ -376,13 +594,15 @@ function CreateTaskDialog({ open, onOpenChange, members, events, onSave }: any) 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="sm:max-w-[600px]">
-                <DialogHeader><DialogTitle>Create New Task</DialogTitle></DialogHeader>
+                <DialogHeader><DialogTitle>{initialData ? "Edit Task" : "Create New Task"}</DialogTitle></DialogHeader>
                 <div className="space-y-4 py-2">
                     <div className="space-y-2"><Label>Title</Label><Input value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} placeholder="Task title" /></div>
+                    
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2"><Label>Priority</Label><Select value={formData.priority} onValueChange={v => setFormData({...formData, priority: v})}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="low">Low</SelectItem><SelectItem value="medium">Medium</SelectItem><SelectItem value="high">High</SelectItem><SelectItem value="urgent">Urgent</SelectItem></SelectContent></Select></div>
                         <div className="space-y-2"><Label>Due Date</Label><Popover><PopoverTrigger asChild><Button variant="outline" className={cn("w-full justify-start text-left font-normal", !formData.dueDate && "text-muted-foreground")}><CalendarIcon className="mr-2 h-4 w-4" />{formData.dueDate ? format(formData.dueDate, "PPP") : <span>Pick a date</span>}</Button></PopoverTrigger><PopoverContent className="w-auto p-0"><Calendar mode="single" selected={formData.dueDate} onSelect={(d) => setFormData({...formData, dueDate: d})} initialFocus /></PopoverContent></Popover></div>
                     </div>
+
                     <div className="space-y-2">
                         <Label>Assign To (Multiple)</Label>
                         <ScrollArea className="h-[100px] border rounded-md p-2">
@@ -403,6 +623,7 @@ function CreateTaskDialog({ open, onOpenChange, members, events, onSave }: any) 
                             </div>
                         </ScrollArea>
                     </div>
+
                     <div className="space-y-2 border-t pt-2">
                         <div className="flex items-center space-x-2">
                             <Checkbox id="linkEvent" checked={formData.linkEvent} onCheckedChange={(c) => setFormData({...formData, linkEvent: !!c})} />
@@ -417,13 +638,14 @@ function CreateTaskDialog({ open, onOpenChange, members, events, onSave }: any) 
                     </div>
                     <div className="space-y-2"><Label>Description</Label><Textarea value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} placeholder="Details..." className="h-24" /></div>
                 </div>
-                <div className="flex justify-end gap-2"><Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button><Button className="bg-[#1C4D8D]" onClick={handleSubmit}>Create Task</Button></div>
+                <div className="flex justify-end gap-2"><Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button><Button className="bg-[#1C4D8D]" onClick={handleSubmit}>{initialData ? "Save Changes" : "Create Task"}</Button></div>
             </DialogContent>
         </Dialog>
     );
 }
 
-function TaskDetailDialog({ open, onOpenChange, task, currentUser, studioId, onUpdate }: any) {
+// Updated TaskDetailDialog (Includes Edit/Delete Actions)
+function TaskDetailDialog({ open, onOpenChange, task, currentUser, studioId, onUpdate, onEdit, onDelete }: any) {
     const [note, setNote] = useState("");
     const [loadingNote, setLoadingNote] = useState(false);
 
@@ -441,11 +663,24 @@ function TaskDetailDialog({ open, onOpenChange, task, currentUser, studioId, onU
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="sm:max-w-[900px] h-[80vh] flex flex-col p-0 gap-0 overflow-hidden">
                 <div className="grid grid-cols-1 md:grid-cols-5 h-full">
+                    
+                    {/* LEFT: DETAILS PANEL */}
                     <div className="md:col-span-3 p-6 border-r overflow-y-auto bg-slate-50/30">
-                        <DialogHeader className="mb-4">
-                            <div className="flex items-start justify-between"><Badge className="mb-2 uppercase tracking-wide">{task.status.replace('_', ' ')}</Badge><Badge variant="outline" className="text-xs">{task.priority}</Badge></div>
-                            <DialogTitle className="text-2xl text-[#0F2854] leading-tight">{task.title}</DialogTitle>
+                        <DialogHeader className="mb-4 flex-row items-start justify-between space-y-0">
+                            <div className="space-y-1.5">
+                                <div className="flex items-center gap-2">
+                                    <Badge className="uppercase tracking-wide">{task.status.replace('_', ' ')}</Badge>
+                                    <Badge variant="outline" className="text-xs">{task.priority}</Badge>
+                                </div>
+                                <DialogTitle className="text-2xl text-[#0F2854] leading-tight">{task.title}</DialogTitle>
+                            </div>
+                            {/* [!code highlight] Header Actions */}
+                            <div className="flex gap-1">
+                                <Button variant="ghost" size="icon" onClick={onEdit}><Edit className="w-4 h-4 text-slate-500 hover:text-blue-600"/></Button>
+                                <Button variant="ghost" size="icon" onClick={onDelete}><Trash2 className="w-4 h-4 text-slate-500 hover:text-red-600"/></Button>
+                            </div>
                         </DialogHeader>
+
                         <div className="space-y-6">
                             <div className="space-y-1"><Label className="text-xs text-slate-400 uppercase">Description</Label><p className="text-sm text-slate-700 whitespace-pre-wrap">{task.description || "No description provided."}</p></div>
                             <div className="grid grid-cols-2 gap-4">
@@ -455,6 +690,8 @@ function TaskDetailDialog({ open, onOpenChange, task, currentUser, studioId, onU
                             {task.linkedEventName && (<div className="bg-blue-50 p-3 rounded-lg border border-blue-100"><Label className="text-xs text-blue-400 uppercase">Linked Event</Label><div className="text-sm font-medium text-blue-800 flex items-center gap-2 mt-1"><CalendarIcon className="w-4 h-4"/> {task.linkedEventName}</div></div>)}
                         </div>
                     </div>
+
+                    {/* RIGHT: TIMELINE PANEL */}
                     <div className="md:col-span-2 flex flex-col h-full bg-white">
                         <div className="p-4 border-b bg-slate-50 font-medium text-sm text-slate-700">Work Log</div>
                         <ScrollArea className="flex-1 p-4">

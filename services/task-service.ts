@@ -3,7 +3,8 @@ import {
   collection, doc, getDocs, addDoc, updateDoc, 
   query, orderBy, serverTimestamp, arrayUnion, limit, startAfter 
 } from "firebase/firestore";
-// [!code highlight] Import from existing services
+import { deleteDoc } from "firebase/firestore";
+
 import { fetchCrewMembers, Member } from "@/services/crew-service"; 
 
 // --- TYPES ---
@@ -189,6 +190,16 @@ export const addWorkNote = async (studioId: string, taskId: string, message: str
         });
     } catch (error) {
         console.error("Error adding note:", error);
+        throw error;
+    }
+};
+
+export const deleteTask = async (studioId: string, taskId: string) => {
+    try {
+        const taskRef = doc(db, "Studios", studioId, "tasks", taskId);
+        await deleteDoc(taskRef);
+    } catch (error) {
+        console.error("Error deleting task:", error);
         throw error;
     }
 };
