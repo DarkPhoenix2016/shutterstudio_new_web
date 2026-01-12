@@ -89,19 +89,6 @@ interface FirebaseEventStructure {
   meta: { createdAt: any; updatedAt: any };
 }
 
-/* ---------------- DISPLAY ID (OMG00001) ---------------- */
-  const eventsRef = collection(db, "studios", studioId, "events")
-  const lastSnap = await getDocs(
-    query(eventsRef, orderBy("createdAt", "desc"), limit(1))
-  )
-
-  let nextNumber = 1
-  if (!lastSnap.empty) {
-    const lastId = lastSnap.docs[0].data().displayId || "OMG00000"
-    nextNumber = Number(lastId.replace("OMG", "")) + 1
-  }
-
-  const displayId = `OMG${String(nextNumber).padStart(5, "0")}`
 
 
 // --- SERVICE FUNCTIONS ---
@@ -172,6 +159,8 @@ export const deleteConsultation = async (studioId: string, consultationId: strin
  * Converts a consultation into a full event record following the strictly nested Firebase structure.
  */
 export const convertToEvent = async (studioId: string, consultation: ConsultationData, packagesList: PackageData[]): Promise<void> => {
+
+  
   try {
     const now = new Date();
     const isCustomPackage = consultation.package.selectedPackageId === 'custom';
