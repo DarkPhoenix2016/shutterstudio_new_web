@@ -450,7 +450,7 @@ export default function ConsultationPage() {
                     <Button variant="ghost" size="icon" onClick={() => { if (!document.fullscreenElement) { document.documentElement.requestFullscreen(); setIsFullScreen(true); } else { document.exitFullscreen(); setIsFullScreen(false); } }}>
                         {isFullScreen ? <Minimize2 className="w-4 h-4 text-slate-500" /> : <Maximize2 className="w-4 h-4 text-slate-500" />}
                     </Button>
-                    <Button variant="ghost" size="icon" onClick={() => router.push('/app/dashboard')}><X className="w-4 h-4 text-slate-500" /></Button>
+                    <Button variant="ghost" size="icon" onClick={() => setStep(0)}><X className="w-4 h-4 text-slate-500" /></Button>
                 </div>
             </header>
 
