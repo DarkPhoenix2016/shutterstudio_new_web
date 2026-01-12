@@ -26,7 +26,6 @@ import { Calendar } from "@/components/ui/calendar"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Checkbox } from "@/components/ui/checkbox"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { Separator } from "@/components/ui/separator"
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -35,14 +34,17 @@ import {
 } from "@/components/ui/dropdown-menu"
 
 // DND Kit
-import { DndContext, DragEndEvent, DragOverlay, useDraggable, useDroppable } from "@dnd-kit/core"
+import { 
+    DndContext, DragEndEvent, DragOverlay, useDraggable, useDroppable,
+    useSensor, useSensors, PointerSensor, KeyboardSensor 
+} from "@dnd-kit/core"
 
 // Icons
 import { 
     Loader2, Search, Calendar as CalendarIcon, MapPin, 
-    ArrowRight, User, PartyPopper, History,
+    User, PartyPopper, History,
     Phone, MessageCircle, MessageSquareText,
-    ImageIcon, Clock, ExternalLink, ChevronRight,
+    ImageIcon, Clock, ChevronRight,
     Plus, ListTodo, KanbanSquare, Send, MoreHorizontal, Trash2, Edit, Eye
 } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -103,7 +105,7 @@ export default function MyTasksPage() {
 }
 
 // ==================================================================================
-// SUB-COMPONENT: MY ASSIGNMENTS VIEW (Restored Full Functionality)
+// SUB-COMPONENT: MY ASSIGNMENTS VIEW
 // ==================================================================================
 
 function MyAssignmentsView({ userData, currentUser }: { userData: any, currentUser: any }) {
@@ -113,14 +115,12 @@ function MyAssignmentsView({ userData, currentUser }: { userData: any, currentUs
     const [searchQuery, setSearchQuery] = useState("")
     const [activeTab, setActiveTab] = useState("today")
 
-    // 1. Load Data
     useEffect(() => {
         const loadMyTasks = async () => {
             if (userData?.studioID && currentUser?.uid) {
                 setLoading(true);
                 try {
                     const events = await fetchEvents(userData.studioID);
-                    // Filter: Only events where current user is assigned
                     const myEvents = events.filter(event => event.assignedCrew?.includes(currentUser.uid));
                     setAllEvents(myEvents);
                 } catch (error) {
@@ -133,7 +133,6 @@ function MyAssignmentsView({ userData, currentUser }: { userData: any, currentUs
         loadMyTasks();
     }, [userData, currentUser]);
 
-    // 2. Filter & Sort Logic
     const { todayTasks, upcomingTasks, pastTasks } = useMemo(() => {
         const today = startOfToday();
         const endToday = endOfToday();
@@ -183,7 +182,6 @@ function MyAssignmentsView({ userData, currentUser }: { userData: any, currentUs
         return "bg-slate-100 text-slate-700 border-slate-200";
     };
 
-    // 3. Assignment Card Component
     const AssignmentCard = ({ data }: { data: any }) => {
         const { event, relevantDate, dayIndex } = data;
         const cleanPhone = event.customerMobile?.replace(/[^0-9]/g, "") || "";
@@ -292,6 +290,16 @@ function StudioTasksView({ userData, currentUser }: { userData: any, currentUser
     const [selectedTask, setSelectedTask] = useState<StudioTask | null>(null);
     const [activeDragId, setActiveDragId] = useState<string | null>(null);
 
+    // [!code highlight] Configured Sensors for Drag Delay
+    const sensors = useSensors(
+        useSensor(PointerSensor, {
+            activationConstraint: {
+                distance: 8, // 8px movement required to start drag
+            },
+        }),
+        useSensor(KeyboardSensor)
+    );
+
     // Data Lists
     const [members, setMembers] = useState<TaskUser[]>([]);
     const [events, setEvents] = useState<EventData[]>([]);
@@ -351,7 +359,7 @@ function StudioTasksView({ userData, currentUser }: { userData: any, currentUser
         }
     };
 
-    // Shared Handle Delete for both Card and Detail View
+    // Shared Handle Delete
     const handleDelete = async (taskId: string) => {
         if (!userData?.studioID) return;
         const result = await Swal.fire({
@@ -371,22 +379,16 @@ function StudioTasksView({ userData, currentUser }: { userData: any, currentUser
         }
     };
 
-    // Open Edit Dialog (reuses Create Dialog with initialData)
+    // Open Edit Dialog
+    const [editingTask, setEditingTask] = useState<StudioTask | null>(null);
     const handleEdit = (task: StudioTask) => {
-        setSelectedTask(null); // Close detail view
-        // We set a flag or pass data to create dialog to know it's editing
-        // But here we need to adapt CreateTaskDialog to handle "Editing" mode properly or make a separate one.
-        // For simplicity, I'll pass the task to CreateTaskDialog.
-        setEditingTask(task); // New State needed
+        setSelectedTask(null); 
+        setEditingTask(task);
         setIsCreateDialogOpen(true);
     };
 
-    // New State to hold task being edited
-    const [editingTask, setEditingTask] = useState<StudioTask | null>(null);
-
     return (
         <div className="space-y-6">
-            {/* Toolbar */}
             <div className="flex flex-col sm:flex-row justify-between gap-4">
                 <div className="relative max-w-xs w-full">
                     <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
@@ -397,8 +399,7 @@ function StudioTasksView({ userData, currentUser }: { userData: any, currentUser
                 </Button>
             </div>
 
-            {/* Board */}
-            <DndContext onDragEnd={handleDragEnd} onDragStart={(e) => setActiveDragId(e.active.id as string)}>
+            <DndContext sensors={sensors} onDragEnd={handleDragEnd} onDragStart={(e) => setActiveDragId(e.active.id as string)}>
                 <div className="flex gap-4 overflow-x-auto pb-4 items-start min-h-[500px]">
                     {COLUMNS.map(col => (
                         <TaskColumn 
@@ -408,7 +409,7 @@ function StudioTasksView({ userData, currentUser }: { userData: any, currentUser
                             color={col.color}
                             tasks={filteredTasks.filter(t => t.status === col.id)}
                             onTaskClick={(t: StudioTask) => setSelectedTask(t)}
-                            onEdit={(t: StudioTask) => { setEditingTask(t); setIsCreateDialogOpen(true); }}
+                            onEdit={(t: StudioTask) => handleEdit(t)}
                             onDelete={(id: string) => handleDelete(id)}
                         />
                     ))}
@@ -479,8 +480,12 @@ const DraggableTaskCard = ({ task, onClick, onEdit, onDelete }: any) => {
                 <div className="flex justify-between items-start">
                     <div className="font-medium text-sm leading-tight text-slate-800 line-clamp-2 cursor-pointer hover:text-blue-600" onClick={() => onClick(task)}>{task.title}</div>
                     
-                    {/* [!code highlight] Card Actions */}
-                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity absolute top-2 right-2 bg-white/90 rounded p-0.5 shadow-sm">
+                    {/* [!code highlight] Fixed Actions Area */}
+                    <div 
+                        className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity absolute top-2 right-2 bg-white/90 rounded p-0.5 shadow-sm"
+                        onPointerDown={(e) => e.stopPropagation()} // Stop Drag Trigger
+                        onClick={(e) => e.stopPropagation()} // Stop Click Propagation
+                    >
                         <Button variant="ghost" size="icon" className="h-6 w-6 text-slate-400 hover:text-blue-600" onClick={(e) => { e.stopPropagation(); onClick(task); }}>
                             <Eye className="w-3 h-3" />
                         </Button>
@@ -544,7 +549,6 @@ const TaskColumn = ({ id, title, tasks, color, onTaskClick, onEdit, onDelete }: 
 // DIALOGS
 // ==================================================================================
 
-// Updated TaskFormDialog (Handles Create & Edit)
 function TaskFormDialog({ open, onOpenChange, members, events, onSave, initialData }: any) {
     const [formData, setFormData] = useState<any>({ 
         title: "", description: "", priority: "medium", 
@@ -583,7 +587,7 @@ function TaskFormDialog({ open, onOpenChange, members, events, onSave, initialDa
             title: formData.title,
             description: formData.description,
             priority: formData.priority,
-            status: initialData ? initialData.status : "todo", // Preserve status on edit
+            status: initialData ? initialData.status : "todo", 
             assignedTo: selectedMembers.map((m:any) => ({ uid: m.uid, name: m.name })),
             dueDate: formData.dueDate,
             linkedEventId: linkedEvent?.id || null,
@@ -644,7 +648,6 @@ function TaskFormDialog({ open, onOpenChange, members, events, onSave, initialDa
     );
 }
 
-// Updated TaskDetailDialog (Includes Edit/Delete Actions)
 function TaskDetailDialog({ open, onOpenChange, task, currentUser, studioId, onUpdate, onEdit, onDelete }: any) {
     const [note, setNote] = useState("");
     const [loadingNote, setLoadingNote] = useState(false);
@@ -674,7 +677,6 @@ function TaskDetailDialog({ open, onOpenChange, task, currentUser, studioId, onU
                                 </div>
                                 <DialogTitle className="text-2xl text-[#0F2854] leading-tight">{task.title}</DialogTitle>
                             </div>
-                            {/* [!code highlight] Header Actions */}
                             <div className="flex gap-1">
                                 <Button variant="ghost" size="icon" onClick={onEdit}><Edit className="w-4 h-4 text-slate-500 hover:text-blue-600"/></Button>
                                 <Button variant="ghost" size="icon" onClick={onDelete}><Trash2 className="w-4 h-4 text-slate-500 hover:text-red-600"/></Button>
