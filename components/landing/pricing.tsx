@@ -1,59 +1,41 @@
 "use client"
 
+import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Check } from "lucide-react"
+import { Check, Loader2 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { fetchPlatformPackages, PlatformPackage } from "@/services/platform"
 
 interface PricingProps {
   onGetStartedClick: () => void
 }
 
-const plans = [
-  {
-    name: "Freelancer",
-    price: "$0",
-    description: "For solo photographers just starting out",
-    features: ["Up to 50 inventory items", "Basic calendar", "Client portal", "Email support"],
-    popular: false,
-    accentColor: "#1C4D8D",
-  },
-  {
-    name: "Studio",
-    price: "$49",
-    description: "For growing studios with a small team",
-    features: [
-      "Unlimited inventory",
-      "Advanced calendar & booking",
-      "Team management (up to 5)",
-      "Financial tracking",
-      "Priority support",
-      "Custom branding",
-    ],
-    popular: true,
-    accentColor: "#4988C4",
-  },
-  {
-    name: "Agency",
-    price: "$199",
-    description: "For large operations and multi-location studios",
-    features: [
-      "Everything in Studio",
-      "Unlimited team members",
-      "Multi-location support",
-      "Advanced analytics",
-      "API access",
-      "Dedicated account manager",
-    ],
-    popular: false,
-    accentColor: "#0F2854",
-  },
-]
-
 export function Pricing({ onGetStartedClick }: PricingProps) {
+  const [plans, setPlans] = useState<PlatformPackage[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    fetchPlatformPackages().then((data) => {
+      setPlans(data)
+      setLoading(false)
+    })
+  }, [])
+
+  if (loading) {
+    return (
+      <section className="py-20 bg-white flex justify-center items-center min-h-[400px]">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </section>
+    )
+  }
+
+  // Fallback if no plans load (prevents empty section)
+  if (plans.length === 0) return null
+
   return (
-    <section className="py-20 px-4 bg-white">
+    <section className="py-20 px-4 bg-white" id="pricing">
       <div className="container mx-auto max-w-6xl">
         <div className="text-center space-y-4 mb-12">
           <h2 className="text-4xl font-bold text-primary">Simple, transparent pricing</h2>
@@ -63,47 +45,78 @@ export function Pricing({ onGetStartedClick }: PricingProps) {
         </div>
 
         <div className="grid md:grid-cols-3 gap-6">
-          {plans.map((plan, index) => (
+          {plans.map((plan) => (
             <Card
-              key={index}
+              key={plan.id}
               className={cn(
-                "relative border-2 transition-all duration-300 bg-white",
-                plan.popular
-                  ? "border-[#4988C4] shadow-2xl scale-105"
-                  : "border-border hover:border-primary/40 hover:shadow-lg",
+                "relative border-2 transition-all duration-300 bg-white flex flex-col",
+                plan.featured
+                  ? "border-[#4988C4] shadow-2xl scale-105 z-10"
+                  : "border-border hover:border-primary/40 hover:shadow-lg"
               )}
             >
-              {plan.popular && (
-                <Badge className="absolute -top-3 left-1/2 -translate-x-1/2 bg-[#4988C4] text-white border-0">
+              {plan.featured && (
+                <Badge className="absolute -top-3 left-1/2 -translate-x-1/2 bg-[#4988C4] text-white border-0 hover:bg-[#4988C4]">
                   Most Popular
                 </Badge>
               )}
+              
               <CardHeader>
                 <CardTitle className="text-2xl text-foreground">{plan.name}</CardTitle>
-                <CardDescription className="text-base">{plan.description}</CardDescription>
+                <CardDescription className="text-base min-h-[50px]">
+                   {plan.description || "Perfect for growing your photography business."}
+                </CardDescription>
                 <div className="mt-4">
-                  <span className="text-4xl font-bold text-primary">{plan.price}</span>
-                  {plan.price !== "$0" && <span className="text-muted-foreground">/month</span>}
+                  <span className="text-4xl font-bold text-primary">
+                    LKR {plan.price.toLocaleString()}
+                  </span>
+                  <span className="text-muted-foreground">/mo</span>
                 </div>
               </CardHeader>
-              <CardContent className="space-y-4">
+              
+              <CardContent className="space-y-6 flex-1 flex flex-col">
                 <Button
                   className={cn(
                     "w-full text-white",
-                    plan.popular ? "bg-[#4988C4] hover:bg-[#4988C4]/90" : "bg-primary hover:bg-primary/90",
+                    plan.featured 
+                      ? "bg-[#4988C4] hover:bg-[#4988C4]/90" 
+                      : "bg-primary hover:bg-primary/90"
                   )}
                   onClick={onGetStartedClick}
                 >
-                  Get Started
+                  {plan.price === 0 ? "Start Free Trial" : "Get Started"}
                 </Button>
-                <ul className="space-y-3">
-                  {plan.features.map((feature, featureIndex) => (
-                    <li key={featureIndex} className="flex items-start gap-2">
-                      <Check className="h-5 w-5 shrink-0 mt-0.5" style={{ color: plan.accentColor }} />
-                      <span className="text-sm text-muted-foreground">{feature}</span>
-                    </li>
-                  ))}
-                </ul>
+
+                <div className="space-y-4 flex-1">
+                  {/* Limits Summary */}
+                  {plan.include_price_table && (
+                    <div className="text-sm font-medium p-3 bg-muted/30 rounded-lg space-y-1 text-muted-foreground">
+                        <div className="flex justify-between">
+                            <span>Users</span>
+                            <span className="text-foreground">{plan.users_limit}</span>
+                        </div>
+                        <div className="flex justify-between">
+                            <span>Events</span>
+                            <span className="text-foreground">{plan.events_limit.toLocaleString()}</span>
+                        </div>
+                    </div>
+                  )}
+
+                  {/* Feature List */}
+                  <ul className="space-y-3">
+                    {plan.features.map((feature, i) => (
+                      <li key={i} className="flex items-start gap-2">
+                        <Check 
+                          className="h-5 w-5 shrink-0 mt-0.5" 
+                          style={{ color: plan.accentColor || "#1C4D8D" }} 
+                        />
+                        <span className="text-sm text-muted-foreground leading-tight">
+                          {feature}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               </CardContent>
             </Card>
           ))}
