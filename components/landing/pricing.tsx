@@ -112,9 +112,9 @@ export function Pricing({ onGetStartedClick }: PricingProps) {
               {/* Limits Box (if enabled) */}
               {plan.include_price_table && (
                  <div className="mb-6 p-4 rounded-xl bg-slate-950/50 border border-white/5 space-y-2.5">
-                    <LimitRow label="Team Members" value={plan.users_limit} />
+                    <LimitRow label="Active Team Members" value={plan.users_limit} />
                     <LimitRow label="Active Events" value={plan.events_limit.toLocaleString()} />
-                    <LimitRow label="Storage" value={plan.photos_per_event === 9999 ? "Unlimited" : "Standard"} />
+                    <LimitRow label="Storage" value={plan.photos_per_event === 10 ? "Unlimited" : "Standard"} />
                  </div>
               )}
 
