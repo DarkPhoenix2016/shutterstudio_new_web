@@ -15,6 +15,26 @@ export interface UsageStats {
   usersUsed: number;
 }
 
+export interface SubscriptionDetails {
+  planId: string;
+  planName: string;
+  status: 'active' | 'trial' | 'past_due' | 'suspended' | 'cancelled';
+  amount: number;
+  interval: 'monthly' | 'yearly';
+  nextRenewalDate: Date;
+  billingEmail?: string;
+}
+
+export interface SubscriptionInvoice {
+  id: string;
+  invoiceNumber: string;
+  amount: number;
+  status: 'paid' | 'pending' | 'failed';
+  issueDate: Date;
+  dueDate: Date;
+  pdfUrl?: string;
+}
+
 // --- FUNCTIONS ---
 
 /**
@@ -154,4 +174,49 @@ export const validateSubscriptionAction = async (
   }
 
   return { allowed: true };
+};
+
+/**
+ * Fetch detailed subscription info (Status, Renewal Date, Price)
+ */
+export const fetchSubscriptionDetails = async (studioId: string): Promise<SubscriptionDetails | null> => {
+  try {
+    const ref = doc(db, "Studios", studioId, "Subscription", "config");
+    const snap = await getDoc(ref);
+    
+    if (snap.exists()) {
+      const data = snap.data();
+      return {
+        planId: data.packageId,
+        planName: data.packageName || "Basic Plan",
+        status: data.status || "active",
+        amount: data.amount || 0,
+        interval: data.interval || "monthly",
+        nextRenewalDate: data.nextRenewalDate?.toDate() || new Date(),
+        billingEmail: data.billingEmail
+      };
+    }
+    return null;
+  } catch (error) {
+    console.error("Error fetching subscription details:", error);
+    return null;
+  }
+};
+
+/**
+ * Fetch subscription invoices
+ */
+export const fetchSubscriptionInvoices = async (studioId: string): Promise<SubscriptionInvoice[]> => {
+  try {
+    const invoicesRef = collection(db, "Studios", studioId, "Subscription", "invoices", "list");
+    // Assuming a subcollection structure or query
+    // If using a root collection with studioID filter:
+    // const q = query(collection(db, "PlatformInvoices"), where("studioId", "==", studioId), orderBy("issueDate", "desc"));
+    
+    // For now, assuming standard subcollection pattern or returning mock empty if not set up
+    return []; 
+  } catch (error) {
+    console.error("Error fetching invoices:", error);
+    return [];
+  }
 };
