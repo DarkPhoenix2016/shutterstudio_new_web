@@ -99,7 +99,7 @@ export function Footer() {
 
         {/* --- BOTTOM BAR --- */}
         <div className="pt-8 border-t border-white/10 flex flex-col md:flex-row justify-between items-center gap-4 text-xs text-slate-500">
-          <p>© {currentYear} ShutterStudio. All rights reserved.</p>
+          <p>© {currentYear} ShutterStudio. All rights reserved. Product of PCSTech.lk</p>
           
           <div className="flex items-center gap-8">
             <Link href="/terms" className="hover:text-slate-300 transition-colors">
@@ -114,7 +114,7 @@ export function Footer() {
               href="/admin/login" 
               className="flex items-center gap-1.5 text-slate-600 hover:text-blue-400 transition-colors ml-4 pl-4 border-l border-slate-800"
             >
-              <span>Admin Access</span>
+              <span>ShutterStudio Crew</span>
             </Link>
           </div>
         </div>
