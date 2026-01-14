@@ -61,7 +61,7 @@ export function Hero({ onGetStartedClick }: HeroProps) {
               <Button
                 size="lg"
                 onClick={onGetStartedClick}
-                className="h-14 px-10 text-base font-semibold bg-blue-600 hover:bg-blue-500 text-white shadow-[0_0_30px_-5px_rgba(37,99,235,0.5)] border-0 transition-all rounded-xl"
+                className="h-14 px-10 text-base font-semibold bg-blue-600 hover:bg-blue-500 text-white shadow-[0_0_30px_-5px_rgba(37,99,235,0.5)] border-0 transition-all rounded-4xl"
               >
                 Contact Sales
                 <ArrowRight className="ml-2 h-5 w-5" />
@@ -71,7 +71,7 @@ export function Hero({ onGetStartedClick }: HeroProps) {
                 size="lg"
                 variant="outline"
                 // Assuming you might have a demo route later, or this opens a video modal
-                className="h-14 px-10 text-purple font-semibold border-slate-700 text-slate-200 hover:bg-slate-800/50 hover:text-white hover:border-blue-500/50 backdrop-blur-sm transition-all rounded-xl"
+                className="h-14 px-10 font-semibold bg-blue-transparent border-slate-700 text-slate-200 backdrop-blur-sm transition-all rounded-4xl"
               >
                 <Play className="mr-2 h-5 w-5 fill-current opacity-80" />
                 See Interactive Demo
