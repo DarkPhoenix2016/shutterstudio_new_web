@@ -10,28 +10,51 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { 
   Mail, 
-  MessageSquare, 
+  HelpCircle, 
   Clock, 
   Send, 
   CheckCircle2, 
-  Loader2, 
-  HelpCircle 
+  Loader2,
+  AlertCircle
 } from "lucide-react"
 
 export default function ContactPage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isSuccess, setIsSuccess] = useState(false)
+  const [error, setError] = useState("")
 
   // Form Submission Handler
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     setIsSubmitting(true)
+    setError("")
 
-    // Simulate network request (Replace this with your actual API call to shutterstudio.dev@gmail.com)
-    await new Promise((resolve) => setTimeout(resolve, 1500))
+    // Gather form data
+    const formData = new FormData(e.currentTarget)
+    const data = {
+      name: formData.get("name"),
+      email: formData.get("email"),
+      subject: formData.get("subject"),
+      category: formData.get("category"),
+      message: formData.get("message"),
+    }
 
-    setIsSubmitting(false)
-    setIsSuccess(true)
+    try {
+      // Send data to our API route
+      const response = await fetch("/api/contact", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      })
+
+      if (!response.ok) throw new Error("Failed to send message")
+      
+      setIsSuccess(true)
+    } catch (err) {
+      setError("Something went wrong. Please try again later.")
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   return (
@@ -61,8 +84,6 @@ export default function ContactPage() {
             
             {/* --- LEFT COLUMN: INFO --- */}
             <div className="space-y-8">
-              
-              {/* How Can We Help */}
               <ScrollReveal direction="right" delay={0.1}>
                 <div className="p-8 rounded-3xl border border-white/10 bg-white/5 backdrop-blur-sm">
                   <div className="flex items-center gap-3 mb-6">
@@ -89,7 +110,6 @@ export default function ContactPage() {
                 </div>
               </ScrollReveal>
 
-              {/* Alternative Contact */}
               <ScrollReveal direction="right" delay={0.2}>
                 <div className="p-8 rounded-3xl border border-white/10 bg-white/5 backdrop-blur-sm">
                   <div className="flex items-center gap-3 mb-4">
@@ -99,16 +119,12 @@ export default function ContactPage() {
                   <p className="text-slate-400 text-sm mb-4">
                     Prefer email? Contact us directly. Please include your studio name for faster service.
                   </p>
-                  <a 
-                    href="mailto:shutterstudio.dev@gmail.com" 
-                    className="inline-flex items-center gap-2 text-blue-400 hover:text-blue-300 font-medium transition-colors"
-                  >
+                  <a href="mailto:shutterstudio.dev@gmail.com" className="inline-flex items-center gap-2 text-blue-400 hover:text-blue-300 font-medium transition-colors">
                     shutterstudio.dev@gmail.com
                   </a>
                 </div>
               </ScrollReveal>
 
-              {/* Response Time */}
               <ScrollReveal direction="right" delay={0.3}>
                 <div className="flex items-start gap-4 p-4 rounded-xl border border-white/5 bg-slate-900/50">
                   <Clock className="w-5 h-5 text-slate-500 mt-0.5" />
@@ -120,7 +136,6 @@ export default function ContactPage() {
                   </div>
                 </div>
               </ScrollReveal>
-
             </div>
 
             {/* --- RIGHT COLUMN: FORM --- */}
@@ -128,7 +143,6 @@ export default function ContactPage() {
               <div className="relative h-full p-8 md:p-10 rounded-3xl bg-slate-900 border border-white/10 shadow-2xl">
                 
                 {isSuccess ? (
-                  // SUCCESS STATE
                   <div className="h-full min-h-[400px] flex flex-col items-center justify-center text-center animate-in fade-in zoom-in duration-500">
                     <div className="w-20 h-20 rounded-full bg-green-500/10 flex items-center justify-center mb-6">
                       <CheckCircle2 className="w-10 h-10 text-green-500" />
@@ -146,7 +160,6 @@ export default function ContactPage() {
                     </Button>
                   </div>
                 ) : (
-                  // FORM STATE
                   <form onSubmit={handleSubmit} className="space-y-6">
                     <div className="space-y-2">
                       <h3 className="text-2xl font-bold text-white">Send a Message</h3>
@@ -156,46 +169,35 @@ export default function ContactPage() {
                     <div className="grid md:grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <label className="text-xs font-medium text-slate-400 uppercase tracking-wider">Full Name</label>
-                        <Input 
-                          required 
-                          placeholder="John Doe" 
-                          className="bg-slate-950 border-slate-800 text-white placeholder:text-slate-600 focus-visible:ring-blue-500"
-                        />
+                        <Input name="name" required placeholder="John Doe" className="bg-slate-950 border-slate-800 text-white placeholder:text-slate-600 focus-visible:ring-blue-500" />
                       </div>
                       <div className="space-y-2">
                         <label className="text-xs font-medium text-slate-400 uppercase tracking-wider">Email Address</label>
-                        <Input 
-                          required 
-                          type="email" 
-                          placeholder="john@studio.com" 
-                          className="bg-slate-950 border-slate-800 text-white placeholder:text-slate-600 focus-visible:ring-blue-500"
-                        />
+                        <Input name="email" required type="email" placeholder="john@studio.com" className="bg-slate-950 border-slate-800 text-white placeholder:text-slate-600 focus-visible:ring-blue-500" />
                       </div>
                     </div>
 
                     <div className="space-y-2">
                       <label className="text-xs font-medium text-slate-400 uppercase tracking-wider">Subject</label>
-                      <Input 
-                        required 
-                        placeholder="Briefly describe your inquiry" 
-                        className="bg-slate-950 border-slate-800 text-white placeholder:text-slate-600 focus-visible:ring-blue-500"
-                      />
+                      <Input name="subject" required placeholder="Briefly describe your inquiry" className="bg-slate-950 border-slate-800 text-white placeholder:text-slate-600 focus-visible:ring-blue-500" />
                     </div>
 
                     <div className="space-y-2">
                       <label className="text-xs font-medium text-slate-400 uppercase tracking-wider">Category (Optional)</label>
                       <div className="relative">
+                        {/* FIXED: Using defaultValue on Select */}
                         <select 
+                          name="category"
+                          defaultValue=""
                           className="flex h-10 w-full rounded-md border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-white ring-offset-background placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 appearance-none"
                         >
-                          <option value="" disabled selected>Select a category</option>
+                          <option value="" disabled>Select a category</option>
                           <option value="general">General Inquiry</option>
                           <option value="technical">Technical Support</option>
                           <option value="billing">Billing & Subscription</option>
                           <option value="feature">Feature Request</option>
                           <option value="other">Other</option>
                         </select>
-                        {/* Custom Arrow for select */}
                         <div className="absolute right-3 top-3 pointer-events-none opacity-50">
                            <svg width="10" height="6" viewBox="0 0 10 6" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M1 1L5 5L9 1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
                         </div>
@@ -204,18 +206,17 @@ export default function ContactPage() {
 
                     <div className="space-y-2">
                       <label className="text-xs font-medium text-slate-400 uppercase tracking-wider">Message</label>
-                      <Textarea 
-                        required 
-                        placeholder="How can we help you today?" 
-                        className="min-h-[120px] bg-slate-950 border-slate-800 text-white placeholder:text-slate-600 focus-visible:ring-blue-500"
-                      />
+                      <Textarea name="message" required placeholder="How can we help you today?" className="min-h-[120px] bg-slate-950 border-slate-800 text-white placeholder:text-slate-600 focus-visible:ring-blue-500" />
                     </div>
 
-                    <Button 
-                      type="submit" 
-                      disabled={isSubmitting}
-                      className="w-full h-12 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-xl shadow-lg shadow-blue-900/20 transition-all"
-                    >
+                    {error && (
+                      <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm flex items-center gap-2">
+                        <AlertCircle className="w-4 h-4" />
+                        {error}
+                      </div>
+                    )}
+
+                    <Button type="submit" disabled={isSubmitting} className="w-full h-12 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-xl shadow-lg shadow-blue-900/20 transition-all">
                       {isSubmitting ? (
                         <>
                           <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -237,11 +238,9 @@ export default function ContactPage() {
                 )}
               </div>
             </ScrollReveal>
-
           </div>
         </div>
       </main>
-
       <Footer />
     </div>
   )

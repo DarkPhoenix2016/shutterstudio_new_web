@@ -64,6 +64,7 @@
     "react-hook-form": "^7.60.0",
     "react-resizable-panels": "^2.1.7",
     "recharts": "2.15.4",
+    "resend": "^6.7.0",
     "sonner": "^1.7.4",
     "sweetalert2": "^11.26.17",
     "sweetalert2-react-content": "^5.1.1",
