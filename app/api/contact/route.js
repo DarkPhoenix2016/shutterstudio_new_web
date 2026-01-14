@@ -9,7 +9,7 @@ export async function POST(request) { // Removed ": Request"
     const { name, email, subject, category, message } = body;
 
     const data = await resend.emails.send({
-      from: 'ShutterStudio Contact <onboarding@resend.dev>',
+      from: 'ShutterStudio Contact <contact@shutterstudio.app>',
       to: ['shutterstudio.dev@gmail.com'],
       subject: `[${category || 'General'}] ${subject}`,
       replyTo: email,
