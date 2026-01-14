@@ -6,33 +6,49 @@ import { Hero } from "@/components/landing/hero"
 import { Features } from "@/components/landing/features"
 import { Pricing } from "@/components/landing/pricing"
 import { Footer } from "@/components/landing/footer"
+// Import new sections
+import { ProblemSolution } from "@/components/landing/problem-solution"
+import { HowItWorks } from "@/components/landing/how-it-works"
+import { WhyUs } from "@/components/landing/why-us"
+import { CTASection } from "@/components/landing/cta-section"
 
 export default function LandingPage() {
   const router = useRouter()
 
-  // Central handler for all CTA buttons
   const handleGetStarted = () => {
     router.push("/dashboard/login")
   }
 
   return (
-    <div className="min-h-screen bg-background font-sans text-foreground">
+    <div className="min-h-screen bg-slate-950 font-sans text-slate-200">
       
-      {/* Navigation */}
+      {/* 1. Navbar */}
       <Navbar />
 
       <main>
-        {/* Hero Section */}
+        {/* 2. Hero */}
         <Hero onGetStartedClick={handleGetStarted} />
         
-        {/* Features Grid */}
+        {/* 3. Problem -> Solution */}
+        <ProblemSolution />
+        
+        {/* 4. Features */}
         <Features />
         
-        {/* Dynamic Pricing Section (Fetches from Firestore) */}
+        {/* 5. How It Works */}
+        <HowItWorks />
+        
+        {/* 6. Why ShutterStudio / Security (Merged for flow) */}
+        <WhyUs />
+
+        {/* 7. Pricing */}
         <Pricing onGetStartedClick={handleGetStarted} />
+        
+        {/* 8. Final CTA (Distinct from Footer) */}
+        <CTASection onGetStartedClick={handleGetStarted} />
       </main>
 
-      {/* Footer */}
+      {/* 9. Footer */}
       <Footer />
       
     </div>
