@@ -1,6 +1,9 @@
 import { db } from "@/lib/firebase";
-import { doc, getDoc, collection, getCountFromServer } from "firebase/firestore";
-
+import { 
+  doc, getDoc, collection, getDocs, getCountFromServer, 
+  query, orderBy, limit, Timestamp 
+} from "firebase/firestore";
+import { addMonths, addYears, isAfter, parseISO } from "date-fns";
 // --- TYPES ---
 
 export interface PackageLimits {
@@ -22,7 +25,9 @@ export interface SubscriptionDetails {
   amount: number;
   interval: 'monthly' | 'yearly';
   nextRenewalDate: Date;
-  billingEmail?: string;
+  regDate: Date;
+  lastInvoiceAmount?: number;
+  lastInvoiceDate?: Date;
 }
 
 export interface SubscriptionInvoice {
@@ -34,6 +39,24 @@ export interface SubscriptionInvoice {
   dueDate: Date;
   pdfUrl?: string;
 }
+
+// --- HELPER: CALCULATE NEXT RENEWAL ---
+const calculateNextRenewal = (regDate: Date, cycle: string): Date => {
+  const now = new Date();
+  let nextDate = new Date(regDate);
+
+  // Safety: Prevent infinite loops if dates are invalid
+  let loops = 0;
+  while (!isAfter(nextDate, now) && loops < 1000) {
+    if (cycle === 'yearly') {
+      nextDate = addYears(nextDate, 1);
+    } else {
+      nextDate = addMonths(nextDate, 1);
+    }
+    loops++;
+  }
+  return nextDate;
+};
 
 // --- FUNCTIONS ---
 
@@ -176,8 +199,11 @@ export const validateSubscriptionAction = async (
   return { allowed: true };
 };
 
+// --- READ FUNCTIONS ---
+
 /**
- * Fetch detailed subscription info (Status, Renewal Date, Price)
+ * 1. Fetch Subscription Configuration
+ * Path: /Studios/{id}/Subscription/config
  */
 export const fetchSubscriptionDetails = async (studioId: string): Promise<SubscriptionDetails | null> => {
   try {
@@ -186,14 +212,28 @@ export const fetchSubscriptionDetails = async (studioId: string): Promise<Subscr
     
     if (snap.exists()) {
       const data = snap.data();
+      
+      // Parse Dates (Handle Firestore Timestamp or ISO String)
+      const regDate = data.regDate instanceof Timestamp 
+        ? data.regDate.toDate() 
+        : new Date(data.regDate || Date.now());
+
+      const lastInvDate = data.last_invoice_date instanceof Timestamp 
+        ? data.last_invoice_date.toDate() 
+        : data.last_invoice_date ? new Date(data.last_invoice_date) : undefined;
+
+      const cycle = data.cycle || 'monthly';
+
       return {
         planId: data.packageId,
         planName: data.packageName || "Basic Plan",
-        status: data.status || "active",
-        amount: data.amount || 0,
-        interval: data.interval || "monthly",
-        nextRenewalDate: data.nextRenewalDate?.toDate() || new Date(),
-        billingEmail: data.billingEmail
+        status: data.status || "active", // Default to active if not explicit
+        amount: data.price || 0,
+        interval: cycle,
+        regDate: regDate,
+        nextRenewalDate: calculateNextRenewal(regDate, cycle),
+        lastInvoiceAmount: data.last_invoice_amount,
+        lastInvoiceDate: lastInvDate
       };
     }
     return null;
@@ -204,17 +244,26 @@ export const fetchSubscriptionDetails = async (studioId: string): Promise<Subscr
 };
 
 /**
- * Fetch subscription invoices
+ * 4. Fetch Invoices (Subcollection)
  */
 export const fetchSubscriptionInvoices = async (studioId: string): Promise<SubscriptionInvoice[]> => {
   try {
     const invoicesRef = collection(db, "Studios", studioId, "Subscription", "invoices", "list");
-    // Assuming a subcollection structure or query
-    // If using a root collection with studioID filter:
-    // const q = query(collection(db, "PlatformInvoices"), where("studioId", "==", studioId), orderBy("issueDate", "desc"));
-    
-    // For now, assuming standard subcollection pattern or returning mock empty if not set up
-    return []; 
+    const q = query(invoicesRef, orderBy("issueDate", "desc"), limit(12));
+    const snap = await getDocs(q);
+
+    return snap.docs.map(d => {
+        const data = d.data();
+        return {
+            id: d.id,
+            invoiceNumber: data.invoiceNumber || d.id,
+            amount: data.amount || 0,
+            status: data.status || 'pending',
+            issueDate: data.issueDate instanceof Timestamp ? data.issueDate.toDate() : new Date(),
+            dueDate: data.dueDate instanceof Timestamp ? data.dueDate.toDate() : new Date(),
+            pdfUrl: data.pdfUrl
+        } as SubscriptionInvoice;
+    });
   } catch (error) {
     console.error("Error fetching invoices:", error);
     return [];
