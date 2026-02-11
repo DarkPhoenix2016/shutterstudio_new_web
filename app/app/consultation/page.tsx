@@ -433,7 +433,7 @@ export default function ConsultationPage() {
         setStep(s => Math.min(s + 1, 4));
     };
 
-    const currentLightboxEvent = lightboxIndex !== null ? matchedEvents[lightboxIndex] : null;
+    const currentLightboxEvent = lightboxIndex !== null ? matchedEvents[lightboxIndex] : null
 
     if (loading) return <div className="h-screen flex items-center justify-center"><Loader2 className="w-8 h-8 animate-spin text-[#1C4D8D]" /></div>;
 

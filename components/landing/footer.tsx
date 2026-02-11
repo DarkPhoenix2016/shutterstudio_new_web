@@ -66,10 +66,8 @@ export function Footer() {
             <div>
               <h3 className="font-semibold text-white mb-6 text-sm uppercase tracking-wider">Product</h3>
               <ul className="space-y-4 text-sm">
-                <FooterLink href="/features">Features</FooterLink>
-                <FooterLink href="/pricing">Pricing</FooterLink>
-                <FooterLink href="/showcase">Studio Showcase</FooterLink>
-                <FooterLink href="/changelog">Changelog</FooterLink>
+                <FooterLink href="/#features">Features</FooterLink>
+                <FooterLink href="/#pricing">Pricing</FooterLink>
               </ul>
             </div>
 
@@ -77,10 +75,6 @@ export function Footer() {
             <div>
               <h3 className="font-semibold text-white mb-6 text-sm uppercase tracking-wider">Resources</h3>
               <ul className="space-y-4 text-sm">
-                <FooterLink href="/docs">Documentation</FooterLink>
-                <FooterLink href="/blog">Blog</FooterLink>
-                <FooterLink href="/community">Community</FooterLink>
-                <FooterLink href="/help">Help Center</FooterLink>
               </ul>
             </div>
 
@@ -89,7 +83,6 @@ export function Footer() {
               <h3 className="font-semibold text-white mb-6 text-sm uppercase tracking-wider">Company</h3>
               <ul className="space-y-4 text-sm">
                 <FooterLink href="/about">About Us</FooterLink>
-                <FooterLink href="/careers">Careers</FooterLink>
                 <FooterLink href="/contact">Contact</FooterLink>
                 <FooterLink href="/privacy">Privacy Policy</FooterLink>
               </ul>

@@ -6,13 +6,14 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useAuth } from "@/context/AuthContext"
-// [!code highlight] 1. Import useToast
-import { useToast } from "@/hooks/use-toast" 
+import { useToast } from "@/hooks/use-toast"
 import { ArrowLeft, Eye, EyeOff, Loader2 } from "lucide-react"
 import Image from "next/image"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useEffect, useState } from "react"
+// 1. Firebase Imports
+import { GoogleAuthProvider, signInWithPopup, getAuth, getAdditionalUserInfo, deleteUser } from "firebase/auth"
 
 interface LoginFormProps {
   portal: "admin" | "user"
@@ -20,41 +21,82 @@ interface LoginFormProps {
 
 export default function LoginForm({ portal }: LoginFormProps) {
   const router = useRouter()
-  // [!code highlight] 2. Initialize toast
-  const { toast } = useToast() 
-  
+  const { toast } = useToast()
+
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [remember, setRemember] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
+  
+  // Loading state for Email/Pass
   const [loading, setLoading] = useState(false)
+  // 2. Specific loading state for Google (Acts as a redirect guard)
+  const [googleLoading, setGoogleLoading] = useState(false)
 
   const { currentUser, login, loading: authLoading } = useAuth()
 
   const successRedirect = portal === "admin" ? "/admin" : "/app"
   const portalName = portal === "admin" ? "ShutterStudio Crew" : "ShutterStudio"
 
+  // 3. FIX: Prevent redirect while Google is still validating the user
   useEffect(() => {
-    if (!authLoading && currentUser) {
+    if (!authLoading && currentUser && !googleLoading) {
       router.push(successRedirect)
     }
-  }, [authLoading, currentUser, router, successRedirect])
+  }, [authLoading, currentUser, router, successRedirect, googleLoading])
+
+  const handleGoogleLogin = async () => {
+    setGoogleLoading(true)
+    const auth = getAuth()
+    const provider = new GoogleAuthProvider()
+
+    try {
+      const result = await signInWithPopup(auth, provider)
+      const details = getAdditionalUserInfo(result)
+
+      // 4. STRICT CHECK: If new user, delete and block
+      if (details?.isNewUser) {
+        await deleteUser(result.user)
+        throw new Error("ACCOUNT_NOT_FOUND_GOOGLE")
+      }
+
+      toast({
+        title: "Welcome back!",
+        description: "Google login successful. Redirecting...",
+        className: "bg-green-50 border-green-200 text-green-800"
+      })
+
+    } catch (err: any) {
+      let errorMessage = "Failed to sign in with Google."
+      
+      if (err.message === "ACCOUNT_NOT_FOUND_GOOGLE") {
+        errorMessage = "No account found. Sign up is disabled for this portal."
+      } else if (err.code === "auth/popup-closed-by-user") {
+        errorMessage = "Sign in cancelled."
+      }
+
+      toast({
+        variant: "destructive",
+        title: "Login Failed",
+        description: errorMessage,
+      })
+      console.error("Google Login error:", err)
+    } finally {
+      setGoogleLoading(false)
+    }
+  }
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
 
     try {
-      // [!code highlight] 3. Fix 400 Error: Trim whitespace
-      const cleanEmail = email.trim() 
-      
+      const cleanEmail = email.trim()
       await login(cleanEmail, password, remember)
-      
-      // [!code highlight] 4. Success Toast
+
       toast({
         title: "Welcome back!",
         description: "Login successful. Redirecting...",
-        variant: "default", // or "success" if you have that configured
         className: "bg-green-50 border-green-200 text-green-800"
       })
 
@@ -72,7 +114,6 @@ export default function LoginForm({ portal }: LoginFormProps) {
         errorMessage = "The email address is badly formatted."
       }
 
-      // [!code highlight] 5. Error Toast
       toast({
         variant: "destructive",
         title: "Login Failed",
@@ -146,6 +187,37 @@ export default function LoginForm({ portal }: LoginFormProps) {
               </CardHeader>
 
               <CardContent>
+                {/* 5. Google Button Section */}
+                <div className="mb-4 space-y-4">
+                  <Button 
+                    variant="outline" 
+                    type="button" 
+                    className="w-full h-11 relative" 
+                    onClick={handleGoogleLogin}
+                    disabled={googleLoading || loading}
+                  >
+                     {googleLoading ? (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                     ) : (
+                        <svg className="mr-2 h-4 w-4" aria-hidden="true" focusable="false" data-prefix="fab" data-icon="google" role="img" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 488 512">
+                          <path fill="currentColor" d="M488 261.8C488 403.3 391.1 504 248 504 110.8 504 0 393.2 0 256S110.8 8 248 8c66.8 0 123 24.5 166.3 64.9l-67.5 64.9C258.5 52.6 94.3 116.6 94.3 256c0 86.5 69.1 156.6 153.7 156.6 98.2 0 135-70.4 140.8-106.9H248v-85.3h236.1c2.3 12.7 3.9 24.9 3.9 41.4z"></path>
+                        </svg>
+                     )}
+                    Sign in with Google
+                  </Button>
+                  
+                  <div className="relative">
+                    <div className="absolute inset-0 flex items-center">
+                      <span className="w-full border-t" />
+                    </div>
+                    <div className="relative flex justify-center text-xs uppercase">
+                      <span className="bg-background px-2 text-muted-foreground bg-white">
+                        Or continue with
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
                 <form onSubmit={onSubmit} className="space-y-4">
                   <div className="space-y-2">
                     <Label htmlFor="email">Email address</Label>
@@ -155,7 +227,7 @@ export default function LoginForm({ portal }: LoginFormProps) {
                       required
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      placeholder="name@example.com" // Placeholder helps user know format
+                      placeholder="name@example.com"
                       className="h-11"
                     />
                   </div>
@@ -195,7 +267,7 @@ export default function LoginForm({ portal }: LoginFormProps) {
 
                   <Button type="submit" className="w-full h-11" disabled={loading}>
                     {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    Sign in
+                    Sign in with Email
                   </Button>
                 </form>
 

@@ -2,35 +2,18 @@
 
 import { useState, useEffect } from "react"
 import { useAuth } from "@/context/AuthContext"
-import { db } from "@/lib/firebase"
-import { doc, getDoc } from "firebase/firestore"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
+import { CatalogueService, type PackageData, type ParameterDef } from "@/services/catalogue-service"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Loader2, Package, Tag, Check, X } from "lucide-react"
 
-interface ParameterDef {
-  name: string
-  type: 'text' | 'number' | 'boolean'
-  unit?: string
-}
-
-interface PackageData {
-  id: string
-  name: string
-  price: number
-  disabled: boolean
-  discounted: boolean
-  discountType: 'percentage' | 'fixed'
-  discountValue: number
-  parameters: Record<string, any>
-}
-
 export default function CatalogueOverviewPage() {
   const { userData, loading: authLoading } = useAuth()
+  
   const [loading, setLoading] = useState(true)
   const [packages, setPackages] = useState<PackageData[]>([])
   const [parameterDefs, setParameterDefs] = useState<ParameterDef[]>([])
+  const [currency, setCurrency] = useState("$") 
 
   useEffect(() => {
     const initData = async () => {
@@ -39,32 +22,18 @@ export default function CatalogueOverviewPage() {
       try {
         const studioID = userData.studioID
         
-        // 1. Fetch Config
-        const configRef = doc(db, "Studios", studioID, "Packages", "CONFIG")
-        const configSnap = await getDoc(configRef)
-        if (configSnap.exists()) {
-            setParameterDefs(configSnap.data().parameters || [])
-        }
+        const [fetchedCurrency, fetchedParams, fetchedPackages] = await Promise.all([
+          CatalogueService.getStudioCurrency(studioID),
+          CatalogueService.getParameters(studioID),
+          CatalogueService.getPackages(studioID)
+        ])
 
-        // 2. Fetch Packages
-        const listRef = doc(db, "Studios", studioID, "Packages", "package_list")
-        const listSnap = await getDoc(listRef)
-        
-        if (listSnap.exists()) {
-            const idList: string[] = listSnap.data().LIST || []
-            if (idList.length > 0) {
-                const fetchedPackages = await Promise.all(
-                    idList.map(async (pkgId) => {
-                        const pkgSnap = await getDoc(doc(db, "Studios", studioID, "Packages", pkgId))
-                        return pkgSnap.exists() ? { id: pkgSnap.id, ...pkgSnap.data() } as PackageData : null
-                    })
-                )
-                // Filter out nulls
-                setPackages(fetchedPackages.filter(p => p !== null) as PackageData[])
-            }
-        }
+        setCurrency(fetchedCurrency)
+        setParameterDefs(fetchedParams)
+        setPackages(fetchedPackages)
+
       } catch (e) {
-        console.error("Error fetching catalogue", e)
+        console.error("Error initializing catalogue", e)
       } finally {
         setLoading(false)
       }
@@ -79,7 +48,34 @@ export default function CatalogueOverviewPage() {
     return pkg.price - (pkg.price * (pkg.discountValue / 100))
   }
 
-  if (authLoading || loading) return <div className="flex h-96 items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-slate-400" /></div>
+  const formatMoney = (amount: number) => {
+    return `${currency} ${amount.toLocaleString()}`
+  }
+
+  // [!code highlight] Helper function to determine sort weight
+  const getParamWeight = (key: string, value: any) => {
+    const def = parameterDefs.find(p => p.name === key)
+    
+    // Priority 1: Numbers with explicit units
+    if (typeof value === 'number' && def?.unit && def.unit.trim().length > 0) return 1
+    
+    // Priority 2: Plain Numbers (no unit or empty unit)
+    if (typeof value === 'number') return 2
+    
+    // Priority 3: Booleans
+    if (typeof value === 'boolean') return 3
+    
+    // Priority 4: Strings and others
+    return 4
+  }
+
+  if (authLoading || loading) {
+    return (
+      <div className="flex h-96 items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6 p-6">
@@ -91,7 +87,20 @@ export default function CatalogueOverviewPage() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-        {packages.map((pkg) => (
+        {packages.map((pkg) => {
+            // [!code highlight] Sort parameters before mapping
+            const sortedParams = Object.entries(pkg.parameters).sort(([keyA, valA], [keyB, valB]) => {
+                const weightA = getParamWeight(keyA, valA)
+                const weightB = getParamWeight(keyB, valB)
+                
+                // If weights are different, sort by weight
+                if (weightA !== weightB) return weightA - weightB
+                
+                // If weights are same, sort alphabetically by name
+                return keyA.localeCompare(keyB)
+            })
+
+            return (
             <Card key={pkg.id} className={`hover:shadow-lg transition-all border-slate-200 flex flex-col ${pkg.disabled ? 'opacity-60 grayscale' : ''}`}>
                 <CardHeader className="pb-4">
                     <div className="flex justify-between items-start">
@@ -101,9 +110,13 @@ export default function CatalogueOverviewPage() {
                                 {pkg.disabled && <Badge variant="destructive" className="text-[10px] h-5">Unavailable</Badge>}
                             </CardTitle>
                             <CardDescription className="mt-1 flex items-baseline gap-2">
-                                <span className="text-2xl font-bold text-[#1C4D8D]">${getFinalPrice(pkg).toLocaleString()}</span>
+                                <span className="text-2xl font-bold text-[#1C4D8D]">
+                                  {formatMoney(getFinalPrice(pkg))}
+                                </span>
                                 {pkg.discounted && (
-                                    <span className="text-sm text-slate-400 line-through">${pkg.price}</span>
+                                    <span className="text-sm text-slate-400 line-through">
+                                      {formatMoney(pkg.price)}
+                                    </span>
                                 )}
                             </CardDescription>
                         </div>
@@ -114,13 +127,15 @@ export default function CatalogueOverviewPage() {
                     {pkg.discounted && (
                         <Badge className="w-fit mt-2 bg-green-100 text-green-700 hover:bg-green-100 border-green-200">
                             <Tag className="w-3 h-3 mr-1" />
-                            {pkg.discountType === 'percentage' ? `${pkg.discountValue}% OFF` : `$${pkg.discountValue} OFF`}
+                            {pkg.discountType === 'percentage' ? `${pkg.discountValue}% OFF` : `${currency}${pkg.discountValue} OFF`}
                         </Badge>
                     )}
                 </CardHeader>
+                
                 <CardContent className="space-y-3 flex-1">
                     <div className="bg-slate-50 p-3 rounded-lg space-y-2 border">
-                        {Object.entries(pkg.parameters).map(([key, value]) => {
+                        {/* [!code highlight] Map over sortedParams instead of Object.entries */}
+                        {sortedParams.map(([key, value]) => {
                             const def = parameterDefs.find(p => p.name === key)
                             return (
                                 <div key={key} className="flex justify-between text-sm">
@@ -135,16 +150,14 @@ export default function CatalogueOverviewPage() {
                                 </div>
                             )
                         })}
-                        {Object.keys(pkg.parameters).length === 0 && <p className="text-xs text-slate-400 italic text-center">No specific parameters.</p>}
+                        {sortedParams.length === 0 && (
+                          <p className="text-xs text-slate-400 italic text-center">No specific parameters.</p>
+                        )}
                     </div>
                 </CardContent>
-                <CardFooter className="pt-0">
-                    <Button variant="outline" className="w-full" disabled={pkg.disabled}>
-                        {pkg.disabled ? "Currently Unavailable" : "View Details"}
-                    </Button>
-                </CardFooter>
             </Card>
-        ))}
+            )
+        })}
         
         {packages.length === 0 && !loading && (
             <div className="col-span-full text-center py-12 border-2 border-dashed border-slate-200 rounded-xl bg-slate-50">

@@ -2,38 +2,19 @@
 
 import { useState, useEffect } from "react"
 import { useAuth } from "@/context/AuthContext"
-import { db } from "@/lib/firebase"
-import { doc, getDoc, setDoc, updateDoc, collection, arrayUnion, arrayRemove } from "firebase/firestore"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card"
+import { CatalogueService, type PackageData, type ParameterDef } from "@/services/catalogue-service"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Switch } from "@/components/ui/switch"
 import { Badge } from "@/components/ui/badge"
-import { Loader2, Plus, Save, Trash2, Settings2, Package, Pencil, Ban, CheckCircle, DollarSign, Tag } from "lucide-react"
+import { Loader2, Plus, Save, Trash2, Settings2, Package, Pencil, Ban, CheckCircle, DollarSign } from "lucide-react"
 import Swal from "sweetalert2"
-
-// --- Types ---
-interface ParameterDef {
-  name: string
-  type: 'text' | 'number' | 'boolean'
-  unit?: string
-}
-
-interface PackageData {
-  id: string
-  name: string
-  price: number
-  disabled: boolean
-  discounted: boolean
-  discountType: 'percentage' | 'fixed'
-  discountValue: number
-  parameters: Record<string, any>
-}
 
 export default function CatalogueSettingsPage() {
   const { userData, loading: authLoading } = useAuth()
@@ -41,6 +22,7 @@ export default function CatalogueSettingsPage() {
   const [saving, setSaving] = useState(false)
   
   // Data State
+  const [currency, setCurrency] = useState("$")
   const [parameters, setParameters] = useState<ParameterDef[]>([])
   const [packages, setPackages] = useState<PackageData[]>([])
   
@@ -52,17 +34,9 @@ export default function CatalogueSettingsPage() {
   // Package Dialog State
   const [isPkgDialogOpen, setIsPkgDialogOpen] = useState(false)
   const [editingPkg, setEditingPkg] = useState<PackageData | null>(null)
-  const [pkgFormData, setPkgFormData] = useState<Partial<PackageData>>({
-    name: "",
-    price: 0,
-    disabled: false,
-    discounted: false,
-    discountType: 'fixed',
-    discountValue: 0,
-    parameters: {}
-  })
+  const [pkgFormData, setPkgFormData] = useState<Partial<PackageData>>({})
 
-  // 1. Fetch All Data (Params & Packages)
+  // 1. Fetch All Data via Service
   useEffect(() => {
     const fetchData = async () => {
       if (!userData?.studioID) return
@@ -70,30 +44,20 @@ export default function CatalogueSettingsPage() {
       try {
         const studioID = userData.studioID
         
-        // A. Parameters
-        const configRef = doc(db, "Studios", studioID, "Packages", "CONFIG")
-        const configSnap = await getDoc(configRef)
-        if (configSnap.exists()) {
-          setParameters(configSnap.data().parameters || [])
-        }
+        // Parallel fetch for efficiency
+        const [fetchedCurrency, fetchedParams, fetchedPkgs] = await Promise.all([
+           CatalogueService.getStudioCurrency(studioID),
+           CatalogueService.getParameters(studioID),
+           CatalogueService.getPackages(studioID)
+        ])
 
-        // B. Packages
-        const listRef = doc(db, "Studios", studioID, "Packages", "package_list")
-        const listSnap = await getDoc(listRef)
-        if (listSnap.exists()) {
-            const idList: string[] = listSnap.data().LIST || []
-            if (idList.length > 0) {
-                const fetchedPackages = await Promise.all(
-                    idList.map(async (pkgId) => {
-                        const pkgSnap = await getDoc(doc(db, "Studios", studioID, "Packages", pkgId))
-                        return pkgSnap.exists() ? { id: pkgSnap.id, ...pkgSnap.data() } as PackageData : null
-                    })
-                )
-                setPackages(fetchedPackages.filter(p => p !== null) as PackageData[])
-            }
-        }
+        setCurrency(fetchedCurrency)
+        setParameters(fetchedParams)
+        setPackages(fetchedPkgs)
+
       } catch (e) {
         console.error("Fetch error", e)
+        Swal.fire({ icon: 'error', title: 'Failed to load catalogue data' })
       } finally {
         setLoading(false)
       }
@@ -123,25 +87,23 @@ export default function CatalogueSettingsPage() {
     if (!userData?.studioID) return
     setSaving(true)
     try {
-      const configRef = doc(db, "Studios", userData.studioID, "Packages", "CONFIG")
-      await setDoc(configRef, { parameters }, { merge: true })
+      await CatalogueService.saveParameters(userData.studioID, parameters)
       Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: 'Parameters saved', timer: 3000, showConfirmButton: false })
     } catch (e) {
-      Swal.fire({ icon: 'error', title: 'Failed to save' })
+      Swal.fire({ icon: 'error', title: 'Failed to save parameters' })
     } finally {
       setSaving(false)
     }
   }
 
   // --- PACKAGE ACTIONS ---
-  
-  // Open Dialog for Create/Edit
   const openPkgDialog = (pkg?: PackageData) => {
       if (pkg) {
           setEditingPkg(pkg)
           setPkgFormData({ ...pkg })
       } else {
           setEditingPkg(null)
+          // Default state for new package
           setPkgFormData({
             name: "",
             price: 0,
@@ -155,7 +117,6 @@ export default function CatalogueSettingsPage() {
       setIsPkgDialogOpen(true)
   }
 
-  // Handle Form Change
   const handlePkgParamChange = (paramName: string, value: any) => {
     setPkgFormData(prev => ({
         ...prev,
@@ -163,43 +124,19 @@ export default function CatalogueSettingsPage() {
     }))
   }
 
-  // Save Package (Create/Update)
   const handleSavePackage = async () => {
       if (!pkgFormData.name || !userData?.studioID) return
       setSaving(true)
 
       try {
-          const studioID = userData.studioID
-          let pkgId = editingPkg?.id
+          const savedPkg = await CatalogueService.savePackage(userData.studioID, pkgFormData)
 
-          // If new, create ID
-          if (!pkgId) {
-              const newRef = doc(collection(db, "Studios", studioID, "Packages"))
-              pkgId = newRef.id
-          }
-
-          const pkgData: PackageData = {
-              id: pkgId,
-              name: pkgFormData.name!,
-              price: Number(pkgFormData.price || 0),
-              disabled: pkgFormData.disabled || false,
-              discounted: pkgFormData.discounted || false,
-              discountType: pkgFormData.discountType || 'fixed',
-              discountValue: Number(pkgFormData.discountValue || 0),
-              parameters: pkgFormData.parameters || {}
-          }
-
-          // 1. Save Document
-          await setDoc(doc(db, "Studios", studioID, "Packages", pkgId), pkgData, { merge: true })
-
-          // 2. Update List (only if new)
-          if (!editingPkg) {
-              const listRef = doc(db, "Studios", studioID, "Packages", "package_list")
-              await setDoc(listRef, { LIST: arrayUnion(pkgId) }, { merge: true })
-              setPackages(prev => [...prev, pkgData])
-          } else {
-              setPackages(prev => prev.map(p => p.id === pkgId ? pkgData : p))
-          }
+          // Update local state
+          setPackages(prev => {
+             const exists = prev.find(p => p.id === savedPkg.id)
+             if (exists) return prev.map(p => p.id === savedPkg.id ? savedPkg : p)
+             return [...prev, savedPkg]
+          })
 
           setIsPkgDialogOpen(false)
           Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: 'Package saved', timer: 3000, showConfirmButton: false })
@@ -212,15 +149,15 @@ export default function CatalogueSettingsPage() {
       }
   }
 
-  // Toggle Disable Status
   const handleTogglePackageStatus = async (pkg: PackageData) => {
       if (!userData?.studioID) return
-      const newStatus = !pkg.disabled
+      
+      // Optimistic update (optional, but here we wait for result)
       try {
-          await updateDoc(doc(db, "Studios", userData.studioID, "Packages", pkg.id), {
-              disabled: newStatus
-          })
+          const newStatus = await CatalogueService.togglePackageStatus(userData.studioID, pkg.id, pkg.disabled)
+          
           setPackages(prev => prev.map(p => p.id === pkg.id ? { ...p, disabled: newStatus } : p))
+          
           Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: newStatus ? 'Package Disabled' : 'Package Enabled', timer: 2000, showConfirmButton: false })
       } catch (e) {
           Swal.fire({ icon: 'error', title: 'Action failed' })
@@ -278,7 +215,7 @@ export default function CatalogueSettingsPage() {
                                         {pkg.name}
                                         {pkg.discounted && <Badge variant="outline" className="ml-2 text-[10px] text-orange-600 border-orange-200 bg-orange-50">Discounted</Badge>}
                                     </TableCell>
-                                    <TableCell>${pkg.price.toLocaleString()}</TableCell>
+                                    <TableCell>{currency} {pkg.price.toLocaleString()}</TableCell>
                                     <TableCell className="text-xs text-slate-500 max-w-xs truncate">
                                         {Object.entries(pkg.parameters).map(([k, v]) => `${k}: ${v}`).join(", ")}
                                     </TableCell>
@@ -383,7 +320,7 @@ export default function CatalogueSettingsPage() {
                     <div className="space-y-2">
                         <Label>Base Price</Label>
                         <div className="relative">
-                            <DollarSign className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-400" />
+                            <div className="absolute left-3 top-2.5 h-4 w-4 text-slate-400 font-bold text-xs flex items-center">{currency}</div>
                             <Input type="number" className="pl-9" value={pkgFormData.price} onChange={e => setPkgFormData({...pkgFormData, price: Number(e.target.value)})} />
                         </div>
                     </div>
@@ -407,7 +344,7 @@ export default function CatalogueSettingsPage() {
                                 <Select value={pkgFormData.discountType} onValueChange={(v: any) => setPkgFormData({...pkgFormData, discountType: v})}>
                                     <SelectTrigger><SelectValue /></SelectTrigger>
                                     <SelectContent>
-                                        <SelectItem value="fixed">Fixed Amount ($)</SelectItem>
+                                        <SelectItem value="fixed">Fixed Amount ({currency})</SelectItem>
                                         <SelectItem value="percentage">Percentage (%)</SelectItem>
                                     </SelectContent>
                                 </Select>

@@ -15,7 +15,7 @@ export default function LandingPage() {
   const router = useRouter()
 
   const handleGetStarted = () => {
-    router.push("/dashboard/login")
+    router.push("/app/login")
   }
 
   return (
