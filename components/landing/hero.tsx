@@ -1,10 +1,10 @@
 "use client"
 
-import { Button } from "@/components/ui/button"
-import { ArrowRight, Play, Sparkles, ShieldCheck, Gem, Layers } from "lucide-react"
-import Image from "next/image"
-import { ScrollReveal } from "@/components/ui/scroll-reveal"
 import { MouseParallax } from "@/components/ui/mouse-parallax"
+import { ScrollReveal } from "@/components/ui/scroll-reveal"
+import { ArrowRight, Gem, Layers, ShieldCheck, Sparkles } from "lucide-react"
+import Image from "next/image"
+import Link from "next/link"
 
 interface HeroProps {
   onGetStartedClick: () => void
@@ -58,6 +58,15 @@ export function Hero({ onGetStartedClick }: HeroProps) {
 
             <ScrollReveal direction="up" delay={0.4}>
               <div className="flex flex-col sm:flex-row gap-5 pt-4">
+
+                <Link 
+                  href="/contact" 
+                  className="inline-flex h-12  items-center justify-center rounded-xl bg-blue-600 px-8 text-base font-medium text-white shadow-lg shadow-blue-900/20 transition-all hover:bg-blue-500 hover:-translate-y-0.5"
+                >
+                  Contact Sales
+                  <ArrowRight className="ml-2 h-4 w-4" />
+                </Link>
+                {/*
                 <Button
                   size="lg"
                   onClick={onGetStartedClick}
@@ -66,14 +75,16 @@ export function Hero({ onGetStartedClick }: HeroProps) {
                   Contact Sales
                   <ArrowRight className="ml-2 h-5 w-5" />
                 </Button>
+                
                 <Button
                   size="lg"
                   variant="outline"
-                  className="h-14 px-10 text-base font-semibold border-slate-700 text-slate-200 hover:bg-slate-800/50 hover:text-white hover:border-blue-500/50 backdrop-blur-sm transition-all rounded-xl"
+                  className="h-14 px-10 text-base font-semibold border-slate-700 text-blue-600 hover:bg-slate-800/50 hover:text-white hover:border-blue-500/50 backdrop-blur-sm transition-all rounded-xl"
                 >
                   <Play className="mr-2 h-5 w-5 fill-current opacity-80" />
                   See Interactive Demo
                 </Button>
+                */}
               </div>
             </ScrollReveal>
 

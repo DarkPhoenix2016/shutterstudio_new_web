@@ -1,10 +1,10 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import Link from "next/link"
 import { Button } from "@/components/ui/button"
-import { Camera, Menu, X } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { Camera, Menu, X } from "lucide-react"
+import Link from "next/link"
+import { useEffect, useState } from "react"
 
 export function Navbar() {
   const [isScrolled, setIsScrolled] = useState(false)
@@ -20,9 +20,11 @@ export function Navbar() {
   }, [])
 
   const navLinks = [
-    { name: "Features", href: "#features" },
-    { name: "How it Works", href: "#how-it-works" }, // Assumes you add id="how-it-works" to that section
-    { name: "Pricing", href: "#pricing" },
+    { name: "Features", href: "/#features" },
+    { name: "How it Works", href: "/#how-it-works" }, // Assumes you add id="how-it-works" to that section
+    { name: "Pricing", href: "/#pricing" },
+    { name: "About Us", href: "/about" },
+    { name: "Contact", href: "/contact" },
   ]
 
   return (
@@ -61,9 +63,6 @@ export function Navbar() {
 
         {/* DESKTOP CTA */}
         <div className="hidden md:flex items-center gap-4">
-          <Link href="/app/login" className="text-sm font-medium text-slate-300 hover:text-white transition-colors">
-            Sign In
-          </Link>
           <Button 
             asChild
             className="bg-blue-600 hover:bg-blue-500 text-white rounded-full px-6 shadow-lg shadow-blue-900/20"

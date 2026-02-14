@@ -1,9 +1,20 @@
+// services/event-service.ts
 import { db } from "@/lib/firebase";
-import { 
-  collection, getDocs, doc, getDoc, addDoc, deleteDoc, updateDoc, 
-  serverTimestamp, query, orderBy, Timestamp, runTransaction, where, arrayRemove 
+import { addMonths, endOfMonth, isWithinInterval, startOfMonth, subMonths } from "date-fns";
+import {
+  arrayRemove,
+  collection,
+  deleteDoc,
+  doc, getDoc,
+  getDocs,
+  orderBy,
+  query,
+  runTransaction,
+  serverTimestamp,
+  Timestamp,
+  updateDoc,
+  where
 } from "firebase/firestore";
-import { startOfMonth, endOfMonth, subMonths, addMonths, isWithinInterval } from "date-fns";
 
 // --- TYPES ---
 
@@ -229,6 +240,7 @@ export const createEvent = async (studioId: string, event: EventData) => {
 
       transaction.set(newEventRef, {
         ...event,
+        id: newEventRef.id,
         displayId: customId, 
         createdAt: serverTimestamp()
       });
@@ -247,15 +259,30 @@ export const createEvent = async (studioId: string, event: EventData) => {
 };
 
 // 4. Update Event
-export const updateEvent = async (studioId: string, eventId: string, updates: Partial<EventData>) => {
+export const updateEvent = async (
+  studioId: string,
+  eventId: string,
+  updates: Partial<EventData>
+) => {
   try {
     const ref = doc(db, "Studios", studioId, "Events", eventId);
+    const snap = await getDoc(ref);
+
+    if (!snap.exists()) throw "Event not found";
+
+    const data = snap.data();
+
+    if (!data.id) {
+      updates.id = eventId;
+    }
+
     await updateDoc(ref, updates);
   } catch (error) {
     console.error("Error updating event:", error);
     throw error;
   }
 };
+
 
 // 5. Delete Event (With Resource Cleanup)
 export const deleteEvent = async (studioId: string, eventId: string) => {
