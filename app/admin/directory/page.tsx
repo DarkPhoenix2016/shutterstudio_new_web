@@ -195,13 +195,11 @@ export default function DirectoryPage() {
   // --- ACTIONS: CREATE USER ---
   const handleCreateUser = async () => {
     if (!formData.email || !formData.password || !formData.displayName || !formData.role) {
-      // [!code highlight] Toast Warning
       return Toast.fire({ icon: 'warning', title: 'Please fill in all required fields.' })
     }
 
     const selectedRole = ROLES.find(r => r.value === formData.role)
     if (selectedRole?.type === "studio" && !formData.studioID) {
-      // [!code highlight] Toast Warning
       return Toast.fire({ icon: 'warning', title: 'Studio ID is required for this role.' })
     }
 
@@ -235,7 +233,6 @@ export default function DirectoryPage() {
         await logAuditAction("CREATE_USER", `Created user ${formData.email}`, currentUser, "UserDirectory")
       }
 
-      // [!code highlight] Toast Success
       Toast.fire({ icon: 'success', title: 'User account created successfully.' })
       
       setIsAddOpen(false)
@@ -243,7 +240,6 @@ export default function DirectoryPage() {
       fetchUsers("initial") 
 
     } catch (error: any) {
-      // [!code highlight] Toast Error
       Toast.fire({ icon: 'error', title: error.message || 'Registration failed' })
     } finally {
       setIsSubmitting(false)
@@ -269,11 +265,9 @@ export default function DirectoryPage() {
       setUsers(prev => prev.map(u => u.id === editingUser.id ? editingUser : u))
       setIsEditOpen(false)
       
-      // [!code highlight] Toast Success
       Toast.fire({ icon: 'success', title: 'User details updated.' })
 
     } catch (e) {
-      // [!code highlight] Toast Error
       Toast.fire({ icon: 'error', title: 'Failed to update user.' })
     } finally {
       setIsSubmitting(false)
@@ -317,7 +311,6 @@ export default function DirectoryPage() {
         const newStatus = isDisabled ? "Active" : "Disabled"
         setUsers(prev => prev.map(u => u.id === user.id ? { ...u, status: newStatus, accountDisabled: !isDisabled } : u))
         
-        // [!code highlight] Toast Success (Instead of second modal)
         Toast.fire({ icon: 'success', title: `User has been ${action}d.` })
       }
     })

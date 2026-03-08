@@ -3,7 +3,6 @@
 import { useState, useEffect, useMemo } from "react"
 import { useAuth } from "@/context/AuthContext"
 import { useRouter } from "next/navigation"
-// [!code highlight] Added fetchEventById for the detailed card
 import { fetchEvents, fetchEventById, EventData } from "@/services/event-service" 
 import { 
     fetchStudioTasks, updateTaskStatus, createTask, updateTaskDetails, addWorkNote, getStudioMembersForTasks, deleteTask,
@@ -50,15 +49,10 @@ import {
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import Swal from "sweetalert2"
+import { safeDate } from "@/lib/date-utils"
 
 // --- HELPER: SAFE DATE ---
-const safeDate = (dateInput: any): Date => {
-    try {
-        if (!dateInput) return new Date();
-        if (typeof dateInput.toDate === 'function') return dateInput.toDate();
-        return new Date(dateInput);
-    } catch { return new Date(); }
-};
+
 
 // ==================================================================================
 // MAIN PAGE COMPONENT
@@ -647,7 +641,6 @@ function TaskFormDialog({ open, onOpenChange, members, events, onSave, initialDa
     );
 }
 
-// [!code highlight] Updated Detail Dialog with Event Card, High Contrast Badges, and Refresh
 function TaskDetailDialog({ open, onOpenChange, task, currentUser, studioId, onUpdate, onEdit, onDelete }: any) {
     const router = useRouter();
     const [note, setNote] = useState("");

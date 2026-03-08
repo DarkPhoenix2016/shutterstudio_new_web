@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { useAuth } from "@/context/AuthContext"
+import { useRouter } from "next/navigation"
 import { 
     fetchSubscriptionDetails, 
     getCurrentUsage, 
@@ -32,6 +33,7 @@ import { cn } from "@/lib/utils"
 
 export default function SubscriptionPage() {
     const { userData } = useAuth()
+    const router = useRouter()
     const [loading, setLoading] = useState(true)
     
     // Data States
@@ -89,11 +91,11 @@ export default function SubscriptionPage() {
                     <p className="text-slate-500">Manage your studio plan, usage, and invoices.</p>
                 </div>
                 <div className="flex gap-3">
-                    <Button variant="outline">Billing Settings</Button>
+                    <Button variant="outline" onClick={() => router.push('/app/profile/settings')}>Billing Settings</Button>
                     {subDetails?.status === 'active' ? (
-                        <Button className="bg-[#1C4D8D] hover:bg-[#153a6b]">Change Plan</Button>
+                        <Button className="bg-[#1C4D8D] hover:bg-[#153a6b]" onClick={() => router.push('/app/studio/subscription/plans')}>Change Plan</Button>
                     ) : (
-                        <Button className="bg-red-600 hover:bg-red-700 text-white">Reactivate Subscription</Button>
+                        <Button className="bg-red-600 hover:bg-red-700 text-white" onClick={() => router.push('/app/studio/subscription/plans')}>Reactivate Subscription</Button>
                     )}
                 </div>
             </div>

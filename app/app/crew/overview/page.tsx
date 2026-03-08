@@ -32,7 +32,9 @@ export default function StudioOverviewPage() {
   const [searchQuery, setSearchQuery] = useState("")
   const [date, setDate] = useState<Date | undefined>(new Date()) 
   const [isScheduleOpen, setIsScheduleOpen] = useState(false)
-  const [selectedMember, setSelectedMember] = useState<Member | null>(null) // Track specific user for schedule
+  const [selectedMember, setSelectedMember] = useState<Member | null>(null)
+  const [memberPage, setMemberPage] = useState(1)
+  const MEMBERS_PER_PAGE = 10
 
   useEffect(() => {
     const fetchData = async () => {
@@ -64,11 +66,17 @@ export default function StudioOverviewPage() {
     fetchData();
   }, [userData]);
 
-  const filteredMembers = members.filter(member => 
+  const filteredMembers = members.filter(member =>
       member.displayName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       member.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       member.phoneNumber?.includes(searchQuery)
-  );
+  )
+
+  const totalMemberPages = Math.ceil(filteredMembers.length / MEMBERS_PER_PAGE)
+  const pagedMembers = filteredMembers.slice(
+    (memberPage - 1) * MEMBERS_PER_PAGE,
+    memberPage * MEMBERS_PER_PAGE
+  )
 
   const formatRole = (role?: string) => role ? role.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase()) : "Staff";
 
@@ -280,18 +288,18 @@ export default function StudioOverviewPage() {
             <CardTitle>Team Quick Access</CardTitle>
             <div className="relative w-64">
                 <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input 
-                    placeholder="Find member..." 
-                    className="pl-8" 
+                <Input
+                    placeholder="Find member..."
+                    className="pl-8"
                     value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
+                    onChange={(e) => { setSearchQuery(e.target.value); setMemberPage(1); }}
                 />
             </div>
           </div>
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-             {filteredMembers.slice(0, 8).map((member) => (
+             {pagedMembers.map((member) => (
                 <div key={member.id} className="flex flex-col md:flex-row md:items-center justify-between border-b pb-4 last:border-0 last:pb-0 gap-4">
                     
                     <div className="flex items-center gap-4 flex-1">
@@ -356,6 +364,17 @@ export default function StudioOverviewPage() {
                 </div>
              ))}
              {filteredMembers.length === 0 && <p className="text-center text-muted-foreground py-8">No members found.</p>}
+             {totalMemberPages > 1 && (
+               <div className="flex items-center justify-between pt-4 border-t">
+                 <span className="text-sm text-slate-500">
+                   Page {memberPage} of {totalMemberPages} ({filteredMembers.length} members)
+                 </span>
+                 <div className="flex gap-2">
+                   <Button variant="outline" size="sm" onClick={() => setMemberPage(p => Math.max(1, p - 1))} disabled={memberPage === 1}>Previous</Button>
+                   <Button variant="outline" size="sm" onClick={() => setMemberPage(p => Math.min(totalMemberPages, p + 1))} disabled={memberPage >= totalMemberPages}>Next</Button>
+                 </div>
+               </div>
+             )}
           </div>
         </CardContent>
       </Card>

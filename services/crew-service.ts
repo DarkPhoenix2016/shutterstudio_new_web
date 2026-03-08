@@ -36,9 +36,9 @@ export interface NewMemberData {
 
 // --- API CONFIG ---
 const API_URLS = {
-  REGISTER: "https://registeruser-g33n26zifq-uc.a.run.app",
-  ENABLE: "https://enableuser-g33n26zifq-uc.a.run.app",
-  DISABLE: "https://disableuser-g33n26zifq-uc.a.run.app"
+  REGISTER: process.env.NEXT_PUBLIC_CF_REGISTER_USER ?? "https://registeruser-g33n26zifq-uc.a.run.app",
+  ENABLE:   process.env.NEXT_PUBLIC_CF_ENABLE_USER   ?? "https://enableuser-g33n26zifq-uc.a.run.app",
+  DISABLE:  process.env.NEXT_PUBLIC_CF_DISABLE_USER  ?? "https://disableuser-g33n26zifq-uc.a.run.app",
 };
 
 // --- READ OPERATIONS ---

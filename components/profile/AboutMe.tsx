@@ -29,14 +29,12 @@ export default function AboutMe() {
       value: studioData?.name || "No Studio",
       className: "text-purple-600 bg-purple-50 border-purple-100",
     },
-    // [!code highlight] Designation (Condition: only if exists)
     ...(userData?.designation ? [{
       icon: Briefcase,
       label: "Designation",
       value: userData.designation,
       className: "text-indigo-600 bg-indigo-50 border-indigo-100",
     }] : []),
-    // [!code highlight] Access Level (Role)
     {
       icon: ShieldCheck,
       label: "Access Level",

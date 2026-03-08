@@ -132,7 +132,6 @@ function GlobalAnalytics() {
         
         usersSnapshot.forEach(doc => {
           const role = doc.data().role || "Unknown"
-          // [!code highlight] Fix: Explicitly type 'l' as string
           const cleanRole = role.replace(/_/g, " ").replace(/\b\w/g, (l: string) => l.toUpperCase())
           roles[cleanRole] = (roles[cleanRole] || 0) + 1
         })
@@ -331,7 +330,6 @@ function StudioSpecificAnalytics() {
         const roles: Record<string, number> = {}
         usersSnap.forEach(doc => {
             const role = doc.data().role || "Crew"
-            // [!code highlight] Fix: Explicitly type 'l' as string
             const cleanRole = role.replace(/_/g, " ").replace(/\b\w/g, (l: string) => l.toUpperCase())
             roles[cleanRole] = (roles[cleanRole] || 0) + 1
         })

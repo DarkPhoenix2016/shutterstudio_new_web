@@ -39,7 +39,6 @@ export default function AuditLogsPage() {
   
   // Filter States
   const [globalSearch, setGlobalSearch] = useState("")
-  // [!code highlight] Date Range State for Calendar
   const [dateRange, setDateRange] = useState<DateRange | undefined>()
   const [filters, setFilters] = useState({
       action: "ALL",

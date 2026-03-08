@@ -17,7 +17,6 @@ export default function ContactCard() {
     return role.replace(/_/g, " ").replace(/\b\w/g, (char) => char.toUpperCase())
   }
 
-  // [!code highlight] Logic: Designation > Role
   const displayTitle = userData?.designation || formatRole(userData?.role)
 
   // Generate VCard String

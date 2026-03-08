@@ -8,7 +8,8 @@ import { Line, LineChart, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Tool
 import { collection, getDocs, query, orderBy, limit, where, getDoc, doc } from "firebase/firestore"
 import { ref, listAll, getMetadata } from "firebase/storage"
 import { db, storage } from "@/lib/firebase"
-import { format, subDays, parseISO, isSameDay, isBefore } from "date-fns"
+import { format, subDays, isSameDay, isBefore } from "date-fns"
+import { safeDate } from "@/lib/date-utils"
 
 // --- TYPES ---
 interface DashboardMetrics {
@@ -55,16 +56,6 @@ export default function SuperAdminDashboard() {
   const [pendingList, setPendingList] = useState<PendingInvoice[]>([])
   const [loading, setLoading] = useState(true)
 
-  // --- HELPERS ---
-  const safeDate = (dateInput: any): Date => {
-    if (!dateInput) return new Date()
-    if (typeof dateInput?.toDate === 'function') return dateInput.toDate()
-    if (dateInput instanceof Date) return dateInput
-    if (typeof dateInput === 'string') {
-        try { return parseISO(dateInput) } catch (e) { return new Date() }
-    }
-    return new Date()
-  }
 
   const calculateTotalStorage = async (): Promise<number> => {
       let totalBytes = 0
@@ -106,7 +97,6 @@ export default function SuperAdminDashboard() {
             if (status.toLowerCase() === 'active') {
                 activeCount++
                 
-                // [!code highlight] Fetch Real MRR from Subscription Config
                 try {
                     const configRef = doc(db, `Studios/${docSnap.id}/Subscription/config`)
                     const configSnap = await getDoc(configRef)

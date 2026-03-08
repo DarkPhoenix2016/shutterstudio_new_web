@@ -8,8 +8,11 @@ import { ArrowUpRight, DollarSign, Calendar, Users, Camera, Clock, Loader2, Aler
 import { cn } from "@/lib/utils"
 import { useAuth } from "@/context/AuthContext"
 import { db } from "@/lib/firebase"
-import { doc, getDoc, collection, query, orderBy, limit, getDocs, where, Timestamp } from "firebase/firestore"
+import { doc, getDoc, collection, query, orderBy, limit, getDocs, Timestamp } from "firebase/firestore"
 import { useRouter } from "next/navigation"
+import { fetchInventory } from "@/services/inventory-service"
+import { getStatusColor } from "@/lib/event-utils"
+import { EventFormDialog } from "@/components/events/EventFormDialog"
 
 // Types
 interface DashboardEvent {
@@ -26,12 +29,13 @@ export default function DashboardPage() {
   const router = useRouter()
 
   const [loading, setLoading] = useState(true)
+  const [isNewEventOpen, setIsNewEventOpen] = useState(false)
   const [events, setEvents] = useState<DashboardEvent[]>([])
   const [stats, setStats] = useState({
     crewCount: 0,
     activeShoots: 0,
     totalInvoices: 0,
-    inventoryCount: 0 // Placeholder until inventory module is fully linked
+    inventoryCount: 0,
   })
 
   useEffect(() => {
@@ -86,13 +90,22 @@ export default function DashboardPage() {
             console.warn("Could not fetch events", e)
         }
 
-        // 3. Set State
+        // 3. Fetch Inventory Count
+        let inventoryCount = 0
+        try {
+            const inventoryItems = await fetchInventory(studioID)
+            inventoryCount = inventoryItems.length
+        } catch (e) {
+            console.warn("Could not fetch inventory count", e)
+        }
+
+        // 4. Set State
         setEvents(eventsList.slice(0, 5)) // Top 5
         setStats({
             crewCount,
             activeShoots: eventsList.length,
             totalInvoices: Number(studioData?.invoice_current || 0),
-            inventoryCount: 24 // Placeholder for now
+            inventoryCount,
         })
 
       } catch (error) {
@@ -110,14 +123,6 @@ export default function DashboardPage() {
   // --- Helpers ---
   const formatDate = (date: Date) => {
     return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(date)
-  }
-
-  const getStatusColor = (status: string) => {
-    const s = status.toLowerCase()
-    if (s.includes('confirm') || s.includes('complete')) return "bg-green-100 text-green-700"
-    if (s.includes('pending')) return "bg-amber-100 text-amber-700"
-    if (s.includes('cancel')) return "bg-red-100 text-red-700"
-    return "bg-[#BDE8F5] text-[#1C4D8D]"
   }
 
   const getEventTypeColor = (type: string) => {
@@ -149,7 +154,7 @@ export default function DashboardPage() {
             Here's what's happening at <span className="font-semibold text-[#1C4D8D]">{studioData?.name}</span> today.
           </p>
         </div>
-        <Button className="bg-[#1C4D8D] text-white hover:bg-[#0F2854] shadow-lg" onClick={() => router.push('/events/new')}>
+        <Button className="bg-[#1C4D8D] text-white hover:bg-[#0F2854] shadow-lg" onClick={() => setIsNewEventOpen(true)}>
           <Calendar className="mr-2 h-4 w-4" /> New Booking
         </Button>
       </div>
@@ -205,7 +210,7 @@ export default function DashboardPage() {
             </CardContent>
         </Card>
 
-        {/* Stat 4: Equipment (Mocked/Static for now) */}
+        {/* Stat 4: Inventory Items */}
         <Card className="border-none shadow-md hover:shadow-xl transition-shadow bg-[#BDE8F5]/30">
             <CardContent className="p-6">
               <div className="flex items-center justify-between mb-2">
@@ -213,11 +218,11 @@ export default function DashboardPage() {
                   <Clock className="h-5 w-5 text-[#1C4D8D]" />
                 </div>
                 <Badge variant="outline" className="text-[10px] font-bold bg-white border-border/50 text-foreground">
-                  ESTIMATE
+                  GEAR
                 </Badge>
               </div>
-              <p className="text-sm font-medium text-muted-foreground">Equipment Utilization</p>
-              <h3 className="text-2xl font-bold mt-1 text-foreground">~60%</h3>
+              <p className="text-sm font-medium text-muted-foreground">Inventory Items</p>
+              <h3 className="text-2xl font-bold mt-1 text-foreground">{stats.inventoryCount}</h3>
             </CardContent>
         </Card>
       </div>
@@ -232,9 +237,10 @@ export default function DashboardPage() {
               <CardTitle className="text-foreground">Upcoming Shoots</CardTitle>
               <CardDescription>Your upcoming schedule</CardDescription>
             </div>
-            <Button variant="ghost" size="sm" className="text-primary font-bold hover:bg-muted" onClick={() => router.push('/events')}>
+            <Button variant="ghost" size="sm" className="text-primary font-bold hover:bg-muted" onClick={() => router.push('/app/events/event')}>
               View All <ArrowUpRight className="ml-1 h-4 w-4" />
             </Button>
+
           </CardHeader>
           <CardContent className="p-6">
             <div className="space-y-4">
@@ -242,7 +248,7 @@ export default function DashboardPage() {
                   <div className="text-center py-8 text-muted-foreground flex flex-col items-center">
                       <Calendar className="h-10 w-10 mb-2 opacity-20" />
                       <p>No upcoming events scheduled.</p>
-                      <Button variant="link" onClick={() => router.push('/events/new')}>Create one now</Button>
+                      <Button variant="link" onClick={() => setIsNewEventOpen(true)}>Create one now</Button>
                   </div>
               ) : (
                   events.map((item) => {
@@ -251,7 +257,7 @@ export default function DashboardPage() {
                         <div
                         key={item.id}
                         className="flex items-center justify-between group cursor-pointer p-3 rounded-lg hover:bg-muted/30 transition-colors border border-transparent hover:border-slate-100"
-                        onClick={() => router.push(`/events/${item.id}`)}
+                        onClick={() => router.push(`/app/events/${item.id}`)}
                         >
                         <div className="flex items-center gap-4">
                             <div
@@ -276,47 +282,39 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
 
-        {/* UTILIZATION / INFO CARD */}
+        {/* QUICK LINKS CARD */}
         <Card className="border-none shadow-md overflow-hidden bg-white">
           <CardHeader className="bg-muted/30 border-b border-border">
-            <CardTitle className="text-primary">Studio Utilization</CardTitle>
-            <CardDescription>Resource capacity overview</CardDescription>
+            <CardTitle className="text-primary">Quick Actions</CardTitle>
+            <CardDescription>Jump to key studio areas</CardDescription>
           </CardHeader>
           <CardContent className="p-6">
-            <div className="space-y-6">
+            <div className="space-y-3">
               {[
-                { label: "Studio Space", percentage: 85, color: "#1C4D8D" },
-                { label: "Camera Gear", percentage: 62, color: "#4988C4" },
-                { label: "Lighting Kits", percentage: 44, color: "#0F2854" },
-                { label: "Post-Production", percentage: 91, color: "#4988C4" },
+                { label: "Manage Crew", path: "/app/crew/overview" },
+                { label: "Inventory", path: "/app/inventory/overview" },
+                { label: "Tasks", path: "/app/tasks" },
+                { label: "Catalogue", path: "/app/catalogue/overview" },
+                { label: "Studio Settings", path: "/app/studio/settings" },
               ].map((item) => (
-                <div key={item.label} className="space-y-2">
-                  <div className="flex justify-between text-sm">
-                    <span className="font-medium text-foreground">{item.label}</span>
-                    <span className="text-muted-foreground">{item.percentage}%</span>
-                  </div>
-                  <div className="h-2.5 w-full bg-muted rounded-full overflow-hidden">
-                    <div
-                      className="h-full transition-all duration-1000 rounded-full"
-                      style={{ width: `${item.percentage}%`, backgroundColor: item.color }}
-                    />
-                  </div>
-                </div>
+                <button
+                  key={item.label}
+                  onClick={() => router.push(item.path)}
+                  className="w-full text-left px-4 py-2.5 rounded-lg text-sm font-medium text-slate-700 hover:bg-[#1C4D8D]/5 hover:text-[#1C4D8D] transition-colors border border-transparent hover:border-[#1C4D8D]/10"
+                >
+                  {item.label}
+                </button>
               ))}
-              
-              <div className="pt-4 mt-4 border-t">
-                 <div className="bg-blue-50 p-3 rounded-md flex gap-3 items-start">
-                    <AlertCircle className="h-5 w-5 text-blue-600 shrink-0 mt-0.5" />
-                    <div className="text-xs text-blue-700">
-                        <span className="font-semibold block mb-1">Quick Tip</span>
-                        Keep your inventory updated after every shoot to ensure accurate utilization stats.
-                    </div>
-                 </div>
-              </div>
             </div>
           </CardContent>
         </Card>
       </div>
+
+      <EventFormDialog
+        open={isNewEventOpen}
+        onOpenChange={setIsNewEventOpen}
+        initialData={null}
+      />
     </div>
   )
 }

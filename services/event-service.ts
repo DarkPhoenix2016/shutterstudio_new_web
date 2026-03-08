@@ -95,6 +95,18 @@ export interface EventDayConfig {
   cost: number;
 }
 
+export interface EventInvoiceRecord {
+  id: string;
+  invoiceNumber: string;
+  pdfUrl: string;
+  storagePath?: string;
+  fileName?: string;
+  generatedAt: string;
+  generatedBy?: string;
+  total?: number;
+  currency?: string;
+}
+
 // --- MAIN EVENT DATA TYPE ---
 
 export interface EventData {
@@ -137,6 +149,8 @@ export interface EventData {
   additionalServices?: AdditionalService[];
   locations?: EventLocation[];
   transactions?: TransactionRecord[]; 
+  invoices?: EventInvoiceRecord[];
+  Invoices?: EventInvoiceRecord[];
 
   notes?: string;
   createdAt?: any;
@@ -361,6 +375,7 @@ export const fetchEvents = async (studioId: string) => {
         return { 
             id: d.id, 
             ...data, 
+            invoices: data.invoices || data.Invoices || [],
             inquiryDate: data.inquiryDate instanceof Timestamp ? data.inquiryDate.toDate() : data.inquiryDate,
             days: Array.isArray(data.days)
               ? data.days.map((day: any) => ({ ...day, date: day.date instanceof Timestamp ? day.date.toDate() : day.date }))
@@ -379,6 +394,7 @@ export const fetchEventById = async (studioId: string, eventId: string) => {
       return {
         id: snap.id,
         ...data,
+        invoices: data.invoices || data.Invoices || [],
         inquiryDate: data.inquiryDate instanceof Timestamp ? data.inquiryDate.toDate() : data.inquiryDate,
         days: Array.isArray(data.days)
           ? data.days.map((day: any) => ({ ...day, date: day.date instanceof Timestamp ? day.date.toDate() : day.date }))

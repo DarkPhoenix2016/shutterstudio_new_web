@@ -1,59 +1,96 @@
 "use client"
 
-import { useState, useEffect, useMemo } from "react"
 import { useAuth } from "@/context/AuthContext"
-import { useParams, useRouter } from "next/navigation"
-import {
-    fetchEventById, updateEvent, fetchStudioSettingsList,
-    checkResourceAvailability, EventData, EventContact, EventLocation, TransactionRecord,
-    fetchPackageConfig, fetchPackagesList, PackageData, AdditionalService,
-    EventDayConfig, CustomItem, PackageConfigParameter, fetchEvents
-} from "@/services/event-service"
-import { uploadFileToStorage } from "@/lib/storage-utils"
+import { db, storage } from "@/lib/firebase"
 import { compressImage } from "@/lib/image-utils"
-import {
-    fetchInventory, InventoryItem,
-    assignInventorySchedule, removeInventorySchedule
-} from "@/services/inventory-service"
-import { ref, deleteObject } from "firebase/storage"
-import { storage } from "@/lib/firebase"
-import { arrayUnion, arrayRemove } from "firebase/firestore"
-import {
-    fetchCrewMembers,
-    assignCrewSchedule, removeCrewSchedule
-} from "@/services/crew-service"
-import { doc, getDoc } from "firebase/firestore"
-import { db } from "@/lib/firebase"
+import { uploadFileToStorage } from "@/lib/storage-utils"
 import { cn } from "@/lib/utils"
-import { deleteField } from "firebase/firestore"
+import { EventInvoiceDialog } from "@/components/events/EventInvoiceDialog"
+import {
+    assignCrewSchedule,
+    fetchCrewMembers,
+    removeCrewSchedule
+} from "@/services/crew-service"
+import {
+    AdditionalService,
+    checkResourceAvailability,
+    CustomItem,
+    EventContact,
+    EventData,
+    EventDayConfig,
+    EventInvoiceRecord,
+    EventLocation,
+    fetchEventById,
+    fetchEvents,
+    fetchPackageConfig, fetchPackagesList,
+    fetchStudioSettingsList,
+    PackageConfigParameter,
+    PackageData,
+    TransactionRecord,
+    updateEvent
+} from "@/services/event-service"
+import {
+    assignInventorySchedule,
+    fetchInventory, InventoryItem,
+    removeInventorySchedule
+} from "@/services/inventory-service"
 import { validateSubscriptionAction } from "@/services/subscription-service"
+import { deleteField, doc, getDoc } from "firebase/firestore"
+import { deleteObject, getDownloadURL, ref, uploadBytes } from "firebase/storage"
+import { useParams, useRouter } from "next/navigation"
+import { useEffect, useMemo, useState } from "react"
+import { createPortal } from "react-dom"
 
 
 
 // UI Components
-import { Command, CommandGroup, CommandItem, CommandList } from "@/components/ui/command"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { Calendar } from "@/components/ui/calendar"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Command, CommandGroup, CommandItem, CommandList } from "@/components/ui/command"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Badge } from "@/components/ui/badge"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Textarea } from "@/components/ui/textarea"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { Calendar } from "@/components/ui/calendar"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Separator } from "@/components/ui/separator"
-import {
-    Loader2, ArrowLeft, Save, MapPin, Phone,
-    Plus, Trash2, Camera, Lock, FileText,
-    Calendar as CalendarIcon, CheckCircle, RefreshCcw, ExternalLink,
-    MessageCircle, LayoutGrid, Pencil, Check, DollarSign,
-    TrendingUp, Wallet, Search, Users, Briefcase, ChevronDown, ChevronLeft, ChevronRight,
-    ImageIcon, UploadCloud, X, Maximize2,
-    Tag, Hash
-} from "lucide-react"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Textarea } from "@/components/ui/textarea"
+import { safeDate } from "@/lib/date-utils"
 import { format } from "date-fns"
+import {
+    ArrowLeft,
+    Briefcase,
+    Calendar as CalendarIcon,
+    Camera,
+    Check,
+    CheckCircle,
+    ChevronDown, ChevronLeft, ChevronRight,
+    Download,
+    DollarSign,
+    ExternalLink,
+    FileText,
+    Hash,
+    ImageIcon,
+    Loader2,
+    Lock,
+    MapPin,
+    MessageCircle,
+    Pencil,
+    Phone,
+    Plus,
+    RefreshCcw,
+    Save,
+    Search,
+    Tag,
+    Trash2,
+    TrendingUp,
+    UploadCloud,
+    Users,
+    Wallet,
+    X
+} from "lucide-react"
 import Swal from "sweetalert2"
 
 const Toast = Swal.mixin({
@@ -64,20 +101,7 @@ const Toast = Swal.mixin({
 })
 
 // --- HELPER: SAFE DATE PARSING ---
-const safeDate = (dateInput: any): Date => {
-    try {
-        if (!dateInput) return new Date();
-        if (dateInput instanceof Date) return dateInput;
-        if (typeof dateInput === 'object') {
-            if (typeof dateInput.toDate === 'function') return dateInput.toDate();
-            if ('seconds' in dateInput) return new Date(dateInput.seconds * 1000);
-        }
-        const d = new Date(dateInput);
-        return isNaN(d.getTime()) ? new Date() : d;
-    } catch (e) {
-        return new Date();
-    }
-};
+
 
 // --- HELPER: CUSTOM SEARCHABLE SELECT ---
 function SearchableSelect({
@@ -151,7 +175,7 @@ function SearchableSelect({
 
 export default function EventDetailPage() {
     const { id } = useParams()
-    const { userData } = useAuth()
+    const { userData, studioData } = useAuth()
     const router = useRouter()
 
     // State
@@ -189,6 +213,8 @@ export default function EventDetailPage() {
     const [serviceParams, setServiceParams] = useState<any[]>([])
     const [activePackage, setActivePackage] = useState<PackageData | null>(null)
     const [lightboxIndex, setLightboxIndex] = useState<number | null>(null)
+    const [isInvoiceDialogOpen, setIsInvoiceDialogOpen] = useState(false)
+    const [invoiceNumber, setInvoiceNumber] = useState("")
 
     // --- NEW LISTS FOR PACKAGE EDITING ---
     const [packagesList, setPackagesList] = useState<PackageData[]>([])
@@ -416,6 +442,137 @@ export default function EventDetailPage() {
             profit: finalBudget - totalExpenses
         };
     }, [event]);
+    const allImages = useMemo(() => {
+        if (!event) return [];
+        const imgs: string[] = [];
+        if (event.couplePhotoUrl) imgs.push(event.couplePhotoUrl);
+        if (event.galleryUrls) imgs.push(...event.galleryUrls);
+        return imgs;
+    }, [event]);
+
+    const downloadImage = async (url: string) => {
+        try {
+            const res = await fetch(url)
+            const blob = await res.blob()
+            const a = document.createElement("a")
+            a.href = URL.createObjectURL(blob)
+            a.download = `event-photo-${Date.now()}.jpg`
+            a.click()
+            URL.revokeObjectURL(a.href)
+        } catch {
+            window.open(url, "_blank")
+        }
+    }
+
+    const buildInvoiceTimestamp = () => {
+        const now = new Date()
+        const yyyy = now.getFullYear().toString()
+        const mm = String(now.getMonth() + 1).padStart(2, "0")
+        const dd = String(now.getDate()).padStart(2, "0")
+        const hh = String(now.getHours()).padStart(2, "0")
+        const mi = String(now.getMinutes()).padStart(2, "0")
+        const ss = String(now.getSeconds()).padStart(2, "0")
+        const ff = String(Math.floor(now.getMilliseconds() / 10)).padStart(2, "0")
+        return `${yyyy}${mm}${dd}${hh}${mi}${ss}${ff}`
+    }
+
+    const buildInvoiceNumber = () => {
+        const prefix = event?.displayId || event?.id || "EVENT"
+        return `${prefix}${buildInvoiceTimestamp()}`
+    }
+
+    const sanitizeInvoicesForFirestore = (invoices: EventInvoiceRecord[]): EventInvoiceRecord[] => {
+        return invoices.map((inv) => {
+            const clean: EventInvoiceRecord = {
+                id: inv.id,
+                invoiceNumber: inv.invoiceNumber,
+                pdfUrl: inv.pdfUrl,
+                generatedAt: inv.generatedAt
+            }
+            if (typeof inv.storagePath === "string" && inv.storagePath) clean.storagePath = inv.storagePath
+            if (typeof inv.fileName === "string" && inv.fileName) clean.fileName = inv.fileName
+            if (typeof inv.generatedBy === "string" && inv.generatedBy) clean.generatedBy = inv.generatedBy
+            if (typeof inv.total === "number" && !Number.isNaN(inv.total)) clean.total = inv.total
+            if (typeof inv.currency === "string" && inv.currency) clean.currency = inv.currency
+            return clean
+        })
+    }
+
+    const handleOpenInvoiceGenerator = () => {
+        if (!event) return
+        setInvoiceNumber(buildInvoiceNumber())
+        setIsInvoiceDialogOpen(true)
+    }
+
+    const handleAutoSaveInvoice = async ({
+        blob,
+        invoiceNumber,
+        fileName,
+        total
+    }: {
+        blob: Blob
+        invoiceNumber: string
+        fileName: string
+        total: number
+    }) => {
+        if (!event || !event.id || !userData?.studioID) return
+
+        const eventCode = (event.displayId || event.id || "EVENT").replace(/[^a-zA-Z0-9_-]/g, "_")
+        const safeFileName = `${fileName.replace(/[^a-zA-Z0-9._-]/g, "_")}`
+        const storagePath = `Studios/${userData.studioID}/Invoices/${eventCode}/${safeFileName}`
+
+        const storageRef = ref(storage, storagePath)
+        const snap = await uploadBytes(storageRef, blob, { contentType: "application/pdf" })
+        const pdfUrl = await getDownloadURL(snap.ref)
+
+        const newInvoice: EventInvoiceRecord = {
+            id: crypto.randomUUID(),
+            invoiceNumber,
+            fileName: safeFileName,
+            storagePath,
+            pdfUrl,
+            generatedAt: new Date().toISOString(),
+            generatedBy: userData.uid || userData.id || "system",
+            total,
+            currency
+        }
+
+        const updatedInvoices = sanitizeInvoicesForFirestore([...(event.invoices || []), newInvoice])
+        await updateEvent(userData.studioID, event.id, { invoices: updatedInvoices, Invoices: updatedInvoices } as Partial<EventData>)
+        setEvent(prev => prev ? ({ ...prev, invoices: updatedInvoices }) : prev)
+        Toast.fire({ icon: "success", title: "Invoice generated and saved" })
+    }
+
+    const handleDeleteInvoice = async (invoice: EventInvoiceRecord) => {
+        if (!event || !event.id || !userData?.studioID) return
+
+        const confirm = await Swal.fire({
+            title: "Delete invoice?",
+            text: "This will remove the saved PDF link from the event.",
+            icon: "warning",
+            showCancelButton: true,
+            confirmButtonColor: "#d33",
+            confirmButtonText: "Yes, delete"
+        })
+
+        if (!confirm.isConfirmed) return
+
+        try {
+            if (invoice.storagePath) {
+                await deleteObject(ref(storage, invoice.storagePath)).catch(() => null)
+            } else if (invoice.pdfUrl) {
+                await deleteObject(ref(storage, invoice.pdfUrl)).catch(() => null)
+            }
+
+            const updatedInvoices = sanitizeInvoicesForFirestore((event.invoices || []).filter((inv) => inv.id !== invoice.id))
+            await updateEvent(userData.studioID, event.id, { invoices: updatedInvoices, Invoices: updatedInvoices } as Partial<EventData>)
+            setEvent(prev => prev ? ({ ...prev, invoices: updatedInvoices }) : prev)
+            Toast.fire({ icon: "success", title: "Invoice deleted" })
+        } catch (e) {
+            console.error(e)
+            Toast.fire({ icon: "error", title: "Failed to delete invoice" })
+        }
+    }
 
     // --- ACTIONS ---
 
@@ -796,6 +953,7 @@ export default function EventDetailPage() {
                     <TabsTrigger value="resources" className="px-6 py-2">Resources</TabsTrigger>
                     <TabsTrigger value="payments" className="px-6 py-2">Payments</TabsTrigger>
                     <TabsTrigger value="expenses" className="px-6 py-2">Expenses</TabsTrigger>
+                    <TabsTrigger value="invoices" className="px-6 py-2">Invoices</TabsTrigger>
                 </TabsList>
 
                 {/* --- 1. OVERVIEW TAB --- */}
@@ -863,7 +1021,7 @@ export default function EventDetailPage() {
                                 </div>
                                 <div className="flex flex-wrap gap-3">
                                     <Button variant="outline" size="sm" className="gap-2" onClick={handleResetApproval}><RefreshCcw className="w-4 h-4" /> Reset Approval</Button>
-                                    <Button variant="outline" size="sm" className="gap-2" onClick={() => Toast.fire({ icon: 'info', title: 'Invoice Generated' })}><FileText className="w-4 h-4" /> Generate Invoice</Button>
+                                    <Button variant="outline" size="sm" className="gap-2" onClick={handleOpenInvoiceGenerator}><FileText className="w-4 h-4" /> Generate Invoice</Button>
                                     <Button
                                         variant="outline"
                                         size="sm"
@@ -1582,6 +1740,106 @@ export default function EventDetailPage() {
                     </Card>
                 </TabsContent>
 
+                <TabsContent value="invoices">
+                    <div className="space-y-4">
+                        {/* Header */}
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <h2 className="text-lg font-semibold text-slate-800 flex items-center gap-2">
+                                    <FileText className="w-5 h-5 text-[#1C4D8D]" />
+                                    Invoices
+                                </h2>
+                                <p className="text-sm text-slate-500 mt-0.5">
+                                    {(event.invoices?.length || 0) > 0
+                                        ? `${event.invoices!.length} invoice${event.invoices!.length > 1 ? "s" : ""} generated · Regenerate after editing event data.`
+                                        : "Generate PDF invoices to share with your client."}
+                                </p>
+                            </div>
+                            <Button size="sm" className="bg-[#1C4D8D] hover:bg-[#163d70] gap-2" onClick={handleOpenInvoiceGenerator}>
+                                <FileText className="w-4 h-4" />
+                                Generate New Invoice
+                            </Button>
+                        </div>
+
+                        {/* Invoice list or empty state */}
+                        {(event.invoices?.length || 0) > 0 ? (
+                            <div className="space-y-3">
+                                {(event.invoices || [])
+                                    .slice()
+                                    .sort((a, b) => new Date(b.generatedAt).getTime() - new Date(a.generatedAt).getTime())
+                                    .map((inv, idx) => (
+                                        <div
+                                            key={inv.id}
+                                            className="relative bg-white border border-slate-200 rounded-xl p-5 hover:border-blue-200 hover:shadow-sm transition-all"
+                                        >
+                                            {idx === 0 && (
+                                                <Badge className="absolute top-4 right-4 bg-blue-50 text-[#1C4D8D] border-blue-200 text-[10px] font-semibold uppercase tracking-wide pointer-events-none">
+                                                    Latest
+                                                </Badge>
+                                            )}
+                                            <div className="flex items-center gap-4">
+                                                <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center">
+                                                    <FileText className="w-5 h-5 text-[#1C4D8D]" />
+                                                </div>
+                                                <div className="flex-1 min-w-0 pr-16">
+                                                    <p className="font-semibold text-slate-800 text-sm font-mono">{inv.invoiceNumber}</p>
+                                                    <div className="flex items-center gap-2 mt-1 flex-wrap">
+                                                        <span className="text-xs text-slate-500">
+                                                            {format(new Date(inv.generatedAt), "MMM d, yyyy 'at' h:mm a")}
+                                                        </span>
+                                                        <span className="text-slate-300 text-xs">·</span>
+                                                        <span className="text-xs font-semibold text-slate-700">
+                                                            {inv.currency || currency} {(inv.total || 0).toLocaleString()}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                                <div className="flex items-center gap-2 flex-shrink-0">
+                                                    <Button
+                                                        variant="outline"
+                                                        size="sm"
+                                                        className="h-8 px-3 text-xs gap-1.5 border-slate-200"
+                                                        onClick={() => window.open(inv.pdfUrl, "_blank")}
+                                                    >
+                                                        <ExternalLink className="w-3.5 h-3.5" />
+                                                        View PDF
+                                                    </Button>
+                                                    <a href={inv.pdfUrl} download={inv.fileName || `${inv.invoiceNumber}.pdf`} target="_blank" rel="noreferrer">
+                                                        <Button variant="outline" size="sm" className="h-8 px-3 text-xs gap-1.5 border-slate-200">
+                                                            <Download className="w-3.5 h-3.5" />
+                                                            Download
+                                                        </Button>
+                                                    </a>
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        className="h-8 w-8 p-0 text-slate-400 hover:text-red-500 hover:bg-red-50"
+                                                        onClick={() => handleDeleteInvoice(inv)}
+                                                    >
+                                                        <Trash2 className="w-3.5 h-3.5" />
+                                                    </Button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
+                            </div>
+                        ) : (
+                            <div className="flex flex-col items-center justify-center py-16 text-center border border-dashed border-slate-200 rounded-xl bg-slate-50">
+                                <div className="w-14 h-14 rounded-2xl bg-blue-50 flex items-center justify-center mb-4">
+                                    <FileText className="w-7 h-7 text-[#1C4D8D]" />
+                                </div>
+                                <p className="font-semibold text-slate-700">No invoices yet</p>
+                                <p className="text-sm text-slate-400 mt-1 max-w-xs">
+                                    Generate a PDF invoice from the current event data to share with your client.
+                                </p>
+                                <Button size="sm" className="mt-5 bg-[#1C4D8D] hover:bg-[#163d70] gap-2" onClick={handleOpenInvoiceGenerator}>
+                                    <FileText className="w-4 h-4" />
+                                    Generate First Invoice
+                                </Button>
+                            </div>
+                        )}
+                    </div>
+                </TabsContent>
+
                 {/* --- 5. RESOURCES TAB (ENHANCED) --- */}
                 <TabsContent value="resources">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -1923,7 +2181,7 @@ export default function EventDetailPage() {
                                                 src={url}
                                                 alt={`Gallery ${idx}`}
                                                 className="w-full h-auto object-cover transition-transform duration-500 group-hover:scale-105 cursor-zoom-in"
-                                                onClick={() => setLightboxIndex(idx)}
+                                                onClick={() => setLightboxIndex((event.couplePhotoUrl ? 1 : 0) + idx)}
                                             />
 
                                             {/* Overlay Actions */}
@@ -1953,34 +2211,72 @@ export default function EventDetailPage() {
 
             </Tabs>
 
-            {lightboxIndex !== null && event.galleryUrls && (
-                <div className="fixed inset-0 z-50 bg-black/95 flex items-center justify-center animate-in fade-in duration-200">
-                    <Button variant="ghost" size="icon" className="absolute top-4 right-4 text-white hover:bg-white/20 rounded-full" onClick={() => setLightboxIndex(null)}>
-                        <X className="w-6 h-6" />
-                    </Button>
+            <EventInvoiceDialog
+                open={isInvoiceDialogOpen}
+                onOpenChange={setIsInvoiceDialogOpen}
+                event={event}
+                packages={packagesList}
+                studio={studioData}
+                currency={currency}
+                invoiceNumber={invoiceNumber}
+                onAutoSave={handleAutoSaveInvoice}
+            />
+
+            {lightboxIndex !== null && allImages.length > 0 && typeof document !== "undefined" && createPortal(
+                <div className="fixed inset-0 z-[9999] bg-black/95 flex items-center justify-center">
+                    <div className="absolute top-4 right-4 flex gap-2">
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            className="text-white hover:bg-white/15 rounded-full"
+                            onClick={() => downloadImage(allImages[lightboxIndex])}
+                            title="Download"
+                        >
+                            <Download className="w-5 h-5" />
+                        </Button>
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            className="text-white hover:bg-white/15 rounded-full"
+                            onClick={() => setLightboxIndex(null)}
+                        >
+                            <X className="w-5 h-5" />
+                        </Button>
+                    </div>
+
+                    {lightboxIndex > 0 && (
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            className="absolute left-3 top-1/2 -translate-y-1/2 text-white hover:bg-white/15 rounded-full"
+                            onClick={() => setLightboxIndex(i => (i ?? 1) - 1)}
+                        >
+                            <ChevronLeft className="w-7 h-7" />
+                        </Button>
+                    )}
 
                     <img
-                        src={event.galleryUrls[lightboxIndex]}
-                        className="max-h-[90vh] max-w-[90vw] object-contain rounded-md shadow-2xl"
-                        alt="Lightbox View"
+                        src={allImages[lightboxIndex]}
+                        alt="Preview"
+                        className="max-h-[88vh] max-w-[90vw] object-contain rounded-lg shadow-2xl"
                     />
 
-                    {/* Navigation Buttons */}
-                    {lightboxIndex > 0 && (
-                        <Button variant="ghost" size="icon" className="absolute left-4 top-1/2 -translate-y-1/2 text-white hover:bg-white/20 rounded-full" onClick={() => setLightboxIndex(i => i! - 1)}>
-                            <ChevronLeft className="w-8 h-8" />
-                        </Button>
-                    )}
-                    {lightboxIndex < (event.galleryUrls.length - 1) && (
-                        <Button variant="ghost" size="icon" className="absolute right-4 top-1/2 -translate-y-1/2 text-white hover:bg-white/20 rounded-full" onClick={() => setLightboxIndex(i => i! + 1)}>
-                            <ChevronRight className="w-8 h-8" />
+                    {lightboxIndex < allImages.length - 1 && (
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-white hover:bg-white/15 rounded-full"
+                            onClick={() => setLightboxIndex(i => (i ?? 0) + 1)}
+                        >
+                            <ChevronRight className="w-7 h-7" />
                         </Button>
                     )}
 
-                    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 text-white/80 text-sm bg-black/50 px-3 py-1 rounded-full backdrop-blur-md">
-                        {lightboxIndex + 1} / {event.galleryUrls.length}
+                    <div className="absolute bottom-5 left-1/2 -translate-x-1/2 text-white/70 text-xs font-medium bg-black/40 px-3 py-1 rounded-full">
+                        {lightboxIndex + 1} / {allImages.length}
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
 
             {/* --- GLOBAL DIALOGS --- */}

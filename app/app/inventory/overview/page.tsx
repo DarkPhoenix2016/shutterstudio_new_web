@@ -45,6 +45,9 @@ export default function InventoryOverviewPage() {
 
   // View State
   const [expandedCategories, setExpandedCategories] = useState<string[]>([])
+
+  // Reset to page 1 whenever filters or category expand/collapse changes
+  useEffect(() => { setPage(1) }, [searchQuery, filterType, expandedCategories])
   const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null) // For Details Dialog
   const [history, setHistory] = useState<StockTransaction[]>([])
   const [loadingHistory, setLoadingHistory] = useState(false)

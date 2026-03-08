@@ -52,7 +52,6 @@ export default function CatalogueOverviewPage() {
     return `${currency} ${amount.toLocaleString()}`
   }
 
-  // [!code highlight] Helper function to determine sort weight
   const getParamWeight = (key: string, value: any) => {
     const def = parameterDefs.find(p => p.name === key)
     
@@ -88,7 +87,6 @@ export default function CatalogueOverviewPage() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
         {packages.map((pkg) => {
-            // [!code highlight] Sort parameters before mapping
             const sortedParams = Object.entries(pkg.parameters).sort(([keyA, valA], [keyB, valB]) => {
                 const weightA = getParamWeight(keyA, valA)
                 const weightB = getParamWeight(keyB, valB)

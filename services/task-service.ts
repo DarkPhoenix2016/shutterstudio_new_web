@@ -56,7 +56,6 @@ export interface StudioTask {
 
 // --- FUNCTIONS ---
 
-// [!code highlight] Wrapper to fetch members using crew-service logic but return TaskUser format
 export const getStudioMembersForTasks = async (studioId: string): Promise<TaskUser[]> => {
     try {
         const members: Member[] = await fetchCrewMembers(studioId);

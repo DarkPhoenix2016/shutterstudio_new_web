@@ -8,8 +8,6 @@ import { useRouter, usePathname } from "next/navigation"
 import { Bell, Search, User, Loader2, AlertTriangle, ShieldAlert } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
-import { doc, getDoc } from "firebase/firestore"
-import { db } from "@/lib/firebase"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -35,18 +33,16 @@ interface NavGroup {
 }
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const { currentUser, userData, globalSettings, loading, logout } = useAuth()
+  const { currentUser, userData, globalSettings, rolePermissions, loading, logout } = useAuth()
   const router = useRouter()
   const pathname = usePathname()
 
-  // [!code highlight] 1. IDENTIFY AUTH PAGES
   // Define routes that live inside this layout but should NOT have the sidebar/checks
   const isAuthPage = pathname.startsWith("/app/login") || pathname.startsWith("/app/register");
 
   const [isAccessChecked, setIsAccessChecked] = useState(false)
 
   useEffect(() => {
-    // [!code highlight] 2. SKIP CHECKS FOR AUTH PAGES
     if (isAuthPage) {
         setIsAccessChecked(true);
         return;
@@ -57,7 +53,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
       // Basic Auth Check
       if (!currentUser) {
-        // [!code highlight] Prevent redirect loop: Only redirect if not already there
         if (!pathname.startsWith("/app/login")) {
             router.push("/app/login")
         }
@@ -83,14 +78,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           return
       }
 
-      // Dynamic Route Permission Check
+      // Dynamic Route Permission Check — uses data already in AuthContext (no extra Firestore reads)
       try {
-        const settingsRef = doc(db, "Platform", "settings")
-        const settingsSnap = await getDoc(settingsRef)
-        const navigationData: NavGroup[] = settingsSnap.exists() ? (settingsSnap.data().navigation || []) : []
-        
+        const navigationData: NavGroup[] = globalSettings?.navigation || []
         const allNavItems = navigationData.flatMap(g => g.items || [])
-        
+
         const currentItem = allNavItems
             .sort((a, b) => b.path.length - a.path.length)
             .find(item => pathname === item.path || pathname.startsWith(`${item.path}/`))
@@ -100,22 +92,17 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             return
         }
 
-        const permRef = doc(db, "Platform", "ROLE_PERMISSIONS")
-        const permSnap = await getDoc(permRef)
-        
-        if (permSnap.exists()) {
-            const rolePermissions = permSnap.data()[userData?.role || ""] || []
-            
-            if (!rolePermissions.includes(currentItem.feature)) {
-                if (isSuperAdmin) {
-                    setIsAccessChecked(true)
-                    return
-                }
+        const allowedFeatures: string[] = rolePermissions?.[userData?.role || ""] || []
 
-                console.warn(`[Access Denied] User '${userData?.displayName}' tried to access '${pathname}'`)
-                router.replace("/app/unauthorized")
+        if (!allowedFeatures.includes(currentItem.feature)) {
+            if (isSuperAdmin) {
+                setIsAccessChecked(true)
                 return
             }
+
+            console.warn(`[Access Denied] User '${userData?.displayName}' tried to access '${pathname}'`)
+            router.replace("/app/unauthorized")
+            return
         }
       } catch (e) {
         console.error("Permission Check Failed", e)
@@ -127,7 +114,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     validateAccess()
   }, [currentUser, userData, globalSettings, loading, pathname, router, isAuthPage]) // Added isAuthPage dependency
 
-  // [!code highlight] 3. RENDER AUTH PAGES WITHOUT SIDEBAR
   if (isAuthPage) {
     return <main className="h-screen w-full bg-slate-50">{children}</main>;
   }

@@ -22,6 +22,7 @@ import {
     Camera, Tag, Info, Download, Check
 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { safeDate } from "@/lib/date-utils"
 
 // --- TYPES ---
 
@@ -33,13 +34,7 @@ interface GalleryItem {
 }
 
 // --- HELPER: SAFE DATE ---
-const safeDate = (dateInput: any): Date => {
-    try {
-        if (!dateInput) return new Date();
-        if (typeof dateInput.toDate === 'function') return dateInput.toDate();
-        return new Date(dateInput);
-    } catch { return new Date(); }
-};
+
 
 export default function EventGalleryPage() {
     const { userData } = useAuth()
@@ -467,7 +462,19 @@ export default function EventGalleryPage() {
                                     </div>
                                 </div>
 
-                                <Button className="w-full gap-2 bg-[#1C4D8D]" onClick={() => window.open(currentImage.url, '_blank')}>
+                                <Button className="w-full gap-2 bg-[#1C4D8D]" onClick={async () => {
+                                    try {
+                                        const res = await fetch(currentImage.url)
+                                        const blob = await res.blob()
+                                        const a = document.createElement("a")
+                                        a.href = URL.createObjectURL(blob)
+                                        a.download = `${currentImage.event.eventName ?? "photo"}-${currentImage.id}.jpg`
+                                        a.click()
+                                        URL.revokeObjectURL(a.href)
+                                    } catch {
+                                        window.open(currentImage.url, "_blank")
+                                    }
+                                }}>
                                     <Download className="w-4 h-4" /> Download Original
                                 </Button>
                             </div>

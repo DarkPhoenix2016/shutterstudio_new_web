@@ -1,0 +1,927 @@
+"use client"
+
+import { db } from "@/lib/firebase"
+import { safeDate } from "@/lib/date-utils"
+import { format } from "date-fns"
+import {
+    collection, collectionGroup, doc, getDoc, getDocs,
+    query, serverTimestamp, updateDoc, where
+} from "firebase/firestore"
+import {
+    AlertCircle, Calendar, Check, CheckCircle, ChevronLeft, ChevronRight,
+    CreditCard, Download, ExternalLink, Image as ImageIcon, Lock,
+    Loader2, Mail, MapPin, Phone, ShieldCheck, X, User
+} from "lucide-react"
+import { useParams } from "next/navigation"
+import { useMemo, useState } from "react"
+import Swal from "sweetalert2"
+import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Separator } from "@/components/ui/separator"
+import { cn } from "@/lib/utils"
+
+// ─── Types ───────────────────────────────────────────────────────────────────
+
+interface EventDay {
+    date: unknown
+    cost: number
+    type: "package" | "custom"
+    packageId?: string
+    customItems?: { name: string; quantity: number; price: number }[]
+}
+
+interface PublicEventData {
+    id: string
+    displayId?: string
+    studioId: string
+    eventName: string
+    eventType: string
+    status: string
+    customerName: string
+    customerEmail: string
+    customerMobile: string
+    couplePhotoUrl?: string
+    galleryUrls?: string[]
+    dayCount: number
+    days: EventDay[]
+    totalBudget: number
+    discount: number
+    discountType: "fixed" | "percentage"
+    finalBudget: number
+    transactions: { amount: number; type: "income" | "expense" }[]
+    approval?: {
+        customer_confirmed: boolean
+        confirmedAt?: unknown
+        verification_type?: string
+        verification_document_number?: string
+    }
+    locations?: { name: string; date: unknown; mapUrl?: string; time?: string; note?: string }[]
+    contacts?: { name: string; role: string; phone: string }[]
+    additionalServices?: { name: string; quantity: number; total: number; pricePerUnit: number }[]
+    notes?: string
+}
+
+interface StudioInfo {
+    privacy_policy_notice?: string
+    banking_details?: {
+        account_name: string
+        account_number: string
+        bank_name: string
+        branch: string
+    }
+}
+
+interface PackageData {
+    id: string
+    name: string
+    price: number
+    parameters?: Record<string, unknown>
+    featuresList?: string[]
+}
+
+type TabId = "overview" | "schedule" | "finance" | "approval"
+
+// ─── Main Component ───────────────────────────────────────────────────────────
+
+export default function CustomerEventPage() {
+    const { id } = useParams<{ id: string }>()
+
+    const [loading, setLoading] = useState(false)
+    const [authEmail, setAuthEmail] = useState("")
+    const [isAuthenticated, setIsAuthenticated] = useState(false)
+    const [event, setEvent] = useState<PublicEventData | null>(null)
+    const [studioInfo, setStudioInfo] = useState<StudioInfo | null>(null)
+    const [packages, setPackages] = useState<PackageData[]>([])
+    const [activeTab, setActiveTab] = useState<TabId>("overview")
+    const [lightboxIndex, setLightboxIndex] = useState<number | null>(null)
+    const [verifType, setVerifType] = useState("id")
+    const [verifDocNum, setVerifDocNum] = useState("")
+    const [isSubmitting, setIsSubmitting] = useState(false)
+
+    // ── Auth ──────────────────────────────────────────────────────────────────
+
+    const handleAuth = async (e: React.FormEvent) => {
+        e.preventDefault()
+        setLoading(true)
+        try {
+            const eventsRef = collectionGroup(db, "Events")
+            let snap = await getDocs(query(eventsRef, where("id", "==", id)))
+            if (snap.empty) snap = await getDocs(query(eventsRef, where("displayId", "==", id)))
+
+            if (snap.empty) {
+                await Swal.fire("Not Found", "Event not found. Check the link.", "error")
+                return
+            }
+
+            const docSnap = snap.docs[0]
+            const data = docSnap.data() as PublicEventData
+            const studioId = docSnap.ref.parent.parent?.id
+
+            if (!studioId) throw new Error("Invalid data structure")
+
+            if (data.customerEmail?.toLowerCase().trim() !== authEmail.toLowerCase().trim()) {
+                await Swal.fire("Access Denied", "The email provided does not match our records.", "error")
+                return
+            }
+
+            const [studioSnap, pkgsSnap] = await Promise.all([
+                getDoc(doc(db, "Studios", studioId)),
+                getDocs(collection(db, "Studios", studioId, "Packages")),
+            ])
+
+            const studio = studioSnap.exists() ? studioSnap.data() : {}
+            setEvent({ ...data, id: docSnap.id, studioId })
+            setStudioInfo({ privacy_policy_notice: studio.privacy_policy_notice, banking_details: studio.banking_details })
+            setPackages(pkgsSnap.docs.map(d => ({ id: d.id, ...d.data() })) as PackageData[])
+            setIsAuthenticated(true)
+        } catch {
+            await Swal.fire("Error", "Failed to load event data.", "error")
+        } finally {
+            setLoading(false)
+        }
+    }
+
+    // ── Approval ──────────────────────────────────────────────────────────────
+
+    const handleApprove = async () => {
+        if (!event) return
+        if (!verifDocNum.trim()) {
+            await Swal.fire("Required", "Please enter your document number.", "warning")
+            return
+        }
+
+        setIsSubmitting(true)
+        try {
+            await updateDoc(doc(db, "Studios", event.studioId, "Events", event.id), {
+                status: "Scheduled",
+                approval: {
+                    customer_confirmed: true,
+                    confirmedAt: serverTimestamp(),
+                    verification_type: verifType === "id" ? "National ID" : "Passport",
+                    verification_document_number: verifDocNum,
+                    customer_email: event.customerEmail,
+                    customer_phone: event.customerMobile,
+                },
+            })
+            setEvent(prev => prev ? {
+                ...prev,
+                status: "Scheduled",
+                approval: {
+                    customer_confirmed: true,
+                    confirmedAt: new Date(),
+                    verification_type: verifType === "id" ? "National ID" : "Passport",
+                    verification_document_number: verifDocNum,
+                },
+            } : null)
+            await Swal.fire({ title: "Approved!", text: "Event confirmed successfully.", icon: "success", confirmButtonColor: "#1C4D8D" })
+        } catch {
+            await Swal.fire("Error", "Failed to process approval.", "error")
+        } finally {
+            setIsSubmitting(false)
+        }
+    }
+
+    // ── Computed ──────────────────────────────────────────────────────────────
+
+    const allImages = useMemo(() => {
+        if (!event) return []
+        const imgs: string[] = []
+        if (event.couplePhotoUrl) imgs.push(event.couplePhotoUrl)
+        if (event.galleryUrls) imgs.push(...event.galleryUrls)
+        return imgs
+    }, [event])
+
+    const financials = useMemo(() => {
+        if (!event) return { baseCost: 0, servicesCost: 0, total: 0, discountAmount: 0, finalBudget: 0, paid: 0, due: 0 }
+        const baseCost = event.days?.reduce((acc, d) => acc + (d.cost ?? 0), 0) ?? 0
+        const servicesCost = event.additionalServices?.reduce((acc, s) => acc + (s.total ?? 0), 0) ?? 0
+        const total = baseCost + servicesCost
+        const discountAmount = event.discountType === "percentage"
+            ? total * ((event.discount ?? 0) / 100)
+            : Number(event.discount ?? 0)
+        const finalBudget = Math.max(0, total - discountAmount)
+        const paid = event.transactions?.filter(t => t.type === "income").reduce((acc, t) => acc + (Number(t.amount) || 0), 0) ?? 0
+        return { baseCost, servicesCost, total, discountAmount, finalBudget, paid, due: finalBudget - paid }
+    }, [event])
+
+    const downloadImage = async (url: string) => {
+        try {
+            const res = await fetch(url)
+            const blob = await res.blob()
+            const a = document.createElement("a")
+            a.href = URL.createObjectURL(blob)
+            a.download = `event-photo-${Date.now()}.jpg`
+            a.click()
+            URL.revokeObjectURL(a.href)
+        } catch {
+            window.open(url, "_blank")
+        }
+    }
+
+    const currency = "LKR"
+    const TABS: { id: TabId; label: string }[] = [
+        { id: "overview", label: "Overview" },
+        { id: "schedule", label: "Schedule" },
+        { id: "finance", label: "Finance" },
+        { id: "approval", label: "Approval" },
+    ]
+
+    // ── Auth Gate ─────────────────────────────────────────────────────────────
+
+    if (!isAuthenticated) {
+        return (
+            <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50/30 flex items-center justify-center p-4">
+                <div className="w-full max-w-sm">
+                    {/* Logo mark */}
+                    <div className="flex flex-col items-center mb-8">
+                        <div className="w-14 h-14 rounded-2xl bg-[#1C4D8D] flex items-center justify-center shadow-lg mb-4">
+                            <Lock className="w-7 h-7 text-white" />
+                        </div>
+                        <h1 className="text-xl font-bold text-slate-800">Event Quotation</h1>
+                        <p className="text-sm text-slate-500 mt-1">Enter your email address to continue</p>
+                    </div>
+
+                    <form onSubmit={handleAuth} className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 space-y-4">
+                        <div className="space-y-1.5">
+                            <Label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Email Address</Label>
+                            <Input
+                                type="email"
+                                placeholder="name@example.com"
+                                value={authEmail}
+                                onChange={e => setAuthEmail(e.target.value)}
+                                required
+                                className="h-11 border-slate-200 bg-slate-50 focus-visible:ring-[#1C4D8D]"
+                            />
+                        </div>
+                        <Button
+                            type="submit"
+                            className="w-full h-11 bg-[#1C4D8D] hover:bg-[#163b6b] rounded-lg font-medium"
+                            disabled={loading}
+                        >
+                            {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+                            Access Document
+                        </Button>
+                    </form>
+
+                    <p className="text-center text-xs text-slate-400 mt-4">
+                        Your email must match what was registered for this event.
+                    </p>
+                </div>
+            </div>
+        )
+    }
+
+    if (!event) return null
+    const isApproved = Boolean(event.approval?.customer_confirmed)
+
+    // ── Main View ─────────────────────────────────────────────────────────────
+
+    return (
+        <div className="min-h-screen bg-slate-50 text-slate-800 pb-24 lg:pb-10">
+
+            {/* ── Top Bar ── */}
+            <header className="sticky top-0 z-30 bg-white/90 backdrop-blur border-b border-slate-200">
+                <div className="max-w-3xl mx-auto px-4 h-14 flex items-center justify-between">
+                    <span className="font-bold text-[#1C4D8D] text-base tracking-tight">Event Quotation</span>
+                    {isApproved ? (
+                        <Badge className="bg-green-100 text-green-700 border-green-200 hover:bg-green-100 gap-1.5 text-xs px-3 py-1">
+                            <CheckCircle className="w-3 h-3" /> Confirmed
+                        </Badge>
+                    ) : (
+                        <Badge className="bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-50 text-xs px-3 py-1">
+                            Awaiting Approval
+                        </Badge>
+                    )}
+                </div>
+            </header>
+
+            {/* ── Hero ── */}
+            <div className="relative w-full h-56 sm:h-72 bg-slate-900 overflow-hidden">
+                <img
+                    src={event.couplePhotoUrl ?? "/api/placeholder/1200/400"}
+                    alt="Event"
+                    className="w-full h-full object-cover opacity-60"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
+                <div className="absolute bottom-0 left-0 w-full p-6 max-w-3xl mx-auto">
+                    <Badge className="bg-[#1C4D8D] text-white border-0 text-[10px] uppercase tracking-widest mb-2">
+                        {event.eventType}
+                    </Badge>
+                    <h2 className="text-2xl sm:text-3xl font-bold text-white leading-tight">{event.eventName}</h2>
+                    <p className="text-slate-300 text-sm mt-1.5 flex items-center gap-1.5">
+                        <Calendar className="w-3.5 h-3.5 text-blue-400" />
+                        {event.days?.length > 0 ? format(safeDate(event.days[0].date), "MMMM do, yyyy") : "Date TBD"}
+                    </p>
+                </div>
+            </div>
+
+            {/* ── Tab Bar (Mobile) ── */}
+            <div className="fixed bottom-0 left-0 w-full z-40 lg:hidden bg-white border-t border-slate-200 shadow-[0_-1px_8px_rgba(0,0,0,0.06)]">
+                <div className="flex">
+                    {TABS.map(tab => (
+                        <button
+                            key={tab.id}
+                            onClick={() => { setActiveTab(tab.id); window.scrollTo({ top: 0, behavior: "smooth" }) }}
+                            className={cn(
+                                "flex-1 py-3.5 text-[10px] font-semibold uppercase tracking-wide transition-colors relative",
+                                activeTab === tab.id
+                                    ? "text-[#1C4D8D]"
+                                    : "text-slate-400"
+                            )}
+                        >
+                            {activeTab === tab.id && (
+                                <span className="absolute top-0 left-1/4 right-1/4 h-0.5 bg-[#1C4D8D] rounded-b-full" />
+                            )}
+                            {tab.label}
+                        </button>
+                    ))}
+                </div>
+            </div>
+
+            {/* ── Desktop Tab Bar ── */}
+            <div className="hidden lg:block sticky top-14 z-20 bg-white border-b border-slate-200">
+                <div className="max-w-3xl mx-auto px-4 flex gap-1">
+                    {TABS.map(tab => (
+                        <button
+                            key={tab.id}
+                            onClick={() => setActiveTab(tab.id)}
+                            className={cn(
+                                "px-5 py-3 text-sm font-medium transition-colors border-b-2 -mb-px",
+                                activeTab === tab.id
+                                    ? "border-[#1C4D8D] text-[#1C4D8D]"
+                                    : "border-transparent text-slate-500 hover:text-slate-700"
+                            )}
+                        >
+                            {tab.label}
+                        </button>
+                    ))}
+                </div>
+            </div>
+
+            {/* ── Content ── */}
+            <div className="max-w-3xl mx-auto px-4 py-6 space-y-5">
+
+                {/* ════════════════════════════════
+                    OVERVIEW TAB
+                ════════════════════════════════ */}
+                <div className={cn(activeTab !== "overview" && "hidden")}>
+
+                    {/* Customer */}
+                    <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden mb-5">
+                        <div className="px-5 py-4 border-b border-slate-100">
+                            <h3 className="text-xs font-bold uppercase tracking-widest text-slate-400">Customer Details</h3>
+                        </div>
+                        <div className="p-5 space-y-3">
+                            <div className="flex items-center gap-3">
+                                <div className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center shrink-0">
+                                    <User className="w-4 h-4 text-slate-400" />
+                                </div>
+                                <div>
+                                    <p className="font-semibold text-slate-800">{event.customerName}</p>
+                                    <p className="text-xs text-slate-500">{event.status}</p>
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-3 pt-1">
+                                <a href={`tel:${event.customerMobile}`} className="flex items-center gap-2 text-sm text-slate-600 hover:text-[#1C4D8D] transition-colors">
+                                    <Phone className="w-3.5 h-3.5 text-slate-400" /> {event.customerMobile}
+                                </a>
+                                <div className="flex items-center gap-2 text-sm text-slate-600">
+                                    <Mail className="w-3.5 h-3.5 text-slate-400" /> {event.customerEmail}
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    {/* Gallery preview */}
+                    {allImages.length > 0 && (
+                        <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden mb-5">
+                            <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+                                <h3 className="text-xs font-bold uppercase tracking-widest text-slate-400 flex items-center gap-2">
+                                    <ImageIcon className="w-3.5 h-3.5" /> Gallery · {allImages.length} Photos
+                                </h3>
+                            </div>
+                            <div className="p-4 grid grid-cols-3 gap-2">
+                                {allImages.slice(0, 6).map((img, idx) => (
+                                    <div
+                                        key={idx}
+                                        className="relative aspect-square rounded-xl overflow-hidden bg-slate-100 cursor-pointer group"
+                                        onClick={() => setLightboxIndex(idx)}
+                                    >
+                                        <img src={img} alt="" className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
+                                        {idx === 5 && allImages.length > 6 && (
+                                            <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                                                <span className="text-white font-bold text-lg">+{allImages.length - 6}</span>
+                                            </div>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                        </section>
+                    )}
+
+                    {/* Locations */}
+                    {event.locations && event.locations.length > 0 && (
+                        <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden mb-5">
+                            <div className="px-5 py-4 border-b border-slate-100">
+                                <h3 className="text-xs font-bold uppercase tracking-widest text-slate-400">Locations</h3>
+                            </div>
+                            <div className="divide-y divide-slate-100">
+                                {event.locations.map((loc, i) => (
+                                    <div key={i} className="flex items-center justify-between px-5 py-4">
+                                        <div className="flex items-start gap-3">
+                                            <MapPin className="w-4 h-4 text-[#1C4D8D] mt-0.5 shrink-0" />
+                                            <div>
+                                                <p className="text-sm font-medium text-slate-800">{loc.name}</p>
+                                                <p className="text-xs text-slate-400 mt-0.5">
+                                                    {format(safeDate(loc.date), "MMM d")}{loc.time ? ` · ${loc.time}` : ""}
+                                                </p>
+                                            </div>
+                                        </div>
+                                        {loc.mapUrl && (
+                                            <a href={loc.mapUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-xs font-medium text-[#1C4D8D] hover:underline shrink-0">
+                                                Map <ExternalLink className="w-3 h-3" />
+                                            </a>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                        </section>
+                    )}
+
+                    {/* Contacts */}
+                    {event.contacts && event.contacts.length > 0 && (
+                        <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden mb-5">
+                            <div className="px-5 py-4 border-b border-slate-100">
+                                <h3 className="text-xs font-bold uppercase tracking-widest text-slate-400">Contacts</h3>
+                            </div>
+                            <div className="divide-y divide-slate-100">
+                                {event.contacts.map((c, i) => (
+                                    <div key={i} className="flex items-center justify-between px-5 py-3.5">
+                                        <div>
+                                            <p className="text-sm font-medium text-slate-800">{c.name}</p>
+                                            <p className="text-xs text-slate-400">{c.role}</p>
+                                        </div>
+                                        <a href={`tel:${c.phone}`} className="text-sm text-slate-600 hover:text-[#1C4D8D] font-mono transition-colors">
+                                            {c.phone}
+                                        </a>
+                                    </div>
+                                ))}
+                            </div>
+                        </section>
+                    )}
+
+                    {/* Notes */}
+                    {event.notes && (
+                        <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden mb-5">
+                            <div className="px-5 py-4 border-b border-slate-100">
+                                <h3 className="text-xs font-bold uppercase tracking-widest text-slate-400">Notes</h3>
+                            </div>
+                            <p className="px-5 py-4 text-sm text-slate-600 leading-relaxed whitespace-pre-line">{event.notes}</p>
+                        </section>
+                    )}
+                </div>
+
+                {/* ════════════════════════════════
+                    SCHEDULE TAB
+                ════════════════════════════════ */}
+                <div className={cn(activeTab !== "schedule" && "hidden")}>
+                    <div className="space-y-4">
+                        {event.days?.map((day, idx) => {
+                            const pkg = day.type === "package" && day.packageId
+                                ? packages.find(p => p.id === day.packageId)
+                                : null
+
+                            return (
+                                <section key={idx} className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                                    {/* Day header */}
+                                    <div className="px-5 py-4 flex items-center justify-between border-b border-slate-100">
+                                        <div>
+                                            <p className="text-xs font-bold uppercase tracking-widest text-slate-400">Day {idx + 1}</p>
+                                            <p className="font-semibold text-slate-800 mt-0.5">
+                                                {day.date ? format(safeDate(day.date), "EEEE, MMMM do") : "Date TBD"}
+                                            </p>
+                                        </div>
+                                        <Badge variant="outline" className={cn(
+                                            "text-xs",
+                                            day.type === "package" ? "border-blue-200 text-blue-600 bg-blue-50" : "border-amber-200 text-amber-600 bg-amber-50"
+                                        )}>
+                                            {day.type === "package" ? "Package" : "Custom"}
+                                        </Badge>
+                                    </div>
+
+                                    {/* Day body */}
+                                    <div className="p-5">
+                                        {pkg && (
+                                            <div className="space-y-3">
+                                                <div className="flex items-center justify-between">
+                                                    <span className="font-semibold text-slate-800">{pkg.name}</span>
+                                                    <span className="font-semibold text-slate-700 text-sm">{currency} {Number(pkg.price).toLocaleString()}</span>
+                                                </div>
+                                                {pkg.featuresList && pkg.featuresList.length > 0 && (
+                                                    <ul className="space-y-2 pt-1">
+                                                        {pkg.featuresList.map((f, i) => (
+                                                            <li key={i} className="flex items-center gap-2 text-sm text-slate-600">
+                                                                <Check className="w-3.5 h-3.5 text-green-500 shrink-0" /> {f}
+                                                            </li>
+                                                        ))}
+                                                    </ul>
+                                                )}
+                                                {pkg.parameters && (
+                                                    <ul className="space-y-2 pt-1">
+                                                        {Object.entries(pkg.parameters).map(([key, value], i) => {
+                                                            if (value === false) return null
+                                                            return (
+                                                                <li key={i} className="flex items-center gap-2 text-sm text-slate-600">
+                                                                    <Check className="w-3.5 h-3.5 text-green-500 shrink-0" />
+                                                                    {key}{typeof value !== "boolean" ? `: ${value}` : ""}
+                                                                </li>
+                                                            )
+                                                        })}
+                                                    </ul>
+                                                )}
+                                            </div>
+                                        )}
+
+                                        {day.type === "custom" && (
+                                            <div className="space-y-2.5">
+                                                {day.customItems?.map((item, i) => (
+                                                    <div key={i} className="flex items-center justify-between text-sm">
+                                                        <span className="text-slate-700">
+                                                            {item.name}
+                                                            <span className="text-slate-400 ml-1.5">× {item.quantity}</span>
+                                                        </span>
+                                                        <span className="font-medium text-slate-800">
+                                                            {currency} {(item.price * item.quantity).toLocaleString()}
+                                                        </span>
+                                                    </div>
+                                                ))}
+                                                {!day.customItems?.length && (
+                                                    <p className="text-sm text-slate-400 italic">No items listed.</p>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* Day footer */}
+                                    <div className="px-5 py-3.5 border-t border-slate-100 bg-slate-50/50 flex items-center justify-between">
+                                        <span className="text-sm text-slate-500">Day {idx + 1} Total</span>
+                                        <span className="font-bold text-slate-900">{currency} {(day.cost ?? 0).toLocaleString()}</span>
+                                    </div>
+                                </section>
+                            )
+                        })}
+
+                        {/* Additional services */}
+                        {event.additionalServices && event.additionalServices.length > 0 && (
+                            <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                                <div className="px-5 py-4 border-b border-slate-100">
+                                    <h3 className="text-xs font-bold uppercase tracking-widest text-slate-400">Additional Services</h3>
+                                </div>
+                                <div className="p-5 space-y-2.5">
+                                    {event.additionalServices.map((svc, i) => (
+                                        <div key={i} className="flex items-center justify-between text-sm">
+                                            <span className="text-slate-700">
+                                                {svc.name}
+                                                <span className="text-slate-400 ml-1.5">× {svc.quantity}</span>
+                                            </span>
+                                            <span className="font-medium text-slate-800">{currency} {svc.total.toLocaleString()}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                                <div className="px-5 py-3.5 border-t border-slate-100 bg-slate-50/50 flex items-center justify-between">
+                                    <span className="text-sm text-slate-500">Services Total</span>
+                                    <span className="font-bold text-slate-900">{currency} {financials.servicesCost.toLocaleString()}</span>
+                                </div>
+                            </section>
+                        )}
+                    </div>
+                </div>
+
+                {/* ════════════════════════════════
+                    FINANCE TAB
+                ════════════════════════════════ */}
+                <div className={cn(activeTab !== "finance" && "hidden")}>
+                    <div className="space-y-4">
+
+                        {/* Cost breakdown per day */}
+                        <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                            <div className="px-5 py-4 border-b border-slate-100">
+                                <h3 className="text-xs font-bold uppercase tracking-widest text-slate-400">Cost Breakdown</h3>
+                            </div>
+                            <div className="divide-y divide-slate-100">
+                                {event.days?.map((day, idx) => {
+                                    const pkg = day.type === "package" && day.packageId
+                                        ? packages.find(p => p.id === day.packageId)
+                                        : null
+                                    return (
+                                        <div key={idx} className="px-5 py-3.5">
+                                            <div className="flex items-center justify-between">
+                                                <div>
+                                                    <p className="text-sm font-medium text-slate-700">
+                                                        Day {idx + 1}
+                                                        {pkg && <span className="text-slate-400 font-normal ml-1.5">— {pkg.name}</span>}
+                                                        {day.type === "custom" && <span className="text-slate-400 font-normal ml-1.5">— Custom Plan</span>}
+                                                    </p>
+                                                    <p className="text-xs text-slate-400 mt-0.5">
+                                                        {day.date ? format(safeDate(day.date), "MMM do, yyyy") : "Date TBD"}
+                                                    </p>
+                                                </div>
+                                                <span className="text-sm font-semibold text-slate-800">
+                                                    {currency} {(day.cost ?? 0).toLocaleString()}
+                                                </span>
+                                            </div>
+
+                                            {/* Custom items detail */}
+                                            {day.type === "custom" && day.customItems && day.customItems.length > 0 && (
+                                                <div className="mt-2 pl-3 border-l-2 border-slate-100 space-y-1">
+                                                    {day.customItems.map((item, i) => (
+                                                        <div key={i} className="flex justify-between text-xs text-slate-500">
+                                                            <span>{item.name} × {item.quantity}</span>
+                                                            <span>{currency} {(item.price * item.quantity).toLocaleString()}</span>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                    )
+                                })}
+
+                                {/* Additional services */}
+                                {event.additionalServices && event.additionalServices.length > 0 && (
+                                    <div className="px-5 py-3.5">
+                                        <div className="flex items-center justify-between">
+                                            <p className="text-sm font-medium text-slate-700">Additional Services</p>
+                                            <span className="text-sm font-semibold text-slate-800">
+                                                {currency} {financials.servicesCost.toLocaleString()}
+                                            </span>
+                                        </div>
+                                        <div className="mt-2 pl-3 border-l-2 border-slate-100 space-y-1">
+                                            {event.additionalServices.map((svc, i) => (
+                                                <div key={i} className="flex justify-between text-xs text-slate-500">
+                                                    <span>{svc.name} × {svc.quantity}</span>
+                                                    <span>{currency} {svc.total.toLocaleString()}</span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </section>
+
+                        {/* Financial Summary */}
+                        <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                            <div className="px-5 py-4 border-b border-slate-100">
+                                <h3 className="text-xs font-bold uppercase tracking-widest text-slate-400">Financial Summary</h3>
+                            </div>
+                            <div className="px-5 py-4 space-y-3 text-sm">
+                                <div className="flex justify-between text-slate-600">
+                                    <span>Packages (Days)</span>
+                                    <span>{currency} {financials.baseCost.toLocaleString()}</span>
+                                </div>
+                                {financials.servicesCost > 0 && (
+                                    <div className="flex justify-between text-slate-600">
+                                        <span>Additional Services &amp; Charges</span>
+                                        <span>{currency} {financials.servicesCost.toLocaleString()}</span>
+                                    </div>
+                                )}
+                                <Separator />
+                                <div className="flex justify-between font-semibold text-slate-700">
+                                    <span>Sub Total</span>
+                                    <span>{currency} {financials.total.toLocaleString()}</span>
+                                </div>
+                                {financials.discountAmount > 0 && (
+                                    <div className="flex justify-between text-red-600">
+                                        <span>
+                                            Discount
+                                            {event.discountType === "percentage" ? ` (${event.discount}%)` : ""}
+                                        </span>
+                                        <span>− {currency} {financials.discountAmount.toLocaleString()}</span>
+                                    </div>
+                                )}
+                                <Separator />
+                                <div className="flex justify-between font-bold text-base text-[#1C4D8D]">
+                                    <span>Final Total</span>
+                                    <span>{currency} {financials.finalBudget.toLocaleString()}</span>
+                                </div>
+                                <Separator />
+                                <div className="flex justify-between text-green-700 font-medium">
+                                    <span>Paid to Date</span>
+                                    <span>{currency} {financials.paid.toLocaleString()}</span>
+                                </div>
+                                <div className={cn(
+                                    "flex justify-between font-bold rounded-xl px-4 py-3 mt-1",
+                                    financials.due > 0
+                                        ? "bg-red-50 border border-red-100 text-red-700"
+                                        : "bg-green-50 border border-green-100 text-green-700"
+                                )}>
+                                    <span>{financials.due > 0 ? "Balance Due" : "Fully Paid"}</span>
+                                    <span>{currency} {Math.abs(financials.due).toLocaleString()}</span>
+                                </div>
+                            </div>
+                        </section>
+
+                        {/* Bank details */}
+                        {studioInfo?.banking_details && (
+                            <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                                <div className="px-5 py-4 border-b border-slate-100 flex items-center gap-2">
+                                    <CreditCard className="w-3.5 h-3.5 text-slate-400" />
+                                    <h3 className="text-xs font-bold uppercase tracking-widest text-slate-400">Payment Details</h3>
+                                </div>
+                                <div className="px-5 py-4 space-y-3 text-sm">
+                                    {[
+                                        { label: "Bank", value: studioInfo.banking_details.bank_name },
+                                        { label: "Branch", value: studioInfo.banking_details.branch },
+                                        { label: "Account Name", value: studioInfo.banking_details.account_name },
+                                        { label: "Account Number", value: studioInfo.banking_details.account_number },
+                                    ].map(({ label, value }) => (
+                                        <div key={label} className="flex justify-between items-center py-1 border-b border-slate-50 last:border-0">
+                                            <span className="text-slate-400">{label}</span>
+                                            <span className="font-semibold text-slate-800">{value}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </section>
+                        )}
+
+                        {/* Privacy / Terms */}
+                        {studioInfo?.privacy_policy_notice && (
+                            <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                                <div className="px-5 py-4 border-b border-slate-100 flex items-center gap-2">
+                                    <ShieldCheck className="w-3.5 h-3.5 text-slate-400" />
+                                    <h3 className="text-xs font-bold uppercase tracking-widest text-slate-400">Terms &amp; Privacy</h3>
+                                </div>
+                                <p className="px-5 py-4 text-xs text-slate-500 leading-relaxed whitespace-pre-line">
+                                    {studioInfo.privacy_policy_notice}
+                                </p>
+                            </section>
+                        )}
+                    </div>
+                </div>
+
+                {/* ════════════════════════════════
+                    APPROVAL TAB
+                ════════════════════════════════ */}
+                <div className={cn(activeTab !== "approval" && "hidden")}>
+                    {isApproved ? (
+                        <section className="bg-white rounded-2xl border border-green-200 shadow-sm overflow-hidden text-center p-8 space-y-4">
+                            <div className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center mx-auto">
+                                <CheckCircle className="w-8 h-8 text-green-600" />
+                            </div>
+                            <h2 className="text-xl font-bold text-green-800">Quotation Approved</h2>
+                            <p className="text-sm text-green-700">You have successfully confirmed this event quotation.</p>
+                            <div className="text-left bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-2.5 max-w-xs mx-auto text-sm">
+                                <div className="flex justify-between">
+                                    <span className="text-slate-400">Approved by</span>
+                                    <span className="font-medium text-slate-800">{event.customerName}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                    <span className="text-slate-400">Date</span>
+                                    <span className="font-medium text-slate-800">
+                                        {event.approval?.confirmedAt ? format(safeDate(event.approval.confirmedAt as Date), "PPP") : "N/A"}
+                                    </span>
+                                </div>
+                                <div className="flex justify-between">
+                                    <span className="text-slate-400">ID Type</span>
+                                    <span className="font-medium text-slate-800">{event.approval?.verification_type}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                    <span className="text-slate-400">Doc No.</span>
+                                    <span className="font-medium text-slate-800 font-mono">{event.approval?.verification_document_number}</span>
+                                </div>
+                            </div>
+                        </section>
+                    ) : (
+                        <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                            <div className="px-5 py-4 border-b border-slate-100">
+                                <h3 className="font-semibold text-slate-800">Sign & Approve Quotation</h3>
+                                <p className="text-xs text-slate-400 mt-1">Verify your identity to electronically confirm this quotation.</p>
+                            </div>
+                            <div className="p-5 space-y-5">
+                                {/* Read-only name */}
+                                <div className="space-y-1.5">
+                                    <Label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Full Name</Label>
+                                    <Input value={event.customerName} disabled className="bg-slate-50 border-slate-200 text-slate-600" />
+                                </div>
+
+                                {/* Verification type */}
+                                <div className="space-y-1.5">
+                                    <Label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                                        Verification Type <span className="text-red-500 normal-case">*</span>
+                                    </Label>
+                                    <Select value={verifType} onValueChange={setVerifType}>
+                                        <SelectTrigger className="border-slate-200">
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="id">National Identity Card (NIC)</SelectItem>
+                                            <SelectItem value="passport">Passport</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+
+                                {/* Document number */}
+                                <div className="space-y-1.5">
+                                    <Label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                                        {verifType === "id" ? "NIC Number" : "Passport Number"} <span className="text-red-500 normal-case">*</span>
+                                    </Label>
+                                    <Input
+                                        placeholder={verifType === "id" ? "e.g. 199012345678" : "Enter Passport Number"}
+                                        value={verifDocNum}
+                                        onChange={e => setVerifDocNum(e.target.value.toUpperCase())}
+                                        className="border-slate-200 font-mono"
+                                    />
+                                    <p className="text-[11px] text-slate-400">
+                                        {verifType === "id"
+                                            ? "Sri Lankan NIC: old format (9 digits + V/X) or new format (12 digits)."
+                                            : "Enter a valid international passport number."}
+                                    </p>
+                                </div>
+
+                                {/* Declaration */}
+                                <div className="bg-blue-50 border border-blue-100 rounded-xl p-4">
+                                    <div className="flex items-start gap-2.5">
+                                        <AlertCircle className="w-4 h-4 text-blue-600 mt-0.5 shrink-0" />
+                                        <div>
+                                            <p className="text-xs font-semibold text-blue-800 mb-1">Declaration</p>
+                                            <p className="text-xs text-blue-700 leading-relaxed">
+                                                By clicking "Approve", I confirm the details above are accurate and agree to the pricing and privacy terms outlined in this quotation.
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <Button
+                                    onClick={handleApprove}
+                                    className="w-full h-11 bg-[#1C4D8D] hover:bg-[#163b6b] rounded-xl font-medium"
+                                    disabled={isSubmitting}
+                                >
+                                    {isSubmitting ? <><Loader2 className="w-4 h-4 animate-spin mr-2" /> Processing...</> : "Approve Quotation"}
+                                </Button>
+                            </div>
+                        </section>
+                    )}
+                </div>
+
+            </div>
+
+            {/* ── Lightbox ── */}
+            {lightboxIndex !== null && allImages.length > 0 && (
+                <div className="fixed inset-0 z-50 bg-black/95 flex items-center justify-center">
+                    {/* Controls */}
+                    <div className="absolute top-4 right-4 flex gap-2">
+                        <Button
+                            variant="ghost" size="icon"
+                            className="text-white hover:bg-white/15 rounded-full"
+                            onClick={() => downloadImage(allImages[lightboxIndex])}
+                            title="Download"
+                        >
+                            <Download className="w-5 h-5" />
+                        </Button>
+                        <Button
+                            variant="ghost" size="icon"
+                            className="text-white hover:bg-white/15 rounded-full"
+                            onClick={() => setLightboxIndex(null)}
+                        >
+                            <X className="w-5 h-5" />
+                        </Button>
+                    </div>
+
+                    {/* Prev */}
+                    {lightboxIndex > 0 && (
+                        <Button
+                            variant="ghost" size="icon"
+                            className="absolute left-3 top-1/2 -translate-y-1/2 text-white hover:bg-white/15 rounded-full"
+                            onClick={() => setLightboxIndex(i => (i ?? 1) - 1)}
+                        >
+                            <ChevronLeft className="w-7 h-7" />
+                        </Button>
+                    )}
+
+                    <img
+                        src={allImages[lightboxIndex]}
+                        alt="Preview"
+                        className="max-h-[88vh] max-w-[90vw] object-contain rounded-lg shadow-2xl"
+                    />
+
+                    {/* Next */}
+                    {lightboxIndex < allImages.length - 1 && (
+                        <Button
+                            variant="ghost" size="icon"
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-white hover:bg-white/15 rounded-full"
+                            onClick={() => setLightboxIndex(i => (i ?? 0) + 1)}
+                        >
+                            <ChevronRight className="w-7 h-7" />
+                        </Button>
+                    )}
+
+                    <div className="absolute bottom-5 left-1/2 -translate-x-1/2 text-white/70 text-xs font-medium bg-black/40 px-3 py-1 rounded-full">
+                        {lightboxIndex + 1} / {allImages.length}
+                    </div>
+                </div>
+            )}
+        </div>
+    )
+}

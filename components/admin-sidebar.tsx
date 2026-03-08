@@ -16,7 +16,6 @@ import {
 } from "lucide-react"
 import { useRouter, usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
-// [!code highlight] REMOVED useStore for user management
 import { useAuth } from "@/context/AuthContext"
 import {
   Sidebar,
@@ -51,7 +50,6 @@ const NAV_ITEMS = {
 }
 
 export function AdminSidebar() {
-  // [!code highlight] CHANGED: Get everything from AuthContext
   const { currentUser, userData, logout } = useAuth()
   
   const router = useRouter()
@@ -78,7 +76,6 @@ export function AdminSidebar() {
       .substring(0, 2) || "AD"
   }
 
-  // [!code highlight] CHANGED: Determine display values from Firestore userData
   const displayName = userData?.name || userData?.displayName || "Admin User"
   const displayEmail = userData?.email || currentUser?.email || "admin@shutterstudio.com"
   const displayImage = userData?.profileImage || userData?.photoURL

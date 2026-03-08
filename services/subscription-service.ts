@@ -87,7 +87,6 @@ export const getStudioPackageConfig = async (studioId: string) => {
  */
 export const getPlatformPackageLimits = async (packageId: string): Promise<PackageLimits | null> => {
   try {
-    // [!code highlight] Fixed: Fetch the single document 'packages' in 'Platform' collection
     // This creates a valid 2-segment reference: Collection(Platform) -> Document(packages)
     const ref = doc(db, "Platform", "packages");
     const snap = await getDoc(ref);
@@ -95,7 +94,6 @@ export const getPlatformPackageLimits = async (packageId: string): Promise<Packa
     if (snap.exists()) {
       const data = snap.data();
       
-      // [!code highlight] Fixed: Access the specific package map from the document fields
       const pkgData = data[packageId];
 
       if (!pkgData) {

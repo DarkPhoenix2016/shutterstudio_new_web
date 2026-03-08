@@ -179,7 +179,7 @@ export default function AboutPage() {
               
               <div className="flex flex-col sm:flex-row justify-center gap-4">
                 <Button asChild size="lg" className="h-12 px-8 bg-blue-600 hover:bg-blue-500 text-white rounded-full">
-                  <Link href="/dashboard/login">Start Your Journey <ArrowRight className="ml-2 w-4 h-4" /></Link>
+                  <Link href="/app/login">Start Your Journey <ArrowRight className="ml-2 w-4 h-4" /></Link>
                 </Button>
                 <Button asChild variant="outline" size="lg" className="h-12 px-8 border-slate-700 text-slate-300 hover:text-white hover:bg-slate-800 rounded-full">
                   <Link href="/contact">Contact Us</Link>

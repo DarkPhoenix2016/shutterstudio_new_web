@@ -21,19 +21,9 @@ import Swal from "sweetalert2"
 import { collection, doc, getDocs, getDoc, setDoc, updateDoc, deleteDoc, query, orderBy, Timestamp, increment } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 import { logAuditAction } from "@/lib/logger"
-import { format, addMonths, addYears, differenceInDays, parseISO } from "date-fns"
+import { format, addMonths, addYears, differenceInDays } from "date-fns"
 import { InvoiceDialog, InvoiceDetails, InvoiceItem } from "@/components/admin/InvoiceDialog"
-
-// --- HELPERS ---
-const safeDate = (dateInput: any): Date => {
-  if (!dateInput) return new Date()
-  if (typeof dateInput?.toDate === 'function') return dateInput.toDate()
-  if (dateInput instanceof Date) return dateInput
-  if (typeof dateInput === 'string') {
-      try { return parseISO(dateInput) } catch (e) { return new Date() }
-  }
-  return new Date()
-}
+import { safeDate } from "@/lib/date-utils"
 
 const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-LK', { style: 'currency', currency: 'LKR', maximumFractionDigits: 0 }).format(amount)
@@ -439,7 +429,6 @@ export default function BillingPage() {
     })
   }
 
-  // [!code highlight] DELETE INVOICE ACTION
   const handleDeleteInvoice = async (invoice: InvoiceData) => {
     Swal.fire({
         title: 'Delete Invoice?',

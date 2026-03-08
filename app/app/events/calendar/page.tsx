@@ -27,17 +27,9 @@ import {
     MessageSquareText
 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { safeDate } from "@/lib/date-utils"
 
-// Helper: Safe Date Parsing
-const safeDate = (dateInput: any): Date => {
-    try {
-        if (!dateInput) return new Date();
-        if (typeof dateInput.toDate === 'function') return dateInput.toDate();
-        return new Date(dateInput);
-    } catch (e) {
-        return new Date();
-    }
-};
+
 
 export default function CalendarPage() {
     const { userData } = useAuth()

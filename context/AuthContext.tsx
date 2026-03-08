@@ -47,7 +47,6 @@ interface StudioData {
   [key: string]: any
 }
 
-// [!code highlight] Added Navigation Types to Global Settings
 interface NavItem {
   label: string
   path: string

@@ -4,7 +4,6 @@ import { useMemo, useState, useEffect } from "react"
 import { useAuth } from "@/context/AuthContext"
 import { useRouter, usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
-// [!code highlight] Import Subscription Service
 import { getStudioPackageConfig } from "@/services/subscription-service"
 import {
   Sidebar,
@@ -48,10 +47,8 @@ export function DashboardSidebar() {
 
   // State
   const [openGroupLabel, setOpenGroupLabel] = useState<string | null>(null)
-  // [!code highlight] State for dynamic package name
   const [planName, setPlanName] = useState<string>("Basic")
 
-  // [!code highlight] Effect: Fetch Subscription Plan
   useEffect(() => {
     const fetchPlan = async () => {
       if (userData?.studioID) {

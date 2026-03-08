@@ -16,7 +16,6 @@ import {
 import { 
   Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter 
 } from "@/components/ui/dialog"
-// [!code highlight] Popover Imports
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { cn } from "@/lib/utils"
 
@@ -102,7 +101,6 @@ export default function SettingsPage() {
   const [itemInput, setItemInput] = useState<NavItem>({ label: "", path: "", icon: "", feature: "" })
   const [selectedFeatureCategory, setSelectedFeatureCategory] = useState("") 
   
-  // [!code highlight] Icon Picker State
   const [iconSearch, setIconSearch] = useState("")
   const [isIconPopoverOpen, setIsIconPopoverOpen] = useState(false)
 

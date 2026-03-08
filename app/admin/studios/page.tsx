@@ -22,23 +22,14 @@ import Swal from "sweetalert2"
 import { db, auth } from "@/lib/firebase"
 import { collection, doc, getDoc, getDocs, setDoc, updateDoc, serverTimestamp } from "firebase/firestore"
 import { logAuditAction } from "@/lib/logger"
-import { format, parseISO } from "date-fns"
+import { format } from "date-fns"
+import { safeDate } from "@/lib/date-utils"
 
 // --- CLOUD FUNCTION ENDPOINTS ---
-const REGISTER_USER_API = "https://registeruser-g33n26zifq-uc.a.run.app"
-const ENABLE_USER_API = "https://enableuser-g33n26zifq-uc.a.run.app"
-const DISABLE_USER_API = "https://disableuser-g33n26zifq-uc.a.run.app"
+const REGISTER_USER_API = process.env.NEXT_PUBLIC_CF_REGISTER_USER ?? "https://registeruser-g33n26zifq-uc.a.run.app"
+const ENABLE_USER_API   = process.env.NEXT_PUBLIC_CF_ENABLE_USER   ?? "https://enableuser-g33n26zifq-uc.a.run.app"
+const DISABLE_USER_API  = process.env.NEXT_PUBLIC_CF_DISABLE_USER  ?? "https://disableuser-g33n26zifq-uc.a.run.app"
 
-// --- HELPERS ---
-const safeDate = (dateInput: any): Date => {
-  if (!dateInput) return new Date()
-  if (typeof dateInput?.toDate === 'function') return dateInput.toDate()
-  if (dateInput instanceof Date) return dateInput
-  if (typeof dateInput === 'string') {
-      try { return parseISO(dateInput) } catch (e) { return new Date() }
-  }
-  return new Date()
-}
 
 // --- TYPES ---
 interface StudioData {

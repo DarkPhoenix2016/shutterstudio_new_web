@@ -48,6 +48,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Separator } from "@/components/ui/separator"
+import { safeDate } from "@/lib/date-utils"
 
 // --- TYPES ---
 interface PublicEventData {
@@ -106,17 +107,7 @@ interface PackageData {
 }
 
 // --- HELPERS ---
-const safeDate = (dateInput: any): Date => {
-    try {
-        if (!dateInput) return new Date();
-        if (dateInput instanceof Date) return dateInput;
-        if (typeof dateInput === 'object') {
-            if (typeof dateInput.toDate === 'function') return dateInput.toDate();
-            if ('seconds' in dateInput) return new Date(dateInput.seconds * 1000);
-        }
-        return new Date(dateInput);
-    } catch { return new Date(); }
-};
+
 
 type TabType = 'overview' | 'itinerary' | 'finance' | 'approval';
 

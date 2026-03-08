@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from "react"
 import { useAuth } from "@/context/AuthContext"
-// [!code highlight] Updated Import Path
 import { 
   fetchCrewMembers, fetchRoles, fetchDesignations, fetchSubscriptionLimits, 
   createCrewMember, updateCrewMember, toggleCrewMemberStatus,
@@ -132,7 +131,6 @@ export default function StudioManagersPage() {
 
   // 3. ACTIONS
   const handleCreateUser = async () => {
-      // [!code highlight] Fixed: Validation Guard Clause
       if (!userData?.studioID) {
           Toast.fire({ icon: 'error', title: 'Studio ID is missing.' });
           return;
@@ -146,7 +144,6 @@ export default function StudioManagersPage() {
       setIsSubmitting(true);
 
       try {
-          // [!code highlight] Safe to use studioID here because of the guard clause above
           await createCrewMember({
               ...newUser,
               studioID: userData.studioID

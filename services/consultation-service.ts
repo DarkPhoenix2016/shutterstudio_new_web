@@ -3,11 +3,12 @@ import {
   collection, addDoc, updateDoc, doc, getDocs,
   query, where, orderBy, deleteDoc, serverTimestamp, Timestamp
 } from "firebase/firestore";
-import { 
-  PackageData, 
-  EventData, 
+import {
+  PackageData,
+  EventData,
   createEvent // Imported directly
 } from "@/services/event-service";
+import { logAuditAction } from "@/lib/logger";
 
 // --- INTERFACES ---
 
@@ -223,6 +224,14 @@ export const convertToEvent = async (studioId: string, consultation: Consultatio
         updatedAt: serverTimestamp()
       });
     }
+
+    // 5. Audit Log
+    await logAuditAction(
+      "CONVERT_CONSULTATION",
+      `Consultation for '${consultation.client.name}' converted to event`,
+      { uid: studioId, name: studioId },
+      "Consultation"
+    );
 
   } catch (error) {
     console.error("Error converting to event:", error);

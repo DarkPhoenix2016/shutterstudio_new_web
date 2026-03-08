@@ -29,7 +29,7 @@ export function Footer() {
               </p>
             </div>
             <Link 
-              href="/dashboard/login" 
+              href="/app/login" 
               className="inline-flex h-12 items-center justify-center rounded-xl bg-blue-600 px-8 text-sm font-medium text-white shadow-lg shadow-blue-900/20 transition-all hover:bg-blue-500 hover:-translate-y-0.5"
             >
               Get Started Now

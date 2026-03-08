@@ -114,7 +114,7 @@ export function LoginModal({ open, onOpenChange }: LoginModalProps) {
       if (role === "super_admin") {
         router.push("/admin")
       } else {
-        router.push("/dashboard")
+        router.push("/app")
       }
 
     } catch (error: any) {

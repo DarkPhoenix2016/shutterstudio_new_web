@@ -28,7 +28,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       // This protects the route from manual entry by standard users
       if (currentUser && userData && !isLoginPage) {
         if (userData.role !== "super_admin") {
-          router.push("/dashboard")
+          router.push("/app")
           return
         }
       }
@@ -64,7 +64,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   if (!currentUser || !userData) return null
 
   return (
-    // [!code highlight] WRAPPED IN SIDEBAR PROVIDER
     <SidebarProvider>
       <div className="flex min-h-screen w-full bg-slate-50/50">
         <AdminSidebar />

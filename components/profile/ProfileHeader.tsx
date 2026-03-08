@@ -16,7 +16,6 @@ export default function ProfileHeader() {
     return role ? role.replace(/_/g, " ") : "Staff"
   }
 
-  // [!code highlight] Logic: Designation > Role
   const displayTitle = userData?.designation || formatRole(userData?.role);
 
   return (
