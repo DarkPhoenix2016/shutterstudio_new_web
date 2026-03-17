@@ -207,7 +207,10 @@ function EventForm({
             if (pkg) updatedDay.cost = Number(pkg.price || 0)
         }
         if (updates.customItems && updatedDay.type === "custom") {
-            updatedDay.cost = updates.customItems.reduce((sum, item: CustomItem) => sum + (item.price || 0), 0)
+            updatedDay.cost = updates.customItems.reduce(
+                (sum, item: CustomItem) => sum + (item.price || 0) * (item.quantity || 1),
+                0
+            )
         }
         newDays[index] = updatedDay
         setFormData({ ...formData, days: newDays })
@@ -457,45 +460,67 @@ function EventForm({
                                         </TabsContent>
 
                                         <TabsContent value="custom" className="pt-2 space-y-3">
-                                            <div className="space-y-2">
-                                                {day.customItems?.map((item: CustomItem, itemIdx: number) => (
-                                                    <div key={itemIdx} className="grid grid-cols-12 gap-2 items-center">
-                                                        <div className="col-span-5">
-                                                            <Input
-                                                                placeholder="Item" className="h-8 text-xs"
-                                                                value={item.name}
-                                                                disabled={isLocked}
-                                                                onChange={e => updateCustomItem(i, itemIdx, "name", e.target.value)}
-                                                            />
-                                                        </div>
-                                                        <div className="col-span-2">
-                                                            <Input
-                                                                type="number" placeholder="Qty" className="h-8 text-xs text-center"
-                                                                value={item.quantity}
-                                                                disabled={isLocked}
-                                                                onChange={e => updateCustomItem(i, itemIdx, "quantity", Number(e.target.value))}
-                                                            />
-                                                        </div>
-                                                        <div className="col-span-4">
-                                                            <Input
-                                                                type="number" placeholder="Price" className="h-8 text-xs text-right"
-                                                                value={item.price}
-                                                                disabled={isLocked}
-                                                                onChange={e => updateCustomItem(i, itemIdx, "price", Number(e.target.value))}
-                                                            />
-                                                        </div>
-                                                        <div className="col-span-1 flex justify-center">
-                                                            <Button
-                                                                variant="ghost" size="icon"
-                                                                className="h-7 w-7 text-red-400 hover:text-red-600"
-                                                                disabled={isLocked}
-                                                                onClick={() => removeCustomItem(i, itemIdx)}
-                                                            >
-                                                                <Trash2 className="h-3 w-3" />
-                                                            </Button>
-                                                        </div>
+                                            <div className="space-y-1.5">
+                                                {/* Column headers — only shown when there are items */}
+                                                {(day.customItems?.length ?? 0) > 0 && (
+                                                    <div className="grid grid-cols-12 gap-2 px-1">
+                                                        <div className="col-span-4 text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Item</div>
+                                                        <div className="col-span-2 text-[10px] font-semibold text-slate-400 uppercase tracking-wide text-center">Qty</div>
+                                                        <div className="col-span-3 text-[10px] font-semibold text-slate-400 uppercase tracking-wide text-right">Unit Price</div>
+                                                        <div className="col-span-2 text-[10px] font-semibold text-slate-400 uppercase tracking-wide text-right">Total</div>
+                                                        <div className="col-span-1" />
                                                     </div>
-                                                ))}
+                                                )}
+
+                                                {day.customItems?.map((item: CustomItem, itemIdx: number) => {
+                                                    const rowTotal = (item.price || 0) * (item.quantity || 1)
+                                                    return (
+                                                        <div key={itemIdx} className="grid grid-cols-12 gap-2 items-center bg-white rounded-md border border-slate-100 px-1 py-1">
+                                                            <div className="col-span-4">
+                                                                <Input
+                                                                    placeholder="Item name"
+                                                                    className="h-8 text-xs border-0 bg-transparent shadow-none focus-visible:ring-1 focus-visible:ring-[#1C4D8D]/30 px-2"
+                                                                    value={item.name}
+                                                                    disabled={isLocked}
+                                                                    onChange={e => updateCustomItem(i, itemIdx, "name", e.target.value)}
+                                                                />
+                                                            </div>
+                                                            <div className="col-span-2">
+                                                                <Input
+                                                                    type="number" min="1" placeholder="1"
+                                                                    className="h-8 text-xs text-center border-slate-200 focus-visible:ring-[#1C4D8D]/30"
+                                                                    value={item.quantity}
+                                                                    disabled={isLocked}
+                                                                    onChange={e => updateCustomItem(i, itemIdx, "quantity", Math.max(1, Number(e.target.value)))}
+                                                                />
+                                                            </div>
+                                                            <div className="col-span-3">
+                                                                <Input
+                                                                    type="number" min="0" placeholder="0"
+                                                                    className="h-8 text-xs text-right border-slate-200 focus-visible:ring-[#1C4D8D]/30"
+                                                                    value={item.price}
+                                                                    disabled={isLocked}
+                                                                    onChange={e => updateCustomItem(i, itemIdx, "price", Number(e.target.value))}
+                                                                />
+                                                            </div>
+                                                            <div className="col-span-2 text-right">
+                                                                <span className="text-xs font-semibold text-[#1C4D8D] tabular-nums pr-1">
+                                                                    {rowTotal.toLocaleString()}
+                                                                </span>
+                                                            </div>
+                                                            <div className="col-span-1 flex justify-center">
+                                                                <Button
+                                                                    variant="ghost" size="icon"
+                                                                    className="h-7 w-7 text-red-400 hover:text-red-600 hover:bg-red-50"
+                                                                    disabled={isLocked}
+                                                                    onClick={() => removeCustomItem(i, itemIdx)}
+                                                                >
+                                                                    <Trash2 className="h-3 w-3" />
+                                                                </Button>
+                                                            </div>
+                                                        </div>
+                                                    )
+                                                })}
 
                                                 <Select disabled={isLocked} onValueChange={val => {
                                                     if (val === "custom_new") addCustomItem(i)
@@ -517,9 +542,17 @@ function EventForm({
                                                 </Select>
                                             </div>
 
-                                            <div className="bg-slate-50 p-2 rounded text-xs text-slate-700 flex justify-between px-3 border">
-                                                <span>Total Custom Cost:</span>
-                                                <span className="font-bold">LKR {(day.cost || 0).toLocaleString()}</span>
+                                            {/* Day subtotal */}
+                                            <div className="flex items-center justify-between rounded-lg bg-[#1C4D8D]/5 border border-[#1C4D8D]/10 px-3 py-2">
+                                                <span className="text-xs text-slate-600">
+                                                    {day.customItems?.length ?? 0} item{(day.customItems?.length ?? 0) !== 1 ? "s" : ""}
+                                                </span>
+                                                <div className="text-right">
+                                                    <span className="text-xs text-slate-500 mr-2">Day Total</span>
+                                                    <span className="text-sm font-bold text-[#1C4D8D]">
+                                                        {(day.cost || 0).toLocaleString()}
+                                                    </span>
+                                                </div>
                                             </div>
                                         </TabsContent>
                                     </Tabs>

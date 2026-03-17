@@ -108,3 +108,25 @@
     @apply bg-background text-foreground;
   }
 }
+
+@media print {
+  /* Hide navigation chrome when printing analytics report */
+  aside,
+  nav,
+  header,
+  [data-sidebar],
+  .print\:hidden {
+    display: none !important;
+  }
+  body {
+    background: white !important;
+    color: black !important;
+  }
+  .shadow-md,
+  .shadow-lg,
+  .shadow-xl,
+  .shadow-sm {
+    box-shadow: none !important;
+    border: 1px solid #e2e8f0 !important;
+  }
+}

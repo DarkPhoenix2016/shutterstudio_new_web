@@ -1,13 +1,13 @@
 "use client"
 
-import { useEffect, useMemo, useRef, useState } from "react"
-import jsPDF from "jspdf"
 import { format } from "date-fns"
+import jsPDF from "jspdf"
 import { Download, Loader2, Printer, X } from "lucide-react"
+import { useEffect, useMemo, useRef, useState } from "react"
 
+import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog"
-import { Badge } from "@/components/ui/badge"
 import { safeDate } from "@/lib/date-utils"
 import { EventData, PackageData } from "@/services/event-service"
 
@@ -165,7 +165,7 @@ export function EventInvoiceDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[98vw] max-w-[98vw] p-0 overflow-hidden gap-0">
+      <DialogContent className="w-[180vw] max-w-[98vw] p-0 overflow-hidden gap-0">
         <DialogTitle className="sr-only">Event Invoice</DialogTitle>
         <DialogDescription className="sr-only">Generated invoice for the event</DialogDescription>
 

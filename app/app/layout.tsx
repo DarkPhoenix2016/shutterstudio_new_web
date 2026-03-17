@@ -5,9 +5,9 @@ import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar"
 import { DashboardSidebar } from "@/components/dashboard-sidebar"
 import { useAuth } from "@/context/AuthContext"
 import { useRouter, usePathname } from "next/navigation"
-import { Bell, Search, User, Loader2, AlertTriangle, ShieldAlert } from "lucide-react"
-import { Input } from "@/components/ui/input"
+import { Bell, User, Loader2, AlertTriangle, ShieldAlert } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { GlobalSearch } from "@/components/GlobalSearch"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -150,13 +150,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               <div className="flex items-center gap-4">
                   <SidebarTrigger className="-ml-2" />
                   
-                  <div className="relative hidden md:block w-96">
-                      <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-400" />
-                      <Input 
-                        placeholder="Search jobs, clients, or tasks..." 
-                        className="pl-9 bg-slate-50 border-slate-200 focus-visible:ring-[#1C4D8D]" 
-                      />
-                  </div>
+                  <GlobalSearch />
               </div>
 
               <div className="flex items-center gap-4">
