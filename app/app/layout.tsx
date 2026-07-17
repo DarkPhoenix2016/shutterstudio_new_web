@@ -6,6 +6,7 @@ import { DashboardSidebar } from "@/components/dashboard-sidebar"
 import { useAuth } from "@/context/AuthContext"
 import { useRouter, usePathname } from "next/navigation"
 import { Bell, User, Loader2, AlertTriangle, ShieldAlert } from "lucide-react"
+import { useTheme } from "next-themes"
 import { Button } from "@/components/ui/button"
 import { GlobalSearch } from "@/components/GlobalSearch"
 import {
@@ -36,6 +37,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const { currentUser, userData, globalSettings, rolePermissions, loading, logout } = useAuth()
   const router = useRouter()
   const pathname = usePathname()
+  const { theme, setTheme } = useTheme()
+
+  useEffect(() => {
+    // Force the workspace layout to always be in light mode
+    if (theme !== "light") {
+      setTheme("light")
+    }
+  }, [theme, setTheme])
 
   // Define routes that live inside this layout but should NOT have the sidebar/checks
   const isAuthPage = pathname.startsWith("/app/login") || pathname.startsWith("/app/register");
@@ -115,16 +124,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   }, [currentUser, userData, globalSettings, loading, pathname, router, isAuthPage]) // Added isAuthPage dependency
 
   if (isAuthPage) {
-    return <main className="h-screen w-full bg-slate-50">{children}</main>;
+    return <main className="h-screen w-full bg-background text-foreground">{children}</main>;
   }
 
   // Loading State (Only for actual dashboard pages)
   if (loading || !isAccessChecked) {
     return (
-        <div className="flex h-screen w-full items-center justify-center bg-slate-50">
+        <div className="flex h-screen w-full items-center justify-center bg-background text-foreground">
             <div className="flex flex-col items-center gap-2">
-                <Loader2 className="h-8 w-8 animate-spin text-[#1C4D8D]" />
-                <span className="text-sm text-slate-500 font-medium">Verifying access...</span>
+                <Loader2 className="h-8 w-8 animate-spin text-brand-primary" />
+                <span className="text-sm text-muted-foreground font-medium">Verifying access…</span>
             </div>
         </div>
     )
@@ -133,7 +142,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   // Main Dashboard Layout
   return (
     <SidebarProvider>
-      <div className="flex h-screen w-full bg-slate-50/50">
+      <div className="flex h-screen w-full bg-background text-foreground">
         
         <DashboardSidebar />
         
@@ -146,7 +155,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
              </div>
            )}
 
-           <header className="flex items-center justify-between px-6 py-3 bg-white border-b border-slate-200 shadow-sm shrink-0">
+           <header className="flex items-center justify-between px-6 py-3 bg-card border-b border-border shadow-xs shrink-0">
               <div className="flex items-center gap-4">
                   <SidebarTrigger className="-ml-2" />
                   
@@ -154,17 +163,17 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               </div>
 
               <div className="flex items-center gap-4">
-                  <Button variant="ghost" size="icon" className="relative text-slate-500 hover:text-[#1C4D8D]">
+                  <Button variant="ghost" size="icon" className="relative text-muted-foreground hover:text-brand-primary">
                       <Bell className="h-5 w-5" />
-                      <span className="absolute top-2 right-2 h-2 w-2 bg-red-500 rounded-full border-2 border-white"></span>
+                      <span className="absolute top-2 right-2 h-2 w-2 bg-red-500 rounded-full border-2 border-card"></span>
                   </Button>
 
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                         <Button variant="ghost" className="relative h-8 w-8 rounded-full">
-                            <Avatar className="h-8 w-8 border border-slate-200">
+                            <Avatar className="h-8 w-8 border border-border">
                                 <AvatarImage src={userData?.photoURL || ""} alt={userData?.displayName || ""} />
-                                <AvatarFallback className="bg-[#1C4D8D] text-white">
+                                <AvatarFallback className="bg-brand-primary text-white">
                                     {(userData?.displayName || "U").charAt(0).toUpperCase()}
                                 </AvatarFallback>
                             </Avatar>
@@ -194,7 +203,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
            </header>
 
            <div className="flex-1 overflow-y-auto scroll-smooth p-8">
-             <Suspense fallback={<div className="flex h-full items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-slate-300"/></div>}>
+             <Suspense fallback={<div className="flex h-full items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground"/></div>}>
                 {children}
              </Suspense>
            </div>

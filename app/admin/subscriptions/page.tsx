@@ -19,6 +19,7 @@ import Swal from "sweetalert2"
 import { doc, getDoc, updateDoc, setDoc, arrayUnion, arrayRemove, deleteField } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 import { logAuditAction } from "@/lib/logger"
+import { Discount } from "@/services/platform"
 
 // --- TYPES ---
 interface PackageConfig {
@@ -84,6 +85,9 @@ export default function SubscriptionsPage() {
   const [packages, setPackages] = useState<PackageConfig[]>([])
   const [loading, setLoading] = useState(true)
   
+  const [discounts, setDiscounts] = useState<Discount[]>([])
+  const [discountsLoading, setDiscountsLoading] = useState(true)
+  
   // Dialog State
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingPkg, setEditingPkg] = useState<PackageConfig | null>(null)
@@ -96,30 +100,56 @@ export default function SubscriptionsPage() {
   const [featureInput, setFeatureInput] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
 
-  // 1. Initial Load (Packages Only)
+  // --- DISCOUNT STATE ---
+  const [isDiscountDialogOpen, setIsDiscountDialogOpen] = useState(false)
+  const [editingDiscount, setEditingDiscount] = useState<Discount | null>(null)
+  const [discountFormData, setDiscountFormData] = useState<Omit<Discount, "id">>({
+    name: "",
+    packageId: "all",
+    billingCycle: "all",
+    type: "percentage",
+    value: 0,
+    active: true,
+    isSeasonal: false
+  })
+  const [isDiscountSubmitting, setIsDiscountSubmitting] = useState(false)
+
+  // 1. Initial Load (Packages & Discounts)
   useEffect(() => {
     const initData = async () => {
       try {
         const docRef = doc(db, "Platform", "packages")
         const snap = await getDoc(docRef)
         const loadedPackages: PackageConfig[] = []
+        const loadedDiscounts: Discount[] = []
 
         if (snap.exists()) {
           const data = snap.data()
-          const pkgList: string[] = data.packages_list || []
           
+          // Load packages
+          const pkgList: string[] = data.packages_list || []
           pkgList.forEach(pkgId => {
             if (data[pkgId]) {
               loadedPackages.push({ id: pkgId, ...data[pkgId] })
             }
           })
           setPackages(loadedPackages.sort((a, b) => a.price - b.price))
+
+          // Load discounts
+          const discList: string[] = data.discounts_list || []
+          discList.forEach(discId => {
+            if (data[discId]) {
+              loadedDiscounts.push({ id: discId, ...data[discId] })
+            }
+          })
+          setDiscounts(loadedDiscounts)
         }
       } catch (e) {
-        console.error("Failed to load packages", e)
-        Toast.fire({ icon: 'error', title: 'Failed to load packages' })
+        console.error("Failed to load platform data", e)
+        Toast.fire({ icon: 'error', title: 'Failed to load packages or discounts' })
       } finally {
         setLoading(false)
+        setDiscountsLoading(false)
       }
     }
     initData()
@@ -268,6 +298,137 @@ export default function SubscriptionsPage() {
     setFormData(prev => ({ ...prev, features: prev.features.filter((_, i) => i !== index) }))
   }
 
+  // --- DISCOUNT ACTIONS ---
+  const openAddDiscountDialog = () => {
+    setEditingDiscount(null)
+    setDiscountFormData({
+      name: "",
+      packageId: "all",
+      billingCycle: "all",
+      type: "percentage",
+      value: 0,
+      active: true,
+      isSeasonal: false
+    })
+    setIsDiscountDialogOpen(true)
+  }
+
+  const openEditDiscountDialog = (discount: Discount) => {
+    setEditingDiscount(discount)
+    setDiscountFormData({
+      name: discount.name,
+      packageId: discount.packageId || "all",
+      billingCycle: discount.billingCycle || "all",
+      type: discount.type || "percentage",
+      value: discount.value || 0,
+      active: discount.active !== false,
+      isSeasonal: discount.isSeasonal === true
+    })
+    setIsDiscountDialogOpen(true)
+  }
+
+  const handleSaveDiscount = async () => {
+    if (!discountFormData.name || discountFormData.value <= 0) {
+      return Toast.fire({ icon: 'warning', title: 'Invalid discount details' })
+    }
+
+    setIsDiscountSubmitting(true)
+    const discountId = editingDiscount ? editingDiscount.id : `disc_${Date.now()}`.toLowerCase()
+
+    try {
+      const discountData = {
+        name: discountFormData.name,
+        packageId: discountFormData.packageId,
+        billingCycle: discountFormData.billingCycle,
+        type: discountFormData.type,
+        value: Number(discountFormData.value),
+        active: discountFormData.active,
+        isSeasonal: discountFormData.isSeasonal
+      }
+
+      const updatePayload: any = { [discountId]: discountData }
+      if (!editingDiscount) updatePayload.discounts_list = arrayUnion(discountId)
+
+      await updateDoc(doc(db, "Platform", "packages"), updatePayload)
+
+      setDiscounts(prev => {
+        const newList = editingDiscount
+          ? prev.map(d => d.id === discountId ? { ...discountData, id: discountId } : d)
+          : [...prev, { ...discountData, id: discountId }]
+        return newList
+      })
+
+      if (currentUser) {
+        await logAuditAction(
+          editingDiscount ? "UPDATE_DISCOUNT" : "CREATE_DISCOUNT",
+          `${editingDiscount ? "Updated" : "Created"} discount: ${discountFormData.name}`,
+          currentUser, "Subscriptions"
+        )
+      }
+
+      Toast.fire({ icon: 'success', title: 'Discount saved successfully' })
+      setIsDiscountDialogOpen(false)
+    } catch (e) {
+      console.error("Save discount failed", e)
+      Toast.fire({ icon: 'error', title: 'Save discount failed' })
+    } finally {
+      setIsDiscountSubmitting(false)
+    }
+  }
+
+  const handleDeleteDiscount = async (discountId: string) => {
+    Swal.fire({
+      title: 'Delete Discount?',
+      text: "This will remove this discount from all active calculations.",
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#d33',
+      confirmButtonText: 'Yes, delete'
+    }).then(async (result) => {
+      if (result.isConfirmed) {
+        try {
+          await updateDoc(doc(db, "Platform", "packages"), {
+            discounts_list: arrayRemove(discountId),
+            [discountId]: deleteField()
+          })
+          setDiscounts(prev => prev.filter(d => d.id !== discountId))
+          if (currentUser) await logAuditAction("DELETE_DISCOUNT", `Deleted discount ID: ${discountId}`, currentUser, "Subscriptions")
+          Toast.fire({ icon: 'success', title: 'Deleted' })
+        } catch (e) {
+          console.error("Delete discount failed", e)
+          Toast.fire({ icon: 'error', title: 'Delete failed' })
+        }
+      }
+    })
+  }
+
+  const handleToggleDiscountActive = async (discount: Discount, active: boolean) => {
+    try {
+      const discountId = discount.id
+      const updatedData = { ...discount, active }
+      delete (updatedData as any).id
+
+      await updateDoc(doc(db, "Platform", "packages"), {
+        [discountId]: updatedData
+      })
+
+      setDiscounts(prev => prev.map(d => d.id === discountId ? { ...d, active } : d))
+      
+      if (currentUser) {
+        await logAuditAction(
+          "TOGGLE_DISCOUNT",
+          `${active ? "Activated" : "Deactivated"} discount: ${discount.name}`,
+          currentUser,
+          "Subscriptions"
+        )
+      }
+      Toast.fire({ icon: 'success', title: `Discount ${active ? "activated" : "deactivated"}` })
+    } catch (e) {
+      console.error("Toggle discount active state failed", e)
+      Toast.fire({ icon: 'error', title: 'Update failed' })
+    }
+  }
+
   return (
     <div className="flex-1 space-y-6 p-6">
       <div className="flex items-center justify-between">
@@ -342,6 +503,88 @@ export default function SubscriptionsPage() {
         </CardContent>
       </Card>
 
+      {/* Discount Manager */}
+      <Card className="border-none shadow-md">
+        <CardHeader className="border-b bg-slate-50/50 flex flex-row items-center justify-between">
+          <div>
+            <CardTitle>Package Discounts</CardTitle>
+            <CardDescription>Configure seasonal, percentage, or flat discounts for billing cycles</CardDescription>
+          </div>
+          <Button onClick={openAddDiscountDialog} className="bg-[#1C4D8D] hover:bg-[#1C4D8D]/90 h-9">
+            <Plus className="h-4 w-4 mr-2" /> Add Discount
+          </Button>
+        </CardHeader>
+        <CardContent className="p-0">
+          {discountsLoading ? (
+            <div className="flex justify-center p-12"><Loader2 className="h-8 w-8 animate-spin text-[#1C4D8D]" /></div>
+          ) : discounts.length === 0 ? (
+            <div className="flex flex-col items-center justify-center p-12 text-muted-foreground">
+              <p className="text-sm">No discounts configured yet.</p>
+              <Button variant="link" onClick={openAddDiscountDialog} className="text-[#1C4D8D] mt-2">Create your first discount</Button>
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-slate-50/50 hover:bg-slate-50/50">
+                  <TableHead className="font-bold">Discount Name</TableHead>
+                  <TableHead className="font-bold">Target Package</TableHead>
+                  <TableHead className="font-bold">Billing Cycle</TableHead>
+                  <TableHead className="font-bold">Discount Type & Value</TableHead>
+                  <TableHead className="font-bold">Type</TableHead>
+                  <TableHead className="font-bold">Status</TableHead>
+                  <TableHead className="text-right font-bold">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {discounts.map((discount) => {
+                  const targetPkg = discount.packageId === "all" ? "All Packages" : (packages.find(p => p.id === discount.packageId)?.name || discount.packageId)
+                  return (
+                    <TableRow key={discount.id} className="hover:bg-slate-50/50">
+                      <TableCell className="font-medium text-foreground">
+                        {discount.name}
+                      </TableCell>
+                      <TableCell className="text-foreground">{targetPkg}</TableCell>
+                      <TableCell className="text-muted-foreground capitalize text-sm">
+                        {discount.billingCycle === "all" ? "All Cycles" : discount.billingCycle === "6months" ? "6 Months" : discount.billingCycle}
+                      </TableCell>
+                      <TableCell className="text-foreground font-semibold">
+                        {discount.type === "percentage" ? `${discount.value}%` : `LKR ${discount.value.toLocaleString()}`}
+                      </TableCell>
+                      <TableCell>
+                        {discount.isSeasonal ? (
+                          <Badge variant="outline" className="text-purple-600 bg-purple-50 border-purple-200">Seasonal</Badge>
+                        ) : (
+                          <Badge variant="outline" className="text-blue-600 bg-blue-50 border-blue-200">Standard</Badge>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center space-x-2">
+                          <Switch
+                            checked={discount.active}
+                            onCheckedChange={(checked) => handleToggleDiscountActive(discount, checked)}
+                          />
+                          <span className="text-xs text-muted-foreground">
+                            {discount.active ? "Active" : "Inactive"}
+                          </span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-right space-x-2">
+                        <Button variant="ghost" size="icon" onClick={() => openEditDiscountDialog(discount)} className="text-blue-600 hover:bg-blue-50">
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                        <Button variant="ghost" size="icon" onClick={() => handleDeleteDiscount(discount.id)} className="text-red-500 hover:bg-red-50">
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  )
+                })}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+
       {/* EDIT/ADD DIALOG */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent className="sm:max-w-[600px]" onInteractOutside={(e) => e.preventDefault()}>
@@ -386,6 +629,102 @@ export default function SubscriptionsPage() {
                 <Button variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
                 <Button className="bg-[#1C4D8D]" onClick={handleSavePackage} disabled={isSubmitting}>
                     {isSubmitting ? <Loader2 className="animate-spin h-4 w-4 mr-2"/> : <CheckCircle2 className="h-4 w-4 mr-2"/>} Save Package
+                </Button>
+            </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* EDIT/ADD DISCOUNT DIALOG */}
+      <Dialog open={isDiscountDialogOpen} onOpenChange={setIsDiscountDialogOpen}>
+        <DialogContent className="sm:max-w-[500px]" onInteractOutside={(e) => e.preventDefault()}>
+            <DialogHeader>
+                <DialogTitle>{editingDiscount ? "Edit Discount" : "Create New Discount"}</DialogTitle>
+                <DialogDescription>Configure discount settings for platform packages.</DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+                <div className="space-y-2">
+                    <Label>Discount Name</Label>
+                    <Input 
+                      value={discountFormData.name} 
+                      onChange={e => setDiscountFormData({...discountFormData, name: e.target.value})} 
+                      placeholder="e.g. Summer Promo, Special 6-Month Deal" 
+                    />
+                </div>
+                
+                <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                        <Label>Applies to Package</Label>
+                        <select
+                          value={discountFormData.packageId}
+                          onChange={e => setDiscountFormData({...discountFormData, packageId: e.target.value})}
+                          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 text-foreground"
+                        >
+                            <option value="all">All Packages</option>
+                            {packages.map(p => (
+                                <option key={p.id} value={p.id}>{p.name}</option>
+                            ))}
+                        </select>
+                    </div>
+                    <div className="space-y-2">
+                        <Label>Billing Cycle</Label>
+                        <select
+                          value={discountFormData.billingCycle}
+                          onChange={e => setDiscountFormData({...discountFormData, billingCycle: e.target.value as any})}
+                          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 text-foreground"
+                        >
+                            <option value="all">All Cycles</option>
+                            <option value="monthly">Monthly</option>
+                            <option value="6months">6 Months</option>
+                            <option value="yearly">Yearly</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                        <Label>Discount Type</Label>
+                        <select
+                          value={discountFormData.type}
+                          onChange={e => setDiscountFormData({...discountFormData, type: e.target.value as any})}
+                          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 text-foreground"
+                        >
+                            <option value="percentage">Percentage (%)</option>
+                            <option value="flat">Flat Amount (LKR)</option>
+                        </select>
+                    </div>
+                    <div className="space-y-2">
+                        <Label>{discountFormData.type === "percentage" ? "Percentage Value (%)" : "Flat Value (LKR)"}</Label>
+                        <Input 
+                          type="number" 
+                          value={discountFormData.value} 
+                          onChange={e => setDiscountFormData({...discountFormData, value: Number(e.target.value)})} 
+                        />
+                    </div>
+                </div>
+
+                <div className="flex gap-4">
+                    <div className="flex items-center space-x-2 border p-3 rounded-md bg-slate-50 flex-1">
+                        <Switch 
+                          checked={discountFormData.active} 
+                          onCheckedChange={(c) => setDiscountFormData({...discountFormData, active: c})} 
+                          id="discount-active" 
+                        />
+                        <Label htmlFor="discount-active" className="cursor-pointer text-sm">Active</Label>
+                    </div>
+                    <div className="flex items-center space-x-2 border p-3 rounded-md bg-slate-50 flex-1">
+                        <Switch 
+                          checked={discountFormData.isSeasonal} 
+                          onCheckedChange={(c) => setDiscountFormData({...discountFormData, isSeasonal: c})} 
+                          id="discount-seasonal" 
+                        />
+                        <Label htmlFor="discount-seasonal" className="cursor-pointer text-sm">Seasonal Discount</Label>
+                    </div>
+                </div>
+            </div>
+            <DialogFooter>
+                <Button variant="outline" onClick={() => setIsDiscountDialogOpen(false)}>Cancel</Button>
+                <Button className="bg-[#1C4D8D]" onClick={handleSaveDiscount} disabled={isDiscountSubmitting}>
+                    {isDiscountSubmitting ? <Loader2 className="animate-spin h-4 w-4 mr-2"/> : <CheckCircle2 className="h-4 w-4 mr-2"/>} Save Discount
                 </Button>
             </DialogFooter>
         </DialogContent>

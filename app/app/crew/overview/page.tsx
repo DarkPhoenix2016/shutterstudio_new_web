@@ -17,6 +17,7 @@ import {
     CalendarDays, MapPin, ChevronRight, Briefcase 
 } from "lucide-react"
 import { format, isSameDay } from "date-fns"
+import { safeDate } from "@/lib/date-utils"
 
 export default function StudioOverviewPage() {
   const { userData } = useAuth()
@@ -91,13 +92,13 @@ export default function StudioOverviewPage() {
   // 2. Get dates for the calendar indicators (using the filtered list)
   const eventDates = useMemo(() => {
       return visibleEvents.flatMap(event => 
-        event.days?.map(day => new Date(day.date)) || []
+        event.days?.map(day => safeDate(day.date)) || []
       );
   }, [visibleEvents]);
 
   // 3. Get events for the currently selected DATE in the calendar
   const selectedDateEvents = visibleEvents.filter(event => 
-    event.days?.some(day => date && isSameDay(new Date(day.date), date))
+    event.days?.some(day => date && isSameDay(safeDate(day.date), date))
   );
 
   const handleOpenSchedule = (member?: Member) => {
@@ -193,9 +194,9 @@ export default function StudioOverviewPage() {
                             {selectedDateEvents.length > 0 ? (
                                 selectedDateEvents.map(evt => {
                                     // Identify active location for this specific day
-                                    const dayInfo = evt.days.find(d => date && isSameDay(new Date(d.date), date));
+                                    const dayInfo = evt.days.find(d => date && isSameDay(safeDate(d.date), date));
                                     // Heuristic: Find a location matching this day, or fallback to first location
-                                    const dayLoc = evt.locations?.find(l => date && isSameDay(new Date(l.date), date)) || evt.locations?.[0];
+                                    const dayLoc = evt.locations?.find(l => date && isSameDay(safeDate(l.date), date)) || evt.locations?.[0];
 
                                     return (
                                         <div 

@@ -209,7 +209,7 @@ export function InvoiceDialog({
         {/* HEADER CONTROLS */}
         <div className="flex flex-col gap-4 p-4 bg-white border-b print:hidden sm:flex-row sm:items-center sm:justify-between">
           <h2 className="text-lg font-semibold flex items-center gap-2">
-            <FileText className="h-5 w-5 text-[#1C4D8D]" />
+            <FileText className="h-5 w-5 text-brand-primary" />
             Invoice Details
           </h2>
           <div className="flex flex-wrap gap-2">
@@ -221,7 +221,7 @@ export function InvoiceDialog({
               {isDownloading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Download className="h-4 w-4 mr-2" />} Download
             </Button>
             <Button size="sm" variant="outline" onClick={handleShare}><Share2 className="h-4 w-4 mr-2" /> Share</Button>
-            <Button size="sm" className="bg-[#1C4D8D] text-white" onClick={handleSendEmailPreview} disabled={isSending}>
+            <Button size="sm" className="bg-brand-primary hover:bg-brand-primary-hover text-white" onClick={handleSendEmailPreview} disabled={isSending}>
               {isSending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Mail className="h-4 w-4 mr-2" />} Send Email
             </Button>
             <Button variant="ghost" size="icon" onClick={onClose} className="ml-auto sm:ml-0"><X className="h-5 w-5 text-slate-500" /></Button>
@@ -236,7 +236,7 @@ export function InvoiceDialog({
             <div>
               <div className="flex justify-between mb-8">
                 <div>
-                  <div className="h-12 w-12 bg-[#1C4D8D] text-white rounded-lg flex items-center justify-center font-bold text-xl mb-4">S</div>
+                  <div className="h-12 w-12 bg-brand-primary text-white rounded-lg flex items-center justify-center font-bold text-xl mb-4">S</div>
                   <h1 className="text-2xl font-bold">ShutterStudio</h1>
                   <p className="text-sm text-gray-500">Colombo 03, Sri Lanka<br />billing@shutterstudio.com</p>
                 </div>
@@ -345,7 +345,7 @@ function Info({ label, children, highlight }: { label: string, children: React.R
 
 function Row({ label, value, highlight, isDiscount }: { label: string, value: number, highlight?: boolean, isDiscount?: boolean }) {
   return (
-    <div className={`flex justify-between ${highlight ? "text-lg font-bold text-[#1C4D8D]" : "text-sm"} ${isDiscount ? "text-red-500" : ""}`}>
+    <div className={`flex justify-between ${highlight ? "text-lg font-bold text-brand-primary" : "text-sm"} ${isDiscount ? "text-red-500" : ""}`}>
       <span>{label}</span>
       <span>{isDiscount ? "-" : ""}LKR {value.toLocaleString()}</span>
     </div>

@@ -10,17 +10,17 @@ interface CTAProps {
 
 export function CTASection({ onGetStartedClick }: CTAProps) {
   return (
-    <section className="py-24 bg-slate-950 px-6">
+    <section className="py-24 bg-background transition-colors duration-300 px-6 border-t border-border">
       <div className="container mx-auto max-w-5xl">
         <ScrollReveal direction="up" distance={50} duration={0.8}>
-          <div className="relative rounded-3xl overflow-hidden px-6 py-20 text-center border border-white/10 bg-slate-900">
+          <div className="relative rounded-3xl overflow-hidden px-6 py-20 text-center border border-border bg-card">
             {/* Background Gradients */}
-            <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-blue-900/40 via-slate-900 to-slate-900 -z-10" />
+            <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-primary/10 via-card to-card -z-10" />
             
-            <h2 className="text-4xl md:text-5xl font-bold text-white mb-6 tracking-tight">
+            <h2 className="text-4xl md:text-5xl font-bold text-foreground mb-6 tracking-tight">
               Ready to professionalize <br /> your workflow?
             </h2>
-            <p className="text-lg text-slate-400 max-w-2xl mx-auto mb-10">
+            <p className="text-lg text-muted-foreground max-w-2xl mx-auto mb-10">
               Join the studios that have moved from chaos to control. 
               Scalable plans for freelancers, growing teams, and agencies.
             </p>
@@ -29,17 +29,17 @@ export function CTASection({ onGetStartedClick }: CTAProps) {
               <Button 
                 size="lg" 
                 onClick={onGetStartedClick}
-                className="h-14 px-8 text-lg bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-900/50 rounded-full transition-transform hover:-translate-y-1"
+                className="h-14 px-8 text-lg bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg shadow-primary/25 rounded-xl transition-transform hover:-translate-y-1"
               >
-                Contact Sales
+                [ Capture Booking ]
                 <ArrowRight className="ml-2 w-5 h-5" />
               </Button>
               <Button 
                 size="lg" 
                 variant="outline"
-                className="h-14 px-8 text-lg border-slate-700 text-slate-300 hover:text-white hover:bg-slate-800 rounded-full"
+                className="h-14 px-8 text-lg border-border text-foreground hover:bg-accent hover:text-accent-foreground rounded-xl"
               >
-                View Packages
+                [ Preview Packages ]
               </Button>
             </div>
           </div>

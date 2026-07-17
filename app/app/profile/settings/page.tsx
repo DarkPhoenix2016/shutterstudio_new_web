@@ -132,22 +132,22 @@ export default function ProfileSettingsPage() {
       }
 
       const studioID = userData?.studioID
-      const basePath = studioID 
+      const basePath = studioID
         ? `Studios/${studioID}/Users/${currentUser.uid}`
         : `Users/${currentUser.uid}`
 
-      // Upload Profile
-      if (profileFile) {
-        const path = `${basePath}/profile.jpg` // We convert everything to jpg/png in cropper
-        const downloadURL = await uploadFileToStorage(path, profileFile)
-        updates.photoURL = downloadURL
-      }
+      // Upload both images in parallel; use allSettled so one failure doesn't block the other
+      const [profileResult, coverResult] = await Promise.allSettled([
+        profileFile ? uploadFileToStorage(`${basePath}/profile.jpg`, profileFile) : Promise.resolve(null),
+        coverFile   ? uploadFileToStorage(`${basePath}/cover.jpg`,   coverFile)   : Promise.resolve(null),
+      ])
 
-      // Upload Cover
-      if (coverFile) {
-        const path = `${basePath}/cover.jpg`
-        const downloadURL = await uploadFileToStorage(path, coverFile)
-        updates.coverURL = downloadURL
+      if (profileResult.status === 'fulfilled' && profileResult.value) updates.photoURL  = profileResult.value
+      if (coverResult.status   === 'fulfilled' && coverResult.value)   updates.coverURL  = coverResult.value
+
+      const failedUploads = [profileResult, coverResult].filter(r => r.status === 'rejected')
+      if (failedUploads.length > 0) {
+        console.error("Some image uploads failed:", failedUploads)
       }
 
       await updateDoc(doc(db, "Users", currentUser.uid), updates)
@@ -155,12 +155,15 @@ export default function ProfileSettingsPage() {
 
       setIsLoading(false)
 
+      const failedCount = [profileResult, coverResult].filter(r => r.status === 'rejected').length
       Swal.fire({
-        title: 'Success!',
-        text: 'Your profile has been updated successfully.',
-        icon: 'success',
+        title: failedCount > 0 ? 'Partially Updated' : 'Success!',
+        text: failedCount > 0
+          ? `Profile saved, but ${failedCount} image upload(s) failed. Please try re-uploading your images.`
+          : 'Your profile has been updated successfully.',
+        icon: failedCount > 0 ? 'warning' : 'success',
         confirmButtonColor: '#1C4D8D',
-        confirmButtonText: 'Great!'
+        confirmButtonText: 'OK'
       })
 
       setProfileFile(null)

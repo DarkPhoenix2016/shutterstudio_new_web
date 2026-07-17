@@ -1,7 +1,7 @@
 import { db } from "@/lib/firebase";
 import {
   collection, addDoc, updateDoc, doc, getDocs,
-  query, where, orderBy, deleteDoc, serverTimestamp, Timestamp
+  query, where, orderBy, deleteDoc, serverTimestamp, Timestamp, writeBatch
 } from "firebase/firestore";
 import {
   PackageData,
@@ -210,28 +210,32 @@ export const convertToEvent = async (studioId: string, consultation: Consultatio
       assignedEquipment: [],
       
       // Extra
-      notes: `"Consutation Notes:" ${consultation.requirements.notes || ""}`
+      notes: `Consultation Notes: ${consultation.requirements.notes || ""}`
     };
 
     // 3. Call Event Service to Create (Handles Transaction & ID Generation)
     await createEvent(studioId, eventData);
 
-    // 4. Update Consultation Status
+    // 4 & 5. Atomically update consultation status + write audit log in a single batch
+    // so both either succeed or both fail — prevents "converted" flag without audit trail
     if (consultation.id) {
-      const consRef = doc(db, "Studios", studioId, "Consultations", consultation.id);
-      await updateDoc(consRef, {
-        status: 'converted',
-        updatedAt: serverTimestamp()
-      });
-    }
+      const batch = writeBatch(db);
 
-    // 5. Audit Log
-    await logAuditAction(
-      "CONVERT_CONSULTATION",
-      `Consultation for '${consultation.client.name}' converted to event`,
-      { uid: studioId, name: studioId },
-      "Consultation"
-    );
+      const consRef = doc(db, "Studios", studioId, "Consultations", consultation.id);
+      batch.update(consRef, { status: 'converted', updatedAt: serverTimestamp() });
+
+      const auditRef = doc(collection(db, "AuditLogs"));
+      batch.set(auditRef, {
+        action: "CONVERT_CONSULTATION",
+        details: `Consultation for '${consultation.client.name}' converted to event`,
+        executor: studioId,
+        executorId: studioId,
+        timestamp: new Date().toISOString(),
+        module: "Consultation"
+      });
+
+      await batch.commit();
+    }
 
   } catch (error) {
     console.error("Error converting to event:", error);

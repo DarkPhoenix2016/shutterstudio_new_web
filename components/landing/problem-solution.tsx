@@ -5,15 +5,15 @@ import { ScrollReveal } from "@/components/ui/scroll-reveal"
 
 export function ProblemSolution() {
   return (
-    <section className="py-24 bg-slate-950 relative overflow-hidden">
-      <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
+    <section className="py-24 bg-background text-foreground transition-colors duration-300 relative overflow-hidden">
+      <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-border to-transparent" />
       
       <div className="container mx-auto px-6 max-w-7xl">
         <ScrollReveal direction="up">
           <div className="text-center mb-16">
-            <h2 className="text-3xl md:text-5xl font-bold text-white mb-4">
+            <h2 className="text-3xl md:text-5xl font-bold text-foreground mb-4">
               Stop running your studio <br />
-              <span className="text-slate-500">on luck and spreadsheets.</span>
+              <span className="text-muted-foreground">on luck and spreadsheets.</span>
             </h2>
           </div>
         </ScrollReveal>
@@ -41,11 +41,11 @@ export function ProblemSolution() {
 
           {/* SOLUTION CARD - Slides in from RIGHT */}
           <ScrollReveal direction="left" delay={0.2} width="100%" className="h-full">
-            <div className="h-full p-8 rounded-3xl border border-blue-500/20 bg-blue-500/[0.05] relative overflow-hidden shadow-[0_0_40px_-10px_rgba(59,130,246,0.1)] hover:bg-blue-500/[0.08] transition-colors">
+            <div className="h-full p-8 rounded-3xl border border-primary/20 bg-primary/5 relative overflow-hidden shadow-[0_0_40px_-10px_rgba(217,119,6,0.1)] hover:bg-primary/10 transition-colors">
               <div className="absolute top-0 right-0 p-4 opacity-20">
-                <CheckCircle2 className="w-32 h-32 text-blue-500" />
+                <CheckCircle2 className="w-32 h-32 text-primary" />
               </div>
-              <h3 className="text-xl font-bold text-blue-400 mb-6 flex items-center gap-2">
+              <h3 className="text-xl font-bold text-primary mb-6 flex items-center gap-2">
                 <Check className="w-5 h-5" /> The Control
               </h3>
               <ul className="space-y-4">
@@ -66,7 +66,7 @@ export function ProblemSolution() {
 
 function ProblemItem({ text }: { text: string }) {
   return (
-    <li className="flex items-start gap-3 text-slate-400">
+    <li className="flex items-start gap-3 text-muted-foreground">
       <div className="mt-1 min-w-[1.25rem]"><X className="w-5 h-5 text-red-500/50" /></div>
       <span>{text}</span>
     </li>
@@ -75,8 +75,8 @@ function ProblemItem({ text }: { text: string }) {
 
 function SolutionItem({ text }: { text: string }) {
   return (
-    <li className="flex items-start gap-3 text-white">
-      <div className="mt-1 min-w-[1.25rem]"><Check className="w-5 h-5 text-blue-400" /></div>
+    <li className="flex items-start gap-3 text-foreground">
+      <div className="mt-1 min-w-[1.25rem]"><Check className="w-5 h-5 text-primary" /></div>
       <span>{text}</span>
     </li>
   )

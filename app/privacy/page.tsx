@@ -15,7 +15,7 @@ export default function PrivacyPage() {
   })
 
   return (
-    <div className="min-h-screen bg-slate-950 font-sans text-slate-200 selection:bg-blue-500/30">
+    <div className="min-h-screen bg-background font-sans text-foreground selection:bg-primary/30">
       <Navbar />
 
       <main className="pt-32 pb-20 relative overflow-hidden">
@@ -29,7 +29,7 @@ export default function PrivacyPage() {
           {/* --- HEADER --- */}
           <ScrollReveal direction="up">
             <div className="mb-12">
-              <Button asChild variant="ghost" className="mb-8 pl-0 text-slate-400 hover:text-white hover:bg-transparent">
+              <Button asChild variant="ghost" className="mb-8 pl-0 text-muted-foreground hover:text-foreground hover:bg-transparent">
                 <Link href="/" className="flex items-center gap-2">
                   <ArrowLeft className="w-4 h-4" /> Back to Home
                 </Link>

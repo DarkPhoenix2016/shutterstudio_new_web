@@ -15,8 +15,7 @@ import {
   ResponsiveContainer, Tooltip, PieChart, Pie, Cell, Legend, BarChart, Bar, XAxis, YAxis, CartesianGrid 
 } from "recharts"
 import { collection, getDocs, query, where, getCountFromServer, doc, getDoc, collectionGroup } from "firebase/firestore"
-import { ref, listAll, getMetadata } from "firebase/storage"
-import { db, storage } from "@/lib/firebase"
+import { db } from "@/lib/firebase"
 
 // --- TYPES ---
 interface StudioSummary {
@@ -33,30 +32,6 @@ interface RoleData {
 
 // --- COLORS ---
 const COLORS = ['#1C4D8D', '#4988C4', '#00C49F', '#FFBB28', '#FF8042', '#8884d8']
-
-// --- HELPER: Recursive Storage Calculator ---
-const calculateFolderSize = async (path: string): Promise<number> => {
-    let totalBytes = 0
-    const traverse = async (currentPath: string) => {
-        const folderRef = ref(storage, currentPath)
-        try {
-            const res = await listAll(folderRef)
-            // Sum files
-            const metadataPromises = res.items.map(item => getMetadata(item))
-            const metaSnapshots = await Promise.all(metadataPromises)
-            metaSnapshots.forEach(meta => totalBytes += meta.size)
-            
-            // Recurse folders
-            for (const folder of res.prefixes) {
-                await traverse(folder.fullPath)
-            }
-        } catch (error) {
-            console.warn(`Skipping folder ${currentPath}:`, error)
-        }
-    }
-    await traverse(path)
-    return totalBytes
-}
 
 // --- HELPER: Format Bytes ---
 const formatBytes = (bytes: number, decimals = 2) => {
@@ -109,19 +84,26 @@ function GlobalAnalytics() {
   useEffect(() => {
     const fetchGlobalData = async () => {
       try {
-        // 1. Efficient Aggregation Counts
+        // 1. Efficient Aggregation Counts & Global Storage Calculation
         const studiosColl = collection(db, "Studios")
         const usersColl = collection(db, "Users")
         const eventsGroup = query(collectionGroup(db, "Events")) 
 
-        const [studioSnap, userSnap, eventSnap] = await Promise.all([
-            getCountFromServer(studiosColl),
+        const [studiosSnapshot, userSnap, eventSnap] = await Promise.all([
+            getDocs(studiosColl),
             getCountFromServer(usersColl),
             getCountFromServer(eventsGroup)
         ])
         
+        // Sum total storage from studio records
+        let totalStorageBytes = 0
+        studiosSnapshot.forEach(doc => {
+          totalStorageBytes += doc.data().storageUtilizationBytes || 0
+        })
+        setTotalStorage(formatBytes(totalStorageBytes))
+
         setCounts({
-          studios: studioSnap.data().count,
+          studios: studiosSnapshot.size,
           users: userSnap.data().count,
           events: eventSnap.data().count
         })
@@ -142,11 +124,6 @@ function GlobalAnalytics() {
           color: COLORS[index % COLORS.length]
         }))
         setRoleDistribution(chartData)
-
-        // 3. Global Storage Calculation
-        calculateFolderSize("Studios").then(bytes => {
-            setTotalStorage(formatBytes(bytes))
-        })
 
       } catch (e) {
         console.error("Global Data Error:", e)
@@ -312,12 +289,16 @@ function StudioSpecificAnalytics() {
       setIsCalculating(true)
       
       try {
-        // A. Get Studio Doc (Package Info)
+        // A. Get Studio Doc (Package Info & Storage Size)
         const studioRef = doc(db, "Studios", selectedStudioId)
         const studioDoc = await getDoc(studioRef)
+        let bytes = 0
         if (studioDoc.exists()) {
-            setStudioPackage(studioDoc.data().package || "Basic")
+            const studioData = studioDoc.data()
+            setStudioPackage(studioData.package || "Basic")
+            bytes = studioData.storageUtilizationBytes || 0
         }
+        setStorageUsed(formatBytes(bytes))
 
         // B. Get Real Event Count (Subcollection)
         const eventsColl = collection(db, `Studios/${selectedStudioId}/Events`)
@@ -339,10 +320,6 @@ function StudioSpecificAnalytics() {
             color: COLORS[index % COLORS.length]
         }))
         setUserRoles(chartData)
-
-        // D. Get Real Storage Size
-        const bytes = await calculateFolderSize(`Studios/${selectedStudioId}`)
-        setStorageUsed(formatBytes(bytes))
 
       } catch (e) {
         console.error("Studio Analytics Error:", e)

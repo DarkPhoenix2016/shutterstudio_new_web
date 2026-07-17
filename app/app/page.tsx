@@ -291,7 +291,7 @@ export default function DashboardPage() {
   if (authLoading || loading) {
     return (
       <div className="flex h-[80vh] items-center justify-center">
-        <Loader2 className="h-7 w-7 animate-spin text-[#1C4D8D]" />
+        <Loader2 className="h-7 w-7 animate-spin text-brand-primary" />
       </div>
     )
   }
@@ -311,13 +311,13 @@ export default function DashboardPage() {
             {greeting}, {name} 👋
           </h1>
           <p className="text-sm text-muted-foreground mt-0.5">
-            <span className="font-medium text-[#1C4D8D]">{studioData?.name}</span>
+            <span className="font-medium text-brand-primary">{studioData?.name}</span>
             {" · "}
             {format(new Date(), "EEEE, MMMM d, yyyy")}
           </p>
         </div>
         <Button
-          className="bg-[#1C4D8D] text-white hover:bg-[#0F2854] gap-2 shadow-sm"
+          className="bg-brand-primary text-white hover:bg-brand-primary-hover gap-2 shadow-sm"
           onClick={() => setNewEventOpen(true)}
         >
           <Plus className="h-4 w-4" /> New Booking
@@ -331,7 +331,7 @@ export default function DashboardPage() {
           label="This Month Revenue"
           value={fmtMoney(data.thisMonthRevenue, currency)}
           sub={`${data.thisMonthEvents} event${data.thisMonthEvents !== 1 ? "s" : ""} this month`}
-          accent="#1C4D8D"
+          accent="#d97706"
           trend="up"
           onClick={() => router.push("/app/analytics")}
         />
@@ -348,7 +348,7 @@ export default function DashboardPage() {
           label="Active Events"
           value={String(data.activeEvents)}
           sub={`${data.upcomingEvents.length} in next 14 days`}
-          accent="#4988C4"
+          accent="#f59e0b"
           onClick={() => router.push("/app/events")}
         />
         <KpiCard
@@ -365,7 +365,7 @@ export default function DashboardPage() {
           label="Crew Members"
           value={String(data.crewCount)}
           sub="Active team"
-          accent="#0F2854"
+          accent="#18181b"
           onClick={() => router.push("/app/crew/overview")}
         />
         <KpiCard
@@ -380,7 +380,7 @@ export default function DashboardPage() {
 
       {/* ── Today's alert banner ────────────────────────────────────── */}
       {data.todayEvents.length > 0 && (
-        <div className="flex items-center gap-3 rounded-xl bg-[#1C4D8D] px-4 py-3 text-white shadow-md">
+        <div className="flex items-center gap-3 rounded-xl bg-brand-primary px-4 py-3 text-white shadow-md">
           <div className="h-8 w-8 rounded-lg bg-white/15 flex items-center justify-center shrink-0">
             <Star className="h-4 w-4" />
           </div>
@@ -415,7 +415,7 @@ export default function DashboardPage() {
             </div>
             <Button
               variant="ghost" size="sm"
-              className="text-[#1C4D8D] hover:bg-[#1C4D8D]/5 text-xs gap-1"
+              className="text-brand-primary hover:bg-brand-primary-light text-xs gap-1"
               onClick={() => router.push("/app/events")}
             >
               All events <ArrowUpRight className="h-3.5 w-3.5" />
@@ -446,7 +446,7 @@ export default function DashboardPage() {
                       <div className={cn(
                         "shrink-0 w-14 text-center rounded-lg py-1.5 border",
                         isUrgent
-                          ? "bg-[#1C4D8D] border-[#1C4D8D] text-white"
+                          ? "bg-brand-primary border-brand-primary text-white"
                           : "bg-slate-50 border-slate-200 text-slate-600"
                       )}>
                         <p className="text-[10px] font-semibold uppercase leading-none">
@@ -477,7 +477,7 @@ export default function DashboardPage() {
                       <div className="flex items-center gap-2 shrink-0">
                         <span className={cn(
                           "text-[11px] font-medium",
-                          isUrgent ? "text-[#1C4D8D]" : "text-slate-400"
+                          "text-brand-primary"
                         )}>
                           {label}
                         </span>
@@ -509,7 +509,7 @@ export default function DashboardPage() {
               </div>
               <Button
                 variant="ghost" size="sm"
-                className="text-[#1C4D8D] hover:bg-[#1C4D8D]/5 text-xs gap-1"
+                className="text-brand-primary hover:bg-brand-primary-light text-xs gap-1"
                 onClick={() => router.push("/app/tasks")}
               >
                 All <ArrowUpRight className="h-3.5 w-3.5" />
@@ -569,9 +569,9 @@ export default function DashboardPage() {
             <CardContent className="p-3">
               <div className="grid grid-cols-2 gap-2">
                 {[
-                  { label: "New Booking",  icon: Calendar,   action: () => setNewEventOpen(true),               accent: "#1C4D8D" },
-                  { label: "Crew",         icon: Users,       action: () => router.push("/app/crew/overview"),    accent: "#0F2854" },
-                  { label: "Inventory",    icon: Package,     action: () => router.push("/app/inventory/overview"), accent: "#4988C4" },
+                  { label: "New Booking",  icon: Calendar,   action: () => setNewEventOpen(true),               accent: "#d97706" },
+                  { label: "Crew",         icon: Users,       action: () => router.push("/app/crew/overview"),    accent: "#18181b" },
+                  { label: "Inventory",    icon: Package,     action: () => router.push("/app/inventory/overview"), accent: "#f59e0b" },
                   { label: "Analytics",   icon: BarChart2,   action: () => router.push("/app/analytics"),        accent: "#8b5cf6" },
                   { label: "Tasks",        icon: CheckSquare, action: () => router.push("/app/tasks"),            accent: "#22c55e" },
                   { label: "Catalogue",   icon: Star,        action: () => router.push("/app/catalogue/overview"), accent: "#f59e0b" },
@@ -602,7 +602,7 @@ export default function DashboardPage() {
           </div>
           <Button
             variant="ghost" size="sm"
-            className="text-[#1C4D8D] hover:bg-[#1C4D8D]/5 text-xs gap-1"
+            className="text-brand-primary hover:bg-brand-primary-light text-xs gap-1"
             onClick={() => router.push("/app/analytics")}
           >
             Full report <ArrowUpRight className="h-3.5 w-3.5" />

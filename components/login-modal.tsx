@@ -28,7 +28,7 @@ export function LoginModal({ open, onOpenChange }: LoginModalProps) {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [loading, setLoading] = useState(false)
-  const setCurrentUser = useStore((state) => state.setCurrentUser)
+  const setCurrentUser = useStore((state: any) => (state as any).setCurrentUser)
   const router = useRouter()
 
   const handleLogin = async (e: React.FormEvent) => {

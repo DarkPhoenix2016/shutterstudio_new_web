@@ -5,6 +5,7 @@ import { AdminSidebar } from "@/components/admin-sidebar"
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar" // [!code highlight] Added imports
 import { useAuth } from "@/context/AuthContext"
 import { Loader2 } from "lucide-react"
+import { useTheme } from "next-themes"
 import { usePathname, useRouter } from "next/navigation"
 import { useEffect } from "react"
 
@@ -13,6 +14,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const router = useRouter()
   // We need userData to check the role (admin vs user)
   const { currentUser, userData, loading } = useAuth()
+  const { theme, setTheme } = useTheme()
+
+  useEffect(() => {
+    // Force the admin layout to always be in light mode
+    if (theme !== "light") {
+      setTheme("light")
+    }
+  }, [theme, setTheme])
 
   const isLoginPage = pathname === "/admin/login"
 
@@ -45,10 +54,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   if (loading) {
     return (
-      <div className="flex h-screen w-full items-center justify-center bg-slate-50">
+      <div className="flex h-screen w-full items-center justify-center bg-background text-foreground">
         <div className="flex items-center gap-2">
-          <Loader2 className="h-6 w-6 animate-spin text-primary" />
-          <span className="text-muted-foreground font-medium">Verifying access...</span>
+          <Loader2 className="h-6 w-6 animate-spin text-brand-primary" />
+          <span className="text-muted-foreground font-medium">Verifying access…</span>
         </div>
       </div>
     )
@@ -56,7 +65,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   // SCENARIO 1: Login Page (No Sidebar, No Provider needed)
   if (isLoginPage) {
-    return <main className="min-h-screen w-full">{children}</main>
+    return <main className="min-h-screen w-full bg-background text-foreground">{children}</main>
   }
 
   // SCENARIO 2: Protected Admin Layout
@@ -65,7 +74,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   return (
     <SidebarProvider>
-      <div className="flex min-h-screen w-full bg-slate-50/50">
+      <div className="flex min-h-screen w-full bg-background text-foreground">
         <AdminSidebar />
         
         <main className="flex-1 flex flex-col min-w-0 overflow-hidden">

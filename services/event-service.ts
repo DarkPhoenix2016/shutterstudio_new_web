@@ -150,7 +150,6 @@ export interface EventData {
   locations?: EventLocation[];
   transactions?: TransactionRecord[]; 
   invoices?: EventInvoiceRecord[];
-  Invoices?: EventInvoiceRecord[];
 
   notes?: string;
   createdAt?: any;
@@ -248,7 +247,8 @@ export const createEvent = async (studioId: string, event: EventData) => {
 
       const customId = `${invoiceText}${nextStr}`; 
       const nextInt = parseInt(nextStr, 10);
-      const newNextStr = String(nextInt + 1).padStart(5, '0');
+      const newNextNum = nextInt + 1;
+      const newNextStr = String(newNextNum).padStart(Math.max(5, String(newNextNum).length), '0');
 
       const newEventRef = doc(collection(db, "Studios", studioId, "Events"));
 

@@ -9,7 +9,7 @@ import Link from "next/link"
 
 export default function AboutPage() {
   return (
-    <div className="min-h-screen bg-slate-950 font-sans text-slate-200 selection:bg-blue-500/30">
+    <div className="min-h-screen bg-background font-sans text-foreground selection:bg-primary/30">
       <Navbar />
 
       <main className="pt-24 pb-20">

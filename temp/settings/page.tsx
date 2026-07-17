@@ -64,7 +64,7 @@ export default function SettingsPage() {
         </CardHeader>
         <CardContent>
           <div className="flex flex-wrap gap-2">
-            {studio?.features.map((f) => (
+            {studio?.features.map((f: string) => (
               <div
                 key={f}
                 className="px-3 py-1.5 rounded-lg bg-slate-100 text-xs font-bold uppercase text-slate-500 border"

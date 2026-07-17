@@ -12,13 +12,13 @@ const steps = [
 
 export function HowItWorks() {
   return (
-    <section className="py-24 bg-slate-950 relative" id="how-it-works">
+    <section className="py-24 bg-background transition-colors duration-300 relative border-t border-border" id="how-it-works">
       <div className="container mx-auto px-6 max-w-7xl">
         <ScrollReveal direction="up" className="mx-auto">
           <div className="text-center mb-16">
-            <h2 className="text-3xl md:text-5xl font-bold text-white mb-4">
+            <h2 className="text-3xl md:text-5xl font-bold text-foreground mb-4">
               From inquiry to invoice <br />
-              <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-400">
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-amber-500">
                 in 4 simple steps.
               </span>
             </h2>
@@ -26,18 +26,18 @@ export function HowItWorks() {
         </ScrollReveal>
 
         <div className="relative grid md:grid-cols-4 gap-8">
-          <div className="hidden md:block absolute top-12 left-[10%] right-[10%] h-0.5 bg-gradient-to-r from-blue-900/50 via-blue-500/30 to-blue-900/50" />
+          <div className="hidden md:block absolute top-12 left-[10%] right-[10%] h-0.5 bg-gradient-to-r from-primary/10 via-primary/30 to-primary/10" />
 
           {steps.map((step, index) => {
             const Icon = step.icon
             return (
               <ScrollReveal key={index} direction="up" delay={index * 0.2} width="100%">
                 <div className="relative group text-center z-10">
-                  <div className="w-24 h-24 mx-auto bg-slate-900 rounded-2xl border border-white/10 flex items-center justify-center mb-6 shadow-xl transition-all duration-300 group-hover:-translate-y-2 group-hover:border-blue-500/50 group-hover:shadow-blue-500/20">
-                    <Icon className="w-10 h-10 text-slate-400 group-hover:text-blue-400 transition-colors" />
+                  <div className="w-24 h-24 mx-auto bg-card rounded-2xl border border-border flex items-center justify-center mb-6 shadow-lg transition-all duration-300 group-hover:-translate-y-2 group-hover:border-primary/50 group-hover:shadow-primary/10">
+                    <Icon className="w-10 h-10 text-muted-foreground group-hover:text-primary transition-colors" />
                   </div>
-                  <h3 className="text-xl font-bold text-white mb-3">{step.title}</h3>
-                  <p className="text-slate-400 text-sm leading-relaxed px-2">
+                  <h3 className="text-xl font-bold text-foreground mb-3">{step.title}</h3>
+                  <p className="text-muted-foreground text-sm leading-relaxed px-2">
                     {step.desc}
                   </p>
                 </div>

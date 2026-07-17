@@ -57,7 +57,66 @@
   --sidebar-ring: #4988c4;
 }
 
-/* Removed dark mode - application runs strictly in light mode */
+.dark {
+  --background: #0f0f10; /* Charcoal / Obsidian */
+  --foreground: #fafaf9;
+  --card: #18181b;
+  --card-foreground: #fafaf9;
+  --popover: #18181b;
+  --popover-foreground: #fafaf9;
+  --primary: #d97706;
+  --primary-foreground: #fafaf9;
+  --secondary: #27272a;
+  --secondary-foreground: #fafaf9;
+  --muted: #27272a;
+  --muted-foreground: #a1a1aa;
+  --accent: #d97706;
+  --accent-foreground: #fafaf9;
+  --destructive: oklch(0.396 0.141 25.723);
+  --destructive-foreground: oklch(0.637 0.237 25.331);
+  --border: #27272a;
+  --input: #27272a;
+  --ring: #d97706;
+  --chart-1: oklch(0.488 0.243 264.376);
+  --chart-2: oklch(0.696 0.17 162.48);
+  --chart-3: oklch(0.769 0.188 70.08);
+  --chart-4: oklch(0.627 0.265 303.9);
+  --chart-5: oklch(0.645 0.246 16.439);
+  --sidebar: #18181b;
+  --sidebar-foreground: #fafaf9;
+  --sidebar-primary: #d97706;
+  --sidebar-primary-foreground: #fafaf9;
+  --sidebar-accent: #27272a;
+  --sidebar-accent-foreground: #fafaf9;
+  --sidebar-border: #27272a;
+  --sidebar-ring: #d97706;
+}
+
+/* Auto-mapping utility fallbacks to respect dark mode */
+.dark .bg-white {
+  background-color: var(--card) !important;
+}
+.dark .text-slate-900, .dark .text-gray-900, .dark .text-zinc-900 {
+  color: var(--foreground) !important;
+}
+.dark .text-slate-700, .dark .text-gray-700, .dark .text-zinc-700 {
+  color: var(--muted-foreground) !important;
+}
+.dark .text-slate-600, .dark .text-slate-500, .dark .text-gray-600, .dark .text-gray-500, .dark .text-zinc-500, .dark .text-slate-400 {
+  color: var(--muted-foreground) !important;
+}
+.dark .border-slate-200, .dark .border-gray-200, .dark .border-zinc-200, .dark .border-slate-100 {
+  border-color: var(--border) !important;
+}
+.dark .bg-slate-50, .dark .bg-gray-50, .dark .bg-zinc-50, .dark .bg-slate-50\/50, .dark .bg-slate-50\/80 {
+  background-color: var(--background) !important;
+}
+.dark .bg-slate-100, .dark .bg-gray-100, .dark .bg-zinc-100 {
+  background-color: var(--secondary) !important;
+}
+.dark .hover\:bg-slate-50:hover, .dark .hover\:bg-gray-50:hover {
+  background-color: var(--secondary) !important;
+}
 
 @theme inline {
   --font-sans: "Geist", "Geist Fallback";

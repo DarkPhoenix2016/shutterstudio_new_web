@@ -129,7 +129,7 @@ export function DashboardSidebar() {
   const userPhoto = userData?.photoURL || userData?.profileImage || userData?.photoURL
 
   return (
-    <Sidebar className="border-r-0 bg-[#0F2854] text-white">
+    <Sidebar className="border-r-0 bg-brand-dark text-white">
       {/* --- HEADER --- */}
       <SidebarHeader className="p-4 pb-2"> 
         <div className="flex items-center justify-between gap-2">
@@ -138,7 +138,7 @@ export function DashboardSidebar() {
                {studioLogo ? (
                   <img src={studioLogo} alt="Studio Logo" className="h-full w-full object-cover" />
                ) : (
-                  <Camera className="h-5 w-5 text-[#BDE8F5]" />
+                  <Camera className="h-5 w-5 text-brand-accent" />
                )}
             </div>
             <div className="flex flex-col overflow-hidden">
@@ -146,14 +146,14 @@ export function DashboardSidebar() {
                  {studioName}
               </span>
               {/* [!code highlight] Dynamic Plan Name */}
-              <span className="text-[9px] text-[#4988C4] font-bold uppercase tracking-widest leading-none">
+              <span className="text-[9px] text-brand-primary font-bold uppercase tracking-widest leading-none">
                  {planName} LICENSE
               </span>
             </div>
           </div>
           <Badge
             variant="outline"
-            className="bg-[#BDE8F5]/10 text-[#BDE8F5] border-[#BDE8F5]/20 text-[9px] h-5 px-1"
+            className="bg-brand-primary-light text-brand-accent border-brand-primary/20 text-[9px] h-5 px-1"
           >
             v2.0
           </Badge>
@@ -172,7 +172,7 @@ export function DashboardSidebar() {
               className="group/collapsible"
             >
               <SidebarGroup className="py-0">
-                <SidebarGroupLabel asChild className="group/label text-[#4988C4] hover:text-white hover:bg-white/5 cursor-pointer text-[10px] font-bold tracking-widest px-2 h-8 mb-0.5 uppercase flex items-center">
+                <SidebarGroupLabel asChild className="group/label text-brand-primary hover:text-white hover:bg-white/5 cursor-pointer text-[10px] font-bold tracking-widest px-2 h-8 mb-0.5 uppercase flex items-center">
                   <CollapsibleTrigger>
                     {group.label}
                     <ChevronDown className="ml-auto h-3 w-3 transition-transform duration-200 group-data-[state=open]/collapsible:rotate-180" />
@@ -194,17 +194,17 @@ export function DashboardSidebar() {
                               className={cn(
                                 "h-8 px-2.5 transition-all duration-200 group relative",
                                 isActive
-                                  ? "bg-[#1C4D8D] text-white font-medium shadow-sm"
-                                  : "text-white/70 hover:text-white hover:bg-[#1e3a6e]",
+                                  ? "bg-brand-primary text-white font-medium shadow-sm"
+                                  : "text-white/70 hover:text-white hover:bg-brand-dark-hover",
                               )}
                             >
                               <button onClick={() => router.push(item.path)} className="w-full flex items-center gap-2.5">
-                                {isActive && <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-[#BDE8F5]" />}
+                                {isActive && <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-brand-accent" />}
                                 <IconComponent
-                                  className={cn("h-4 w-4 shrink-0", isActive ? "text-[#BDE8F5]" : "text-white/40")}
+                                  className={cn("h-4 w-4 shrink-0", isActive ? "text-brand-accent" : "text-white/40")}
                                 />
                                 <span className="truncate text-xs">{item.label}</span>
-                                {isActive && <ChevronRight className="ml-auto h-3 w-3 text-[#BDE8F5]/50" />}
+                                {isActive && <ChevronRight className="ml-auto h-3 w-3 text-brand-accent/50" />}
                               </button>
                             </SidebarMenuButton>
                           </SidebarMenuItem>
@@ -228,7 +228,7 @@ export function DashboardSidebar() {
         >
           <Avatar className="h-8 w-8 border border-white/10">
             <AvatarImage src={userPhoto || undefined} alt={userName} />
-            <AvatarFallback className="bg-[#1C4D8D] text-white text-[10px]">
+            <AvatarFallback className="bg-brand-primary text-white text-[10px]">
               {getInitials(userName)}
             </AvatarFallback>
           </Avatar>
@@ -237,7 +237,7 @@ export function DashboardSidebar() {
             <span className="text-xs font-medium truncate text-white">
               {userName}
             </span>
-            <span className="text-[9px] text-[#4988C4] font-bold uppercase tracking-wider truncate">
+            <span className="text-[9px] text-brand-primary font-bold uppercase tracking-wider truncate">
               {formatRole(userRole)}
             </span>
           </div>

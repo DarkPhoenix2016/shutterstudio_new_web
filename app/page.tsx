@@ -19,7 +19,7 @@ export default function LandingPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 font-sans text-slate-200">
+    <div className="min-h-screen bg-background text-foreground transition-colors duration-300 font-sans">
       <Navbar />
       <main>
         <Hero onGetStartedClick={handleGetStarted} />

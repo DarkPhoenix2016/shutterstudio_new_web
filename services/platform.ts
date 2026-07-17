@@ -45,3 +45,39 @@ export async function fetchPlatformPackages() {
     return []
   }
 }
+
+export interface Discount {
+  id: string
+  name: string
+  packageId: string // "all" or specific package ID
+  billingCycle: "monthly" | "6months" | "yearly" | "all"
+  type: "percentage" | "flat"
+  value: number
+  active: boolean
+  isSeasonal: boolean
+}
+
+export async function fetchPlatformDiscounts(): Promise<Discount[]> {
+  try {
+    const ref = doc(db, "Platform", "packages")
+    const snap = await getDoc(ref)
+
+    if (!snap.exists()) return []
+
+    const data = snap.data()
+    const list = data.discounts_list || []
+
+    const orderedDiscounts = list.map((key: string) => {
+      const discData = data[key]
+      return {
+        id: key,
+        ...discData,
+      }
+    })
+
+    return orderedDiscounts as Discount[]
+  } catch (error) {
+    console.error("Error fetching discounts:", error)
+    return []
+  }
+}

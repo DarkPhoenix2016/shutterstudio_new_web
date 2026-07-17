@@ -479,7 +479,7 @@ function EventForm({
                                                             <div className="col-span-4">
                                                                 <Input
                                                                     placeholder="Item name"
-                                                                    className="h-8 text-xs border-0 bg-transparent shadow-none focus-visible:ring-1 focus-visible:ring-[#1C4D8D]/30 px-2"
+                                                                    className="h-8 text-xs border-0 bg-transparent shadow-none focus-visible:ring-1 focus-visible:ring-brand-primary/30 px-2"
                                                                     value={item.name}
                                                                     disabled={isLocked}
                                                                     onChange={e => updateCustomItem(i, itemIdx, "name", e.target.value)}
@@ -488,7 +488,7 @@ function EventForm({
                                                             <div className="col-span-2">
                                                                 <Input
                                                                     type="number" min="1" placeholder="1"
-                                                                    className="h-8 text-xs text-center border-slate-200 focus-visible:ring-[#1C4D8D]/30"
+                                                                    className="h-8 text-xs text-center border-slate-200 focus-visible:ring-brand-primary/30"
                                                                     value={item.quantity}
                                                                     disabled={isLocked}
                                                                     onChange={e => updateCustomItem(i, itemIdx, "quantity", Math.max(1, Number(e.target.value)))}
@@ -497,14 +497,14 @@ function EventForm({
                                                             <div className="col-span-3">
                                                                 <Input
                                                                     type="number" min="0" placeholder="0"
-                                                                    className="h-8 text-xs text-right border-slate-200 focus-visible:ring-[#1C4D8D]/30"
+                                                                    className="h-8 text-xs text-right border-slate-200 focus-visible:ring-brand-primary/30"
                                                                     value={item.price}
                                                                     disabled={isLocked}
                                                                     onChange={e => updateCustomItem(i, itemIdx, "price", Number(e.target.value))}
                                                                 />
                                                             </div>
                                                             <div className="col-span-2 text-right">
-                                                                <span className="text-xs font-semibold text-[#1C4D8D] tabular-nums pr-1">
+                                                                <span className="text-xs font-semibold text-brand-primary tabular-nums pr-1">
                                                                     {rowTotal.toLocaleString()}
                                                                 </span>
                                                             </div>
@@ -543,13 +543,13 @@ function EventForm({
                                             </div>
 
                                             {/* Day subtotal */}
-                                            <div className="flex items-center justify-between rounded-lg bg-[#1C4D8D]/5 border border-[#1C4D8D]/10 px-3 py-2">
+                                            <div className="flex items-center justify-between rounded-lg bg-brand-primary/5 border border-brand-primary/10 px-3 py-2">
                                                 <span className="text-xs text-slate-600">
                                                     {day.customItems?.length ?? 0} item{(day.customItems?.length ?? 0) !== 1 ? "s" : ""}
                                                 </span>
                                                 <div className="text-right">
                                                     <span className="text-xs text-slate-500 mr-2">Day Total</span>
-                                                    <span className="text-sm font-bold text-[#1C4D8D]">
+                                                    <span className="text-sm font-bold text-brand-primary">
                                                         {(day.cost || 0).toLocaleString()}
                                                     </span>
                                                 </div>
@@ -598,7 +598,7 @@ function EventForm({
                             <span>- LKR {financials.discountAmount.toLocaleString()}</span>
                         </div>
                         <Separator className="bg-slate-300" />
-                        <div className="flex justify-between text-base font-bold text-[#1C4D8D]">
+                        <div className="flex justify-between text-base font-bold text-brand-primary">
                             <span>Final Budget</span>
                             <span>LKR {financials.subTotal.toLocaleString()}</span>
                         </div>
@@ -621,7 +621,7 @@ function EventForm({
             <div className="p-4 border-t bg-white flex gap-3 shrink-0">
                 <Button variant="outline" className="flex-1" onClick={onCancel}>Cancel</Button>
                 <Button
-                    className="bg-[#1C4D8D] flex-1"
+                    className="bg-brand-primary hover:bg-brand-primary-hover flex-1"
                     onClick={handleSubmit}
                     disabled={submitting}
                 >

@@ -22,6 +22,7 @@ import {
     CalendarDays, MapPin, UserCheck
 } from "lucide-react"
 import { format, isSameDay } from "date-fns"
+import { safeDate } from "@/lib/date-utils"
 
 const ITEMS_PER_PAGE = 10;
 
@@ -133,11 +134,11 @@ export default function InventoryOverviewPage() {
   }, [events, scheduleItem]);
 
   const eventDates = useMemo(() => {
-      return itemEvents.flatMap(evt => evt.days.map(d => new Date(d.date)));
+      return itemEvents.flatMap(evt => evt.days.map(d => safeDate(d.date)));
   }, [itemEvents]);
 
   const selectedDateEvents = useMemo(() => {
-      return itemEvents.filter(evt => evt.days.some(d => date && isSameDay(new Date(d.date), date)));
+      return itemEvents.filter(evt => evt.days.some(d => date && isSameDay(safeDate(d.date), date)));
   }, [itemEvents, date]);
 
 
@@ -473,7 +474,7 @@ export default function InventoryOverviewPage() {
                     <div className="flex-1 overflow-y-auto p-6 space-y-4">
                         {selectedDateEvents.length > 0 ? (
                             selectedDateEvents.map(evt => {
-                                const dayLoc = evt.locations?.find(l => date && isSameDay(new Date(l.date), date)) || evt.locations?.[0];
+                                const dayLoc = evt.locations?.find(l => date && isSameDay(safeDate(l.date), date)) || evt.locations?.[0];
                                 return (
                                     <div 
                                         key={evt.id} 

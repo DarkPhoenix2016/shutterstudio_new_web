@@ -2,11 +2,12 @@
 
 import { useState, useEffect } from "react"
 import { useAuth } from "@/context/AuthContext"
-import { 
-  fetchCrewMembers, fetchRoles, fetchDesignations, fetchSubscriptionLimits, 
+import {
+  fetchCrewMembers, fetchRoles, fetchDesignations, fetchSubscriptionLimits,
   createCrewMember, updateCrewMember, toggleCrewMemberStatus,
-  Member, PackageLimits 
+  Member, PackageLimits
 } from "@/services/crew-service"
+import { logAuditAction } from "@/lib/logger"
 import { 
     Table, TableBody, TableCell, TableHead, TableHeader, TableRow 
 } from "@/components/ui/table"
@@ -130,30 +131,49 @@ export default function StudioManagersPage() {
   };
 
   // 3. ACTIONS
+  const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
   const handleCreateUser = async () => {
       if (!userData?.studioID) {
           Toast.fire({ icon: 'error', title: 'Studio ID is missing.' });
           return;
       }
 
-      if(!newUser.email || !newUser.password || !newUser.displayName || !newUser.role) {
+      if (!newUser.email || !newUser.password || !newUser.displayName || !newUser.role) {
           Toast.fire({ icon: 'warning', title: 'Please fill all mandatory fields' });
+          return;
+      }
+
+      if (!EMAIL_RE.test(newUser.email)) {
+          Toast.fire({ icon: 'warning', title: 'Please enter a valid email address' });
+          return;
+      }
+
+      if (newUser.password.length < 6) {
+          Toast.fire({ icon: 'warning', title: 'Password must be at least 6 characters' });
           return;
       }
 
       setIsSubmitting(true);
 
       try {
-          await createCrewMember({
-              ...newUser,
-              studioID: userData.studioID
-          });
+          await createCrewMember({ ...newUser, studioID: userData.studioID });
+
+          await logAuditAction(
+              "CREATE_CREW_MEMBER",
+              `New crew member '${newUser.displayName}' (${newUser.email}) created with role '${newUser.role}'`,
+              { uid: currentUser?.uid || "", email: userData.email, displayName: userData.displayName },
+              "Crew"
+          );
 
           Toast.fire({ icon: 'success', title: 'User created successfully' });
           setIsAddOpen(false);
           setNewUser({ displayName: "", email: "", phone: "", password: "", role: "", designation: "" });
-          
-          window.location.reload(); 
+
+          // Refetch instead of full page reload
+          const refreshed = await fetchCrewMembers(userData.studioID);
+          setMembers(refreshed);
+          setActiveUsage(refreshed.filter(u => !(u.disabled || u.accountDisabled || u.status === "Disabled")).length);
 
       } catch (error: any) {
           Toast.fire({ icon: 'error', title: error.message || 'Registration failed' });
@@ -181,8 +201,15 @@ export default function StudioManagersPage() {
 
           await updateCrewMember(editingUser.id, updateData);
 
+          await logAuditAction(
+              "UPDATE_CREW_MEMBER",
+              `Crew member '${editingUser.displayName}' profile updated (role: ${updateData.role})`,
+              { uid: currentUser?.uid || "", email: userData?.email, displayName: userData?.displayName },
+              "Crew"
+          );
+
           setMembers(prev => prev.map(m => m.id === editingUser.id ? { ...m, ...updateData } : m));
-          
+
           Toast.fire({ icon: 'success', title: 'User details updated' });
           setIsEditOpen(false);
       } catch (error: any) {
@@ -213,11 +240,18 @@ export default function StudioManagersPage() {
               try {
                   await toggleCrewMemberStatus(member.id, !isDisabled);
 
-                  setMembers(prev => prev.map(m => m.id === member.id ? { 
-                      ...m, 
-                      disabled: !isDisabled, 
+                  await logAuditAction(
+                      `${action.toUpperCase()}_CREW_MEMBER`,
+                      `Crew member '${member.displayName}' account ${action.toLowerCase()}d`,
+                      { uid: currentUser?.uid || "", email: userData?.email, displayName: userData?.displayName },
+                      "Crew"
+                  );
+
+                  setMembers(prev => prev.map(m => m.id === member.id ? {
+                      ...m,
+                      disabled: !isDisabled,
                       accountDisabled: !isDisabled,
-                      status: isDisabled ? "Active" : "Disabled" 
+                      status: isDisabled ? "Active" : "Disabled"
                   } : m));
 
                   setActiveUsage(prev => isDisabled ? prev + 1 : prev - 1);

@@ -284,7 +284,6 @@ export default function EventDetailPage() {
    const availableTags = useMemo(() => {
         const tags = new Set<string>();
         allEvents.forEach(e => {
-            // @ts-ignore
             if(Array.isArray(e.tags)) e.tags.forEach(t => tags.add(t))
         });
         return Array.from(tags).sort();
@@ -292,9 +291,8 @@ export default function EventDetailPage() {
 
     const filteredTagSuggestions = useMemo(() => {
         if (!tagInput) return [];
-        return availableTags.filter(t => 
-            t.toLowerCase().includes(tagInput.toLowerCase()) && 
-            // @ts-ignore
+        return availableTags.filter(t =>
+            t.toLowerCase().includes(tagInput.toLowerCase()) &&
             !event?.tags?.includes(t)
         );
     }, [availableTags, tagInput, event]);
@@ -304,7 +302,6 @@ export default function EventDetailPage() {
         const trimmed = tag.trim();
         if (!trimmed) return;
         
-        // @ts-ignore
         const currentTags = event.tags || [];
         if (currentTags.includes(trimmed)) {
             setTagInput("");
@@ -312,18 +309,17 @@ export default function EventDetailPage() {
         }
 
         const newTags = [...currentTags, trimmed];
-        setEvent({ ...event, tags: newTags } as any);
+        setEvent({ ...event, tags: newTags });
         setTagInput("");
         setShowTagSuggestions(false);
-        await handleUpdateEvent({ tags: newTags } as any);
+        await handleUpdateEvent({ tags: newTags });
     };
 
     const handleRemoveTag = async (tagToRemove: string) => {
         if (!event) return;
-        // @ts-ignore
         const newTags = (event.tags || []).filter(t => t !== tagToRemove);
-        setEvent({ ...event, tags: newTags } as any);
-        await handleUpdateEvent({ tags: newTags } as any);
+        setEvent({ ...event, tags: newTags });
+        await handleUpdateEvent({ tags: newTags });
     };
 
     const handleGalleryUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -961,7 +957,7 @@ export default function EventDetailPage() {
 
                     {/* HERO SECTION */}
                     <div className="relative w-full h-80 rounded-2xl overflow-hidden group shadow-md border border-slate-200 bg-slate-900">
-                        <img src={event.couplePhotoUrl || "/api/placeholder/800/400"} alt="Event Cover" className="w-full h-full object-cover opacity-90 transition-transform duration-700 group-hover:scale-105" />
+                        <img src={event.couplePhotoUrl || ""} alt="Event Cover" className="w-full h-full object-cover opacity-90 transition-transform duration-700 group-hover:scale-105" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
                         <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent" />
                         <div className="absolute top-4 right-4">
                             <label className="cursor-pointer bg-white/10 hover:bg-white/20 backdrop-blur-md text-white px-3 py-1.5 rounded-full text-xs font-medium flex items-center gap-2 transition-all">
@@ -1064,7 +1060,6 @@ export default function EventDetailPage() {
                             <CardContent className="p-4 space-y-4">
                                     {event.tags && event.tags.length > 0 && (
                                     <div className="flex flex-wrap gap-2">
-                                        {/* @ts-ignore */}
                                         {event.tags.map((tag, i) => (
                                             <Badge key={i} variant="secondary" className="bg-slate-100 text-slate-600 border-slate-200 font-normal">
                                                 <Hash className="w-3 h-3 mr-1 opacity-50" /> {tag}
@@ -2111,14 +2106,12 @@ export default function EventDetailPage() {
                         </CardHeader>
                         <CardContent className="p-4 space-y-4">
                             <div className="flex flex-wrap gap-2">
-                                {/* @ts-ignore */}
                                 {event.tags?.map((tag, i) => (
                                     <Badge key={i} className="pl-2 pr-1 py-1 h-7 flex items-center gap-1 bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100">
                                         {tag}
                                         <button onClick={() => handleRemoveTag(tag)} className="ml-1 h-4 w-4 rounded-full hover:bg-blue-200 flex items-center justify-center text-blue-600"><X className="w-3 h-3"/></button>
                                     </Badge>
                                 ))}
-                                {/* @ts-ignore */}
                                 {!event.tags?.length && <span className="text-sm text-slate-400 italic">No tags added yet.</span>}
                             </div>
                             <div className="relative max-w-md">

@@ -62,14 +62,14 @@ export default function MyTasksPage() {
     const { userData, currentUser } = useAuth();
     const [mainTab, setMainTab] = useState("assignments");
 
-    if (!userData || !currentUser) return <div className="h-screen flex items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-[#1C4D8D]" /></div>;
+    if (!userData || !currentUser) return <div className="h-screen flex items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-brand-primary" /></div>;
 
     return (
         <div className="max-w-7xl mx-auto p-4 md:p-6 min-h-screen bg-slate-50/50 space-y-6 pb-24">
             {/* HEADER */}
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div>
-                    <h1 className="text-3xl font-bold text-[#0F2854]">Workspace</h1>
+                    <h1 className="text-3xl font-bold text-slate-900">Workspace</h1>
                     <p className="text-slate-500 text-sm">Manage your event assignments and studio tasks.</p>
                 </div>
             </div>
@@ -78,10 +78,10 @@ export default function MyTasksPage() {
             <Tabs value={mainTab} onValueChange={setMainTab} className="w-full">
                 <div className="flex justify-center md:justify-start w-full">
                     <TabsList className="grid w-full max-w-[400px] grid-cols-2 mb-8 bg-white border border-slate-200 shadow-sm p-1 rounded-lg h-11">
-                        <TabsTrigger value="assignments" className="h-9 data-[state=active]:bg-blue-50 data-[state=active]:text-blue-700 data-[state=active]:border-blue-100 flex items-center justify-center gap-2 rounded-md transition-all">
+                        <TabsTrigger value="assignments" className="h-9 data-[state=active]:bg-brand-primary-light data-[state=active]:text-brand-primary data-[state=active]:border-brand-primary/10 flex items-center justify-center gap-2 rounded-md transition-all">
                             <ListTodo className="w-4 h-4" /> My Assignments
                         </TabsTrigger>
-                        <TabsTrigger value="tasks" className="h-9 data-[state=active]:bg-blue-50 data-[state=active]:text-blue-700 data-[state=active]:border-blue-100 flex items-center justify-center gap-2 rounded-md transition-all">
+                        <TabsTrigger value="tasks" className="h-9 data-[state=active]:bg-brand-primary-light data-[state=active]:text-brand-primary data-[state=active]:border-brand-primary/10 flex items-center justify-center gap-2 rounded-md transition-all">
                             <KanbanSquare className="w-4 h-4" /> Studio Tasks
                         </TabsTrigger>
                     </TabsList>
@@ -171,7 +171,7 @@ function MyAssignmentsView({ userData, currentUser }: { userData: any, currentUs
     const getStatusStyles = (status: string) => {
         const s = status?.toLowerCase() || "";
         if (s.includes('complet')) return "bg-green-100 text-green-700 border-green-200";
-        if (s.includes('progress') || s.includes('shoot')) return "bg-blue-100 text-blue-700 border-blue-200";
+        if (s.includes('progress') || s.includes('shoot')) return "bg-amber-100 text-amber-700 border-amber-200";
         if (s.includes('edit') || s.includes('post')) return "bg-purple-100 text-purple-700 border-purple-200";
         if (s.includes('cancel')) return "bg-red-100 text-red-700 border-red-200";
         return "bg-slate-100 text-slate-700 border-slate-200";
@@ -184,7 +184,7 @@ function MyAssignmentsView({ userData, currentUser }: { userData: any, currentUs
         const totalDays = event.days?.length || 1;
 
         return (
-            <Card className="group cursor-pointer hover:shadow-xl transition-all border-slate-200 hover:border-blue-300 overflow-hidden bg-white p-0" onClick={() => router.push(`/app/events/${event.id}`)}>
+            <Card className="group cursor-pointer hover:shadow-xl transition-all border-slate-200 hover:border-brand-primary overflow-hidden bg-white p-0" onClick={() => router.push(`/app/events/${event.id}`)}>
                 <div className="flex flex-col sm:flex-row h-full min-h-[160px]">
                     <div className="w-full sm:w-48 h-48 sm:h-auto bg-slate-100 relative shrink-0">
                         {event.couplePhotoUrl ? (
@@ -197,28 +197,28 @@ function MyAssignmentsView({ userData, currentUser }: { userData: any, currentUs
                     <div className="flex-1 p-4 flex flex-col justify-between gap-3">
                         <div className="flex justify-between items-start">
                             <div className="flex flex-wrap items-center gap-2">
-                                <Badge variant="secondary" className="bg-blue-50 text-blue-700 border-blue-100 rounded-sm font-mono text-[10px] px-1.5">{event.displayId || "ID"}</Badge>
+                                <Badge variant="secondary" className="bg-brand-primary-light text-brand-primary border-brand-primary/10 rounded-sm font-mono text-[10px] px-1.5">{event.displayId || "ID"}</Badge>
                                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{event.eventType}</span>
                                 {totalDays > 1 && <Badge className="bg-amber-100 text-amber-700 border-amber-200 h-5 text-[10px] px-1.5">Day {dayIndex} of {totalDays}</Badge>}
                             </div>
                             <div className="hidden sm:block"><Badge variant="outline" className={cn("font-medium", getStatusStyles(event.status))}>{event.status}</Badge></div>
                         </div>
                         <div>
-                            <h3 className="font-bold text-[#0F2854] text-xl leading-tight group-hover:text-[#1C4D8D] transition-colors mb-1">{event.eventName}</h3>
+                            <h3 className="font-bold text-slate-900 text-xl leading-tight group-hover:text-brand-primary transition-colors mb-1">{event.eventName}</h3>
                             <div className="flex items-center gap-2 text-sm text-slate-500 font-medium"><User className="w-4 h-4 text-slate-400" />{event.customerName}</div>
                         </div>
                         <div className="flex items-center gap-2 mt-1">
-                            <Button variant="outline" size="sm" className="h-7 px-2 text-xs gap-1.5 border-slate-200 text-slate-600 hover:text-blue-600 bg-white" onClick={(e) => { e.stopPropagation(); window.open(`tel:${event.customerMobile}`, '_self'); }} disabled={!event.customerMobile}><Phone className="h-3 w-3" /> Call</Button>
+                            <Button variant="outline" size="sm" className="h-7 px-2 text-xs gap-1.5 border-slate-200 text-slate-600 hover:text-brand-primary bg-white" onClick={(e) => { e.stopPropagation(); window.open(`tel:${event.customerMobile}`, '_self'); }} disabled={!event.customerMobile}><Phone className="h-3 w-3" /> Call</Button>
                             <Button variant="outline" size="sm" className="h-7 px-2 text-xs gap-1.5 border-slate-200 text-slate-600 hover:text-green-600 bg-white" onClick={(e) => { e.stopPropagation(); window.open(`https://wa.me/${cleanPhone}`, '_blank'); }} disabled={!cleanPhone}><MessageCircle className="h-3 w-3" /> WhatsApp</Button>
                         </div>
                         <div className="mt-auto pt-3">
                             <div className="flex items-center gap-2 px-3 py-2 bg-slate-50 border border-slate-100 rounded-md text-xs font-medium w-full text-slate-600">
-                                <CalendarIcon className="w-3.5 h-3.5 text-blue-500 shrink-0" />
-                                <span className="font-semibold text-blue-900">{format(relevantDate, "EEE, MMM do")}</span>
+                                <CalendarIcon className="w-3.5 h-3.5 text-brand-primary shrink-0" />
+                                <span className="font-semibold text-brand-primary-hover">{format(relevantDate, "EEE, MMM do")}</span>
                                 {dayLocation && (<><span className="text-slate-300">|</span><MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" /><span className="truncate flex-1">{dayLocation.name}</span></>)}
                             </div>
                         </div>
-                        <div className="hidden sm:flex absolute right-4 top-1/2 -translate-y-1/2 text-slate-200 group-hover:text-blue-100 pointer-events-none transition-colors"><ChevronRight className="w-8 h-8" /></div>
+                        <div className="hidden sm:flex absolute right-4 top-1/2 -translate-y-1/2 text-slate-200 group-hover:text-brand-primary/20 pointer-events-none transition-colors"><ChevronRight className="w-8 h-8" /></div>
                     </div>
                 </div>
             </Card>
@@ -233,7 +233,7 @@ function MyAssignmentsView({ userData, currentUser }: { userData: any, currentUs
         </div>
     );
 
-    if (loading) return <div className="py-20 flex justify-center"><Loader2 className="h-8 w-8 animate-spin text-[#1C4D8D]" /></div>;
+    if (loading) return <div className="py-20 flex justify-center"><Loader2 className="h-8 w-8 animate-spin text-brand-primary" /></div>;
 
     return (
         <div className="space-y-6">
@@ -244,16 +244,16 @@ function MyAssignmentsView({ userData, currentUser }: { userData: any, currentUs
 
             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
                 <TabsList className="grid w-full grid-cols-3 mb-6 bg-slate-100/80 p-1">
-                    <TabsTrigger value="today" className="data-[state=active]:bg-white data-[state=active]:text-blue-700 data-[state=active]:shadow-sm">Today {todayTasks.length > 0 && <Badge className="ml-2 bg-blue-100 text-blue-700 border-0 h-5 px-1.5 text-[10px]">{todayTasks.length}</Badge>}</TabsTrigger>
+                    <TabsTrigger value="today" className="data-[state=active]:bg-white data-[state=active]:text-brand-primary data-[state=active]:shadow-sm">Today {todayTasks.length > 0 && <Badge className="ml-2 bg-brand-primary-light text-brand-primary border-0 h-5 px-1.5 text-[10px]">{todayTasks.length}</Badge>}</TabsTrigger>
                     <TabsTrigger value="upcoming" className="data-[state=active]:bg-white data-[state=active]:shadow-sm">Upcoming {upcomingTasks.length > 0 && <Badge variant="secondary" className="ml-2 h-5 px-1.5 text-[10px]">{upcomingTasks.length}</Badge>}</TabsTrigger>
                     <TabsTrigger value="past" className="data-[state=active]:bg-white data-[state=active]:shadow-sm">Past</TabsTrigger>
                 </TabsList>
-
+ 
                 <TabsContent value="today" className="space-y-4">
                     {todayTasks.length > 0 ? todayTasks.map((item, i) => <AssignmentCard key={`${item.event.id}_t_${i}`} data={item} />) : <EmptyState title="You're all clear today!" sub="No events assigned for today." icon={<PartyPopper className="w-6 h-6 text-green-600"/>} />}
                 </TabsContent>
                 <TabsContent value="upcoming" className="space-y-4">
-                    {upcomingTasks.length > 0 ? upcomingTasks.map((item, i) => <AssignmentCard key={`${item.event.id}_u_${i}`} data={item} />) : <EmptyState title="No upcoming events" sub="Your schedule is free for now." icon={<CalendarIcon className="w-6 h-6 text-blue-400"/>} />}
+                    {upcomingTasks.length > 0 ? upcomingTasks.map((item, i) => <AssignmentCard key={`${item.event.id}_u_${i}`} data={item} />) : <EmptyState title="No upcoming events" sub="Your schedule is free for now." icon={<CalendarIcon className="w-6 h-6 text-brand-primary"/>} />}
                 </TabsContent>
                 <TabsContent value="past" className="space-y-4">
                     {pastTasks.length > 0 ? pastTasks.map((item, i) => <AssignmentCard key={`${item.event.id}_p_${i}`} data={item} />) : <EmptyState title="No past events" sub="History will appear here." icon={<History className="w-6 h-6 text-slate-400"/>} />}
@@ -270,7 +270,7 @@ function MyAssignmentsView({ userData, currentUser }: { userData: any, currentUs
 
 const COLUMNS = [
     { id: "todo", title: "To Do", color: "bg-slate-100/50 border-slate-200" },
-    { id: "in_progress", title: "In Progress", color: "bg-blue-50/50 border-blue-100" },
+    { id: "in_progress", title: "In Progress", color: "bg-amber-50/50 border-amber-100" },
     { id: "review", title: "Review", color: "bg-amber-50/50 border-amber-100" },
     { id: "completed", title: "Done", color: "bg-green-50/50 border-green-100" }
 ];
@@ -386,7 +386,7 @@ function StudioTasksView({ userData, currentUser }: { userData: any, currentUser
                     <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
                     <Input placeholder="Search tasks or people..." className="pl-9 bg-white" value={search} onChange={e => setSearch(e.target.value)} />
                 </div>
-                <Button onClick={() => { setEditingTask(null); setIsCreateDialogOpen(true); }} className="bg-[#1C4D8D]">
+                <Button onClick={() => { setEditingTask(null); setIsCreateDialogOpen(true); }} className="bg-brand-primary hover:bg-brand-primary-hover">
                     <Plus className="w-4 h-4 mr-2" /> Create Task
                 </Button>
             </div>
@@ -410,7 +410,7 @@ function StudioTasksView({ userData, currentUser }: { userData: any, currentUser
                 <DragOverlay>
                     {activeDragId ? (
                         <div className="opacity-80 rotate-2 cursor-grabbing w-[280px]">
-                            <Card className="shadow-xl ring-2 ring-blue-500 bg-white">
+                            <Card className="shadow-xl ring-2 ring-brand-primary bg-white">
                                 <CardContent className="p-3">
                                     <span className="font-medium text-sm">{tasks.find(t => t.id === activeDragId)?.title}</span>
                                 </CardContent>
@@ -479,7 +479,7 @@ const DraggableTaskCard = ({ task, onClick, onEdit, onDelete }: any) => {
                         onPointerDown={(e) => e.stopPropagation()} // Stop Drag Trigger
                         onClick={(e) => e.stopPropagation()} // Stop Click Propagation
                     >
-                        <Button variant="ghost" size="icon" className="h-6 w-6 text-slate-400 hover:text-blue-600" onClick={(e) => { e.stopPropagation(); onClick(task); }}>
+                        <Button variant="ghost" size="icon" className="h-6 w-6 text-slate-400 hover:text-brand-primary" onClick={(e) => { e.stopPropagation(); onClick(task); }}>
                             <Eye className="w-3 h-3" />
                         </Button>
                         <DropdownMenu>
@@ -635,7 +635,7 @@ function TaskFormDialog({ open, onOpenChange, members, events, onSave, initialDa
                     </div>
                     <div className="space-y-2"><Label>Description</Label><Textarea value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} placeholder="Details..." className="h-24" /></div>
                 </div>
-                <div className="flex justify-end gap-2"><Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button><Button className="bg-[#1C4D8D]" onClick={handleSubmit}>{initialData ? "Save Changes" : "Create Task"}</Button></div>
+                <div className="flex justify-end gap-2"><Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button><Button className="bg-brand-primary hover:bg-brand-primary-hover" onClick={handleSubmit}>{initialData ? "Save Changes" : "Create Task"}</Button></div>
             </DialogContent>
         </Dialog>
     );
@@ -679,7 +679,7 @@ function TaskDetailDialog({ open, onOpenChange, task, currentUser, studioId, onU
                                     <Badge className="uppercase tracking-wide">{task.status.replace('_', ' ')}</Badge>
                                     <Badge variant="outline" className="text-xs">{task.priority}</Badge>
                                 </div>
-                                <DialogTitle className="text-2xl text-[#0F2854] leading-tight">{task.title}</DialogTitle>
+                                <DialogTitle className="text-2xl text-slate-900 leading-tight">{task.title}</DialogTitle>
                             </div>
                             <div className="flex gap-1">
                                 <Button variant="ghost" size="icon" onClick={onEdit}><Edit className="w-4 h-4 text-slate-500 hover:text-blue-600"/></Button>
@@ -708,7 +708,7 @@ function TaskDetailDialog({ open, onOpenChange, task, currentUser, studioId, onU
                                 <div>
                                     <Label className="text-xs text-slate-400 uppercase mb-2 block">Linked Event</Label>
                                     <Card 
-                                        className="overflow-hidden border-slate-200 cursor-pointer group hover:border-blue-300 transition-colors"
+                                        className="overflow-hidden border-slate-200 cursor-pointer group hover:border-brand-primary transition-colors"
                                         onClick={() => router.push(`/app/events/${linkedEventData.id}`)}
                                     >
                                         <div className="flex h-24">
@@ -725,7 +725,7 @@ function TaskDetailDialog({ open, onOpenChange, task, currentUser, studioId, onU
                                                         <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">{linkedEventData.eventType}</span>
                                                         <Badge variant="outline" className="text-[10px] h-5 bg-purple-50 text-purple-700 border-purple-100">{linkedEventData.status}</Badge>
                                                     </div>
-                                                    <h4 className="font-bold text-[#0F2854] text-sm line-clamp-1 group-hover:text-blue-700">{linkedEventData.eventName}</h4>
+                                                    <h4 className="font-bold text-slate-900 text-sm line-clamp-1 group-hover:text-brand-primary">{linkedEventData.eventName}</h4>
                                                     <div className="flex items-center gap-1.5 text-xs text-slate-500 mt-0.5">
                                                         <User className="w-3 h-3" /> {linkedEventData.customerName}
                                                     </div>
@@ -748,7 +748,7 @@ function TaskDetailDialog({ open, onOpenChange, task, currentUser, studioId, onU
                         <div className="p-4 border-b bg-slate-50 font-medium text-sm text-slate-700 flex justify-between items-center">
                             Work Log
                             {/* [!code highlight] Refresh Button */}
-                            <Button variant="ghost" size="icon" className="h-6 w-6 text-slate-400 hover:text-blue-600" onClick={onUpdate} title="Refresh Notes">
+                            <Button variant="ghost" size="icon" className="h-6 w-6 text-slate-400 hover:text-brand-primary" onClick={onUpdate} title="Refresh Notes">
                                 <RefreshCw className="w-3.5 h-3.5" />
                             </Button>
                         </div>
@@ -757,7 +757,7 @@ function TaskDetailDialog({ open, onOpenChange, task, currentUser, studioId, onU
                                 {task.workNotes && task.workNotes.length > 0 ? (task.workNotes.map((note: any) => (
                                     <div key={note.id} className="flex gap-3 text-sm">
                                         <Avatar className="h-8 w-8 mt-1">
-                                            <AvatarFallback className="bg-blue-100 text-blue-600 text-xs">
+                                            <AvatarFallback className="bg-brand-primary-light text-brand-primary text-xs">
                                                 {note.userName.substring(0,2).toUpperCase()}
                                             </AvatarFallback>
                                         </Avatar>
@@ -772,7 +772,7 @@ function TaskDetailDialog({ open, onOpenChange, task, currentUser, studioId, onU
                                 ))) : (<div className="text-center text-slate-400 text-xs py-10">No notes yet.</div>)}
                             </div>
                         </ScrollArea>
-                        <div className="p-3 border-t bg-slate-50"><div className="flex gap-2"><Input placeholder="Add a work note..." value={note} onChange={e => setNote(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSendNote()} className="bg-white" /><Button size="icon" onClick={handleSendNote} disabled={loadingNote || !note.trim()} className="shrink-0 bg-[#1C4D8D]">{loadingNote ? <Loader2 className="w-4 h-4 animate-spin"/> : <Send className="w-4 h-4"/>}</Button></div></div>
+                        <div className="p-3 border-t bg-slate-50"><div className="flex gap-2"><Input placeholder="Add a work note..." value={note} onChange={e => setNote(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSendNote()} className="bg-white" /><Button size="icon" onClick={handleSendNote} disabled={loadingNote || !note.trim()} className="shrink-0 bg-brand-primary hover:bg-brand-primary-hover">{loadingNote ? <Loader2 className="w-4 h-4 animate-spin"/> : <Send className="w-4 h-4"/>}</Button></div></div>
                     </div>
                 </div>
             </DialogContent>

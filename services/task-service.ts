@@ -90,14 +90,17 @@ export const fetchStudioTasks = async (studioId: string, pageSize = 50, lastDoc 
       return {
         id: doc.id,
         ...data,
-        dueDate: data.dueDate?.toDate(),
-        createdAt: data.createdAt?.toDate(),
-        updatedAt: data.updatedAt?.toDate(),
-        workNotes: data.workNotes?.map((n: any) => ({...n, timestamp: n.timestamp?.toDate()})) || [],
+        dueDate: data.dueDate?.toDate?.() ?? null,
+        createdAt: data.createdAt?.toDate?.() ?? null,
+        updatedAt: data.updatedAt?.toDate?.() ?? null,
+        workNotes: data.workNotes?.map((n: any) => ({
+            ...n,
+            timestamp: n.timestamp?.toDate?.() ?? null
+        })) || [],
         activityLog: data.activityLog?.map((log: any) => ({
             ...log,
-            timestamp: log.timestamp?.toDate()
-        }))
+            timestamp: log.timestamp?.toDate?.() ?? null
+        })) || []
       } as StudioTask;
     });
     

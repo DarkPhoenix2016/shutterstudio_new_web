@@ -58,10 +58,10 @@ interface SearchData {
 // ─── Config ───────────────────────────────────────────────────────────────────
 
 const TYPE_CONFIG: Record<ResultType, { icon: React.ElementType; color: string; label: string }> = {
-  event:     { icon: Camera,      color: "#1C4D8D", label: "Events" },
+  event:     { icon: Camera,      color: "#d97706", label: "Events" },
   task:      { icon: CheckSquare, color: "#8b5cf6", label: "Tasks" },
-  crew:      { icon: Users,       color: "#0F2854", label: "Crew" },
-  inventory: { icon: Package,     color: "#4988C4", label: "Inventory" },
+  crew:      { icon: Users,       color: "#18181b", label: "Crew" },
+  inventory: { icon: Package,     color: "#f59e0b", label: "Inventory" },
 }
 
 const QUICK_LINKS = [
@@ -224,8 +224,8 @@ function QuickLinkItem({
   const Icon = item.icon
   return (
     <CommandItem value={`nav-${item.href}`} onSelect={onSelect} className="gap-3 py-2">
-      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#1C4D8D]/8">
-        <Icon className="h-4 w-4 text-[#1C4D8D]" />
+      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-primary-light">
+        <Icon className="h-4 w-4 text-brand-primary" />
       </div>
       <div className="flex-1 min-w-0">
         <p className="text-sm font-medium">{item.label}</p>
@@ -341,7 +341,7 @@ export function GlobalSearch() {
       {/* ── Navbar trigger (desktop) ──────────────────────────────── */}
       <button
         onClick={() => setOpen(true)}
-        className="relative hidden md:flex h-9 w-96 items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 text-sm text-slate-400 transition-all hover:border-[#1C4D8D]/30 hover:bg-white hover:text-slate-500"
+        className="relative hidden md:flex h-9 w-96 items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 text-sm text-slate-400 transition-all hover:border-brand-primary/30 hover:bg-white hover:text-slate-500"
       >
         <Search className="h-4 w-4 shrink-0" />
         <span className="flex-1 text-left">Search events, clients, crew…</span>
@@ -353,7 +353,7 @@ export function GlobalSearch() {
       {/* ── Mobile trigger (icon only) ────────────────────────────── */}
       <button
         onClick={() => setOpen(true)}
-        className="flex md:hidden h-9 w-9 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-[#1C4D8D] transition-colors"
+        className="flex md:hidden h-9 w-9 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-brand-primary transition-colors"
         aria-label="Search"
       >
         <Search className="h-5 w-5" />

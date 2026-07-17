@@ -235,10 +235,10 @@ export default function ConsultationPage() {
         }))
     }
 
-    const updateAddonItem = (index: number, field: string, value: any) => {
-        const newItems = [...consultation.package.customItems]
-        // @ts-ignore
-        newItems[index][field] = value
+    const updateAddonItem = (index: number, field: keyof CustomItem, value: any) => {
+        const newItems = consultation.package.customItems.map((item, i) =>
+            i === index ? { ...item, [field]: value } : item
+        )
         setConsultation(prev => ({
             ...prev,
             package: { ...prev.package, customItems: newItems }
@@ -261,10 +261,10 @@ export default function ConsultationPage() {
         }))
     }
 
-    const updateBaseItem = (index: number, field: string, value: any) => {
-        const newItems = [...consultation.package.customBaseItems]
-        // @ts-ignore
-        newItems[index][field] = value
+    const updateBaseItem = (index: number, field: keyof CustomItem, value: any) => {
+        const newItems = consultation.package.customBaseItems.map((item, i) =>
+            i === index ? { ...item, [field]: value } : item
+        )
         setConsultation(prev => ({
             ...prev,
             package: { ...prev.package, customBaseItems: newItems }

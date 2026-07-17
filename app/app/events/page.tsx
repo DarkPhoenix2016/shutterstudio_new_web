@@ -16,6 +16,7 @@ import { Input } from "@/components/ui/input"
 // Icons
 import { cn } from "@/lib/utils"
 import { format } from "date-fns"
+import { safeDate } from "@/lib/date-utils"
 import { AlertCircle, Calendar as CalendarIcon, ChevronLeft, ChevronRight, Edit, Loader2, Plus, Search, Trash, User } from "lucide-react"
 import Swal from "sweetalert2"
 
@@ -25,6 +26,7 @@ export default function EventsPage() {
     const { userData } = useAuth()
     const router = useRouter()
     const [loading, setLoading] = useState(true)
+    const [error, setError] = useState<string | null>(null)
     const [events, setEvents] = useState<EventData[]>([])
     const [searchTerm, setSearchTerm] = useState("")
     const [eventsPage, setEventsPage] = useState(1)
@@ -37,12 +39,14 @@ export default function EventsPage() {
     }, [userData])
 
     const loadData = async () => {
+        setError(null)
         try {
             if (userData?.studioID) {
                 setEvents(await fetchEvents(userData.studioID))
             }
         } catch (e) {
             console.error(e)
+            setError("Failed to load events. Please refresh the page.")
         } finally {
             setLoading(false)
         }
@@ -55,7 +59,10 @@ export default function EventsPage() {
     ), [events, searchTerm])
 
     const totalEventPages = Math.max(1, Math.ceil(filteredEvents.length / EVENTS_PER_PAGE))
-    const pagedEvents = filteredEvents.slice((eventsPage - 1) * EVENTS_PER_PAGE, eventsPage * EVENTS_PER_PAGE)
+    const pagedEvents = useMemo(
+        () => filteredEvents.slice((eventsPage - 1) * EVENTS_PER_PAGE, eventsPage * EVENTS_PER_PAGE),
+        [filteredEvents, eventsPage]
+    )
 
     useEffect(() => { setEventsPage(1) }, [searchTerm])
 
@@ -86,6 +93,14 @@ export default function EventsPage() {
 
     if (loading) return <div className="flex h-96 items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-[#1C4D8D]" /></div>
 
+    if (error) return (
+        <div className="flex flex-col h-96 items-center justify-center gap-3 text-slate-500">
+            <AlertCircle className="h-10 w-10 text-red-400" />
+            <p className="font-medium text-slate-700">{error}</p>
+            <Button variant="outline" onClick={loadData}>Try Again</Button>
+        </div>
+    )
+
     return (
         <div className="space-y-6 p-6 animate-in fade-in duration-500">
             {/* HEADER */}
@@ -110,7 +125,26 @@ export default function EventsPage() {
                 </div>
             </div>
 
+            {/* EMPTY STATE */}
+            {events.length === 0 && (
+                <div className="flex flex-col items-center justify-center py-24 gap-4 text-slate-400">
+                    <CalendarIcon className="h-14 w-14 opacity-30" />
+                    <div className="text-center">
+                        <p className="font-semibold text-slate-600 text-lg">No events yet</p>
+                        <p className="text-sm mt-1">Create your first event to get started.</p>
+                    </div>
+                    <Button className="bg-[#1C4D8D] mt-2" onClick={openNew}><Plus className="mr-2 h-4 w-4" /> Add Event</Button>
+                </div>
+            )}
+
             {/* EVENTS GRID */}
+            {events.length > 0 && filteredEvents.length === 0 && (
+                <div className="flex flex-col items-center justify-center py-20 gap-2 text-slate-400">
+                    <Search className="h-10 w-10 opacity-30" />
+                    <p className="font-medium text-slate-600">No events match your search</p>
+                </div>
+            )}
+
             <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
                 {pagedEvents.map(event => {
                     const isIncomplete = (!event.assignedCrew?.length || !event.assignedEquipment?.length) && event.status !== "Inquiry"
@@ -145,7 +179,7 @@ export default function EventsPage() {
                                     <div className="flex items-center gap-1 text-xs text-slate-500">
                                         <CalendarIcon className="h-3 w-3" />
                                         {event.days?.[0]?.date
-                                            ? format(event.days[0].date instanceof Date ? event.days[0].date : new Date(), "MMM dd")
+                                            ? format(safeDate(event.days[0].date), "MMM dd")
                                             : "TBD"}
                                     </div>
                                 </div>
