@@ -1,8 +1,8 @@
 "use client"
 
-import { useState, useEffect, useMemo } from "react"
+import { useState, useEffect, useMemo, Suspense } from "react"
 import { useAuth } from "@/context/AuthContext"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import { fetchEvents, fetchEventById, EventData } from "@/services/event-service" 
 import { 
     fetchStudioTasks, updateTaskStatus, createTask, updateTaskDetails, addWorkNote, getStudioMembersForTasks, deleteTask,
@@ -58,9 +58,24 @@ import { safeDate } from "@/lib/date-utils"
 // MAIN PAGE COMPONENT
 // ==================================================================================
 
-export default function MyTasksPage() {
+export default function MyTasksPageWrapper() {
+    return (
+        <Suspense fallback={<div className="h-screen flex items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-brand-primary" /></div>}>
+            <MyTasksPage />
+        </Suspense>
+    )
+}
+
+function MyTasksPage() {
     const { userData, currentUser } = useAuth();
+    const searchParams = useSearchParams();
     const [mainTab, setMainTab] = useState("assignments");
+
+    useEffect(() => {
+        if (searchParams.get("action") === "new") {
+            setMainTab("tasks");
+        }
+    }, [searchParams]);
 
     if (!userData || !currentUser) return <div className="h-screen flex items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-brand-primary" /></div>;
 
@@ -301,6 +316,17 @@ function StudioTasksView({ userData, currentUser }: { userData: any, currentUser
             loadAuxData();
         }
     }, [userData]);
+
+    const router = useRouter();
+    const searchParams = useSearchParams();
+    
+    useEffect(() => {
+        if(searchParams.get("action") === "new") {
+            // Slight delay so the component has time to mount properly, specifically the dialog
+            setTimeout(() => setIsCreateDialogOpen(true), 300);
+            router.replace('/app/tasks', { scroll: false });
+        }
+    }, [searchParams, router]);
 
     const loadTasks = async () => {
         setLoading(true);

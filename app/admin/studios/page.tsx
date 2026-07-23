@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef, useCallback } from "react"
 import { useAuth } from "@/context/AuthContext"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -13,7 +13,7 @@ import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { 
   Building2, Search, Plus, MoreHorizontal, 
-  Pencil, Ban, Check, Loader2, UserCog, AlertTriangle, ChevronLeft, ChevronRight, Calendar as CalendarIcon 
+  Pencil, Ban, Check, Loader2, UserCog, AlertTriangle, ChevronLeft, ChevronRight, Calendar as CalendarIcon, Globe 
 } from "lucide-react"
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger,
@@ -24,6 +24,7 @@ import { collection, doc, getDoc, getDocs, setDoc, updateDoc, serverTimestamp } 
 import { logAuditAction } from "@/lib/logger"
 import { format } from "date-fns"
 import { safeDate } from "@/lib/date-utils"
+import { validateSlug, isSlugAvailable } from "@/services/studio-service"
 
 // --- CLOUD FUNCTION ENDPOINTS ---
 const REGISTER_USER_API = process.env.NEXT_PUBLIC_CF_REGISTER_USER ?? "https://registeruser-g33n26zifq-uc.a.run.app"
@@ -36,6 +37,7 @@ interface StudioData {
   id: string
   name: string
   email: string
+  slug?: string
   package: string // Display only
   status: "Active" | "Suspended"
   address: string
@@ -55,6 +57,7 @@ interface StudioMember {
 
 interface WizardData {
   studioName: string
+  studioSlug: string
   studioAddress: string
   studioPhone: string
   studioWebsite: string
@@ -65,7 +68,7 @@ interface WizardData {
 }
 
 const INITIAL_WIZARD: WizardData = {
-  studioName: "", studioAddress: "", studioPhone: "", studioWebsite: "",
+  studioName: "", studioSlug: "", studioAddress: "", studioPhone: "", studioWebsite: "",
   ownerName: "", ownerEmail: "", ownerPassword: "", ownerPhone: ""
 }
 
@@ -86,8 +89,15 @@ export default function StudiosPage() {
   const [formData, setFormData] = useState<WizardData>(INITIAL_WIZARD)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
+  // Slug validation state (shared between wizard and edit)
+  const [slugError, setSlugError] = useState<string | null>(null)
+  const [slugChecking, setSlugChecking] = useState(false)
+  const [slugAvailable, setSlugAvailable] = useState<boolean | null>(null)
+  const slugDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
   // Edit & Transfer State
   const [editingStudio, setEditingStudio] = useState<StudioData | null>(null)
+  const [editSlug, setEditSlug] = useState("")
   const [isEditOpen, setIsEditOpen] = useState(false)
   const [availableMembers, setAvailableMembers] = useState<StudioMember[]>([])
   const [membersLoading, setMembersLoading] = useState(false)
@@ -119,6 +129,7 @@ export default function StudiosPage() {
              id: studioId,
              name: d.name || "Unnamed Studio",
              email: d.email || "",
+             slug: d.slug || "",
              package: packageName,
              status: d.status || "Active", 
              address: d.address || "",
@@ -140,6 +151,45 @@ export default function StudiosPage() {
     fetchData()
   }, [])
 
+  // --- SLUG REAL-TIME CHECK ---
+  const checkSlugRealtime = useCallback((slug: string, excludeStudioId?: string) => {
+    if (slugDebounceRef.current) clearTimeout(slugDebounceRef.current)
+    setSlugAvailable(null)
+
+    const validationError = slug ? validateSlug(slug) : null
+    setSlugError(validationError)
+    if (!slug || validationError) {
+      setSlugChecking(false)
+      return
+    }
+
+    setSlugChecking(true)
+    slugDebounceRef.current = setTimeout(async () => {
+      try {
+        const available = await isSlugAvailable(slug, excludeStudioId)
+        setSlugAvailable(available)
+        if (!available) setSlugError("This subdomain is already taken")
+        else setSlugError(null)
+      } catch {
+        setSlugError("Could not verify availability")
+      } finally {
+        setSlugChecking(false)
+      }
+    }, 500)
+  }, [])
+
+  const handleWizardSlugChange = (value: string) => {
+    const normalized = value.toLowerCase().replace(/[^a-z0-9-]/g, "")
+    setFormData(prev => ({ ...prev, studioSlug: normalized }))
+    checkSlugRealtime(normalized)
+  }
+
+  const handleEditSlugChange = (value: string) => {
+    const normalized = value.toLowerCase().replace(/[^a-z0-9-]/g, "")
+    setEditSlug(normalized)
+    checkSlugRealtime(normalized, editingStudio?.id)
+  }
+
   // --- ACTIONS: REGISTRATION ---
   const handleInputChange = (field: keyof WizardData, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }))
@@ -154,18 +204,33 @@ export default function StudiosPage() {
     try {
       if (!auth.currentUser) throw new Error("Authentication required")
 
+      // Validate slug if provided
+      if (formData.studioSlug) {
+        const slugValidation = validateSlug(formData.studioSlug)
+        if (slugValidation) {
+          Swal.fire({ icon: 'error', title: 'Invalid Subdomain', text: slugValidation })
+          setIsSubmitting(false)
+          return
+        }
+        const available = await isSlugAvailable(formData.studioSlug)
+        if (!available) {
+          Swal.fire({ icon: 'error', title: 'Subdomain Taken', text: 'This subdomain is already in use.' })
+          setIsSubmitting(false)
+          return
+        }
+      }
+
       // 1. Create Root Studio Doc (Identity Only - No Billing Data)
       const studioRef = doc(db, "Studios", studioID)
       await setDoc(studioRef, {
         name: formData.studioName,
+        slug: formData.studioSlug || null,
         address: formData.studioAddress,
         phone: formData.studioPhone,
         website: formData.studioWebsite,
         email: formData.ownerEmail,
         status: "Active",
         createdAt: serverTimestamp(),
-        // Note: 'package', 'invoice_cycle' etc are NOT set here. 
-        // They are handled in the Billing Page via mapping.
       })
 
       // 2. Init Members Subcollection
@@ -207,7 +272,8 @@ export default function StudiosPage() {
         id: studioID,
         name: formData.studioName,
         email: formData.ownerEmail,
-        package: "Unassigned", // Default until mapped
+        slug: formData.studioSlug || undefined,
+        package: "Unassigned",
         status: "Active",
         address: formData.studioAddress,
         phone: formData.studioPhone,
@@ -233,7 +299,11 @@ export default function StudiosPage() {
   // --- ACTIONS: EDIT & OWNERSHIP TRANSFER ---
 
   const handleEditClick = async (studio: StudioData) => {
-    setEditingStudio({ ...studio }) 
+    setEditingStudio({ ...studio })
+    setEditSlug(studio.slug || "")
+    setSlugError(null)
+    setSlugAvailable(null)
+    setSlugChecking(false) 
     setIsEditOpen(true)
     setMembersLoading(true)
     setAvailableMembers([])
@@ -283,11 +353,26 @@ export default function StudiosPage() {
     const isTransferringOwnership = editingStudio.owner_uid !== originalStudio.owner_uid
 
     try {
+      // Validate slug if changed
+      if (editSlug) {
+        const slugValidation = validateSlug(editSlug)
+        if (slugValidation) {
+          Swal.fire({ icon: 'error', title: 'Invalid Subdomain', text: slugValidation })
+          return
+        }
+        const available = await isSlugAvailable(editSlug, editingStudio.id)
+        if (!available) {
+          Swal.fire({ icon: 'error', title: 'Subdomain Taken', text: 'This subdomain is already in use.' })
+          return
+        }
+      }
+
       const studioRef = doc(db, "Studios", editingStudio.id)
       
-      // Update Root Doc (Contact Info Only)
+      // Update Root Doc (Contact Info + Slug)
       await updateDoc(studioRef, {
         name: editingStudio.name,
+        slug: editSlug || null,
         address: editingStudio.address,
         phone: editingStudio.phone,
         website: editingStudio.website,
@@ -310,7 +395,7 @@ export default function StudiosPage() {
          }
       }
 
-      setStudios(prev => prev.map(s => s.id === editingStudio.id ? editingStudio : s))
+      setStudios(prev => prev.map(s => s.id === editingStudio.id ? { ...editingStudio, slug: editSlug || undefined } : s))
       setIsEditOpen(false)
       
       Swal.fire({
@@ -421,6 +506,38 @@ export default function StudiosPage() {
             {currentStep === 1 && (
               <div className="space-y-4 py-2">
                 <div className="space-y-2"><Label>Studio Name *</Label><Input value={formData.studioName} onChange={e => handleInputChange("studioName", e.target.value)} /></div>
+                
+                {/* Subdomain Slug */}
+                <div className="space-y-2">
+                  <Label className="flex items-center gap-1.5"><Globe className="h-3.5 w-3.5 text-[#1C4D8D]" />Subdomain URL</Label>
+                  <div className="flex items-center gap-0">
+                    <Input
+                      value={formData.studioSlug}
+                      onChange={e => handleWizardSlugChange(e.target.value)}
+                      placeholder="my-studio"
+                      className={`rounded-r-none font-mono text-sm ${
+                        slugError ? 'border-red-400 focus-visible:ring-red-400' :
+                        slugAvailable === true ? 'border-emerald-400 focus-visible:ring-emerald-400' : ''
+                      }`}
+                    />
+                    <span className="inline-flex items-center px-3 h-9 border border-l-0 border-slate-200 rounded-r-md bg-slate-50 text-xs text-slate-500 whitespace-nowrap">
+                      .shutterstudio.com
+                    </span>
+                  </div>
+                  {slugChecking && (
+                    <p className="text-xs text-slate-500 flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin" />Checking availability...</p>
+                  )}
+                  {slugError && !slugChecking && (
+                    <p className="text-xs text-red-500">{slugError}</p>
+                  )}
+                  {slugAvailable === true && !slugError && !slugChecking && formData.studioSlug && (
+                    <p className="text-xs text-emerald-600">✓ Available — {formData.studioSlug}.shutterstudio.com</p>
+                  )}
+                  {!formData.studioSlug && (
+                    <p className="text-xs text-muted-foreground">Optional. Lowercase letters, numbers, and hyphens only.</p>
+                  )}
+                </div>
+
                 <div className="space-y-2"><Label>Address</Label><Input value={formData.studioAddress} onChange={e => handleInputChange("studioAddress", e.target.value)} /></div>
                 <div className="grid grid-cols-2 gap-4">
                    <div className="space-y-2"><Label>Phone</Label><Input value={formData.studioPhone} onChange={e => handleInputChange("studioPhone", e.target.value)} /></div>
@@ -458,6 +575,35 @@ export default function StudiosPage() {
             {editingStudio && (
               <div className="space-y-4 py-2">
                 <div className="space-y-2"><Label>Studio Name</Label><Input value={editingStudio.name} onChange={e => setEditingStudio({...editingStudio, name: e.target.value})} /></div>
+                
+                {/* Subdomain Slug (Edit) */}
+                <div className="space-y-2">
+                  <Label className="flex items-center gap-1.5"><Globe className="h-3.5 w-3.5 text-[#1C4D8D]" />Subdomain URL</Label>
+                  <div className="flex items-center gap-0">
+                    <Input
+                      value={editSlug}
+                      onChange={e => handleEditSlugChange(e.target.value)}
+                      placeholder="my-studio"
+                      className={`rounded-r-none font-mono text-sm ${
+                        slugError ? 'border-red-400 focus-visible:ring-red-400' :
+                        slugAvailable === true ? 'border-emerald-400 focus-visible:ring-emerald-400' : ''
+                      }`}
+                    />
+                    <span className="inline-flex items-center px-3 h-9 border border-l-0 border-slate-200 rounded-r-md bg-slate-50 text-xs text-slate-500 whitespace-nowrap">
+                      .shutterstudio.com
+                    </span>
+                  </div>
+                  {slugChecking && (
+                    <p className="text-xs text-slate-500 flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin" />Checking...</p>
+                  )}
+                  {slugError && !slugChecking && (
+                    <p className="text-xs text-red-500">{slugError}</p>
+                  )}
+                  {slugAvailable === true && !slugError && !slugChecking && editSlug && (
+                    <p className="text-xs text-emerald-600">✓ Available — {editSlug}.shutterstudio.com</p>
+                  )}
+                </div>
+
                 <div className="space-y-2"><Label>Address</Label><Input value={editingStudio.address} onChange={e => setEditingStudio({...editingStudio, address: e.target.value})} /></div>
                 <div className="grid grid-cols-2 gap-4">
                    <div className="space-y-2"><Label>Phone</Label><Input value={editingStudio.phone} onChange={e => setEditingStudio({...editingStudio, phone: e.target.value})} /></div>

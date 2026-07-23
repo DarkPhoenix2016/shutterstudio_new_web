@@ -48,6 +48,7 @@ export interface EventContact {
   name: string;
   role: string;
   phone: string;
+  email?: string;
   note?: string;
 }
 

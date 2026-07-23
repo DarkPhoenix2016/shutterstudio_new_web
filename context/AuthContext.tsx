@@ -28,6 +28,7 @@ interface UserData {
   lastLogin?: string
   coverURL?: string
   phoneNumber?: string
+  country?: string
   studioID: string
   designation?: string
   createdAt?: any
@@ -35,6 +36,7 @@ interface UserData {
 
 interface StudioData {
   name: string
+  slug?: string
   logo_url?: string
   cover_url?: string
   designations?: string[]
@@ -60,11 +62,26 @@ interface NavGroup {
   items: NavItem[]
 }
 
+export interface MobileNavItem {
+  id: string
+  position: 'left1' | 'left2' | 'center' | 'right1' | 'right2'
+  title?: string
+  icon?: string
+  route?: string
+  type?: 'quick_actions' | 'link'
+}
+
+export interface MobileNavigationConfig {
+  enabled: boolean
+  items: MobileNavItem[]
+}
+
 interface GlobalSettings {
   maintenanceMode: boolean
   announcement?: string
   version?: string
-  navigation?: NavGroup[] // [!code highlight] Added navigation structure
+  navigation?: NavGroup[]
+  mobileNavigation?: MobileNavigationConfig
 }
 
 type RolePermissions = Record<string, string[]>
@@ -178,7 +195,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           if (doc.exists()) {
             setGlobalSettings(doc.data() as GlobalSettings)
           } else {
-            setGlobalSettings({ maintenanceMode: false, navigation: [] })
+            setGlobalSettings({ maintenanceMode: false, navigation: [], mobileNavigation: { enabled: true, items: [] } })
           }
         }, (error) => {
             console.error("Settings listener error:", error)

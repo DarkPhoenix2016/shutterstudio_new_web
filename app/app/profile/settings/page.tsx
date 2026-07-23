@@ -25,6 +25,10 @@ import { db, storage } from "@/lib/firebase"
 import { uploadFileToStorage } from "@/lib/storage-utils"
 import { compressImage, getCroppedImg } from "@/lib/image-utils"
 import Cropper from "react-easy-crop" // [!code highlight]
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { PhoneInput } from "@/components/ui/phone-input"
+import { SUPPORTED_COUNTRIES, validatePhoneNumber } from "@/lib/phone-utils"
+import { CountryCode } from "libphonenumber-js"
 
 export default function ProfileSettingsPage() {
   const { currentUser, userData, loading: authLoading, refreshUserData } = useAuth()
@@ -33,6 +37,7 @@ export default function ProfileSettingsPage() {
   // Form State
   const [displayName, setDisplayName] = useState("")
   const [phone, setPhone] = useState("")
+  const [country, setCountry] = useState("LK")
   
   // Image Files (Final compressed files to upload)
   const [profileFile, setProfileFile] = useState<File | null>(null)
@@ -53,6 +58,7 @@ export default function ProfileSettingsPage() {
     if (userData) {
       setDisplayName(userData.displayName || "")
       setPhone(userData.phoneNumber || "")
+      setCountry(userData.country || "LK")
     }
   }, [userData])
 
@@ -125,10 +131,27 @@ export default function ProfileSettingsPage() {
     if (!currentUser) return
 
     setIsLoading(true)
+
+    // Validate phone number against chosen country code if inputted
+    if (phone) {
+      const isValid = validatePhoneNumber(phone, country as CountryCode);
+      if (!isValid) {
+        Swal.fire({
+          icon: 'error',
+          title: 'Invalid Phone Number',
+          text: `The entered phone number is not valid for ${SUPPORTED_COUNTRIES.find(c => c.code === country)?.name || country}.`,
+          confirmButtonColor: '#1C4D8D',
+        });
+        setIsLoading(false);
+        return;
+      }
+    }
+
     try {
       const updates: any = {
         displayName: displayName,
         phoneNumber: phone,
+        country: country,
       }
 
       const studioID = userData?.studioID
@@ -275,17 +298,35 @@ export default function ProfileSettingsPage() {
                 <CardDescription>Update your contact details visible to the team.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div className="space-y-2">
                         <Label htmlFor="name">Display Name</Label>
                         <Input id="name" value={displayName} onChange={e => setDisplayName(e.target.value)} placeholder="John Doe" />
                     </div>
                     <div className="space-y-2">
+                        <Label htmlFor="country">Default Country</Label>
+                        <Select value={country} onValueChange={(val) => setCountry(val)}>
+                            <SelectTrigger className="w-full bg-slate-50 border-slate-200 text-slate-700 h-9">
+                                <SelectValue placeholder="Select Country" />
+                            </SelectTrigger>
+                            <SelectContent className="max-h-[300px]">
+                                {SUPPORTED_COUNTRIES.map((c) => (
+                                    <SelectItem key={c.code} value={c.code}>
+                                        <span className="mr-2">{c.flag}</span>
+                                        <span className="font-medium">{c.name}</span>
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+                    <div className="space-y-2">
                         <Label htmlFor="phone">Phone Number</Label>
-                        <div className="relative">
-                            <Phone className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-400" />
-                            <Input id="phone" value={phone} onChange={e => setPhone(e.target.value)} className="pl-9" placeholder="+1 234 567 890" />
-                        </div>
+                        <PhoneInput
+                            id="phone"
+                            value={phone}
+                            onChange={(val) => setPhone(val)}
+                            placeholder="Enter phone number"
+                        />
                     </div>
                 </div>
                 

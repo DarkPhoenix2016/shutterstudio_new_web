@@ -6,6 +6,8 @@ import { compressImage } from "@/lib/image-utils"
 import { uploadFileToStorage } from "@/lib/storage-utils"
 import { cn } from "@/lib/utils"
 import { EventInvoiceDialog } from "@/components/events/EventInvoiceDialog"
+import { PhoneInput } from "@/components/ui/phone-input"
+import { validatePhoneNumber, parseE164 } from "@/lib/phone-utils"
 import {
     assignCrewSchedule,
     fetchCrewMembers,
@@ -189,6 +191,29 @@ export default function EventDetailPage() {
     // Edit States for Modals
     const [editingContact, setEditingContact] = useState<EventContact | null>(null)
     const [isContactOpen, setIsContactOpen] = useState(false)
+    const [contactName, setContactName] = useState("")
+    const [contactRole, setContactRole] = useState("")
+    const [contactPhone, setContactPhone] = useState("")
+    const [contactEmail, setContactEmail] = useState("")
+    const [contactNote, setContactNote] = useState("")
+    const [showContactSuggestions, setShowContactSuggestions] = useState(false)
+
+    useEffect(() => {
+        if (isContactOpen) {
+            setContactName(editingContact?.name || "")
+            setContactRole(editingContact?.role || "")
+            setContactPhone(editingContact?.phone || "")
+            setContactEmail(editingContact?.email || "")
+            setContactNote(editingContact?.note || "")
+        } else {
+            setContactName("")
+            setContactRole("")
+            setContactPhone("")
+            setContactEmail("")
+            setContactNote("")
+        }
+        setShowContactSuggestions(false)
+    }, [editingContact, isContactOpen])
 
     const [editingLocation, setEditingLocation] = useState<EventLocation | null>(null)
     const [isLocationOpen, setIsLocationOpen] = useState(false)
@@ -296,6 +321,56 @@ export default function EventDetailPage() {
             !event?.tags?.includes(t)
         );
     }, [availableTags, tagInput, event]);
+
+    const existingEventContacts = useMemo(() => {
+        const uniqueContactsMap = new Map<string, EventContact>()
+        allEvents.forEach(e => {
+            if (Array.isArray(e.contacts)) {
+                e.contacts.forEach(c => {
+                    const cleanPhone = c.phone ? c.phone.replace(/\D/g, "") : ""
+                    const cleanEmail = c.email ? c.email.trim().toLowerCase() : ""
+                    const key = cleanPhone || cleanEmail || c.name?.trim().toLowerCase()
+                    if (key && !uniqueContactsMap.has(key)) {
+                        uniqueContactsMap.set(key, c)
+                    }
+                })
+            }
+        })
+        return Array.from(uniqueContactsMap.values())
+    }, [allEvents])
+
+    const existingRoles = useMemo(() => {
+        const roles = new Set<string>()
+        allEvents.forEach(e => {
+            if (Array.isArray(e.contacts)) {
+                e.contacts.forEach(c => {
+                    if (c.role && c.role.trim()) {
+                        roles.add(c.role.trim())
+                    }
+                })
+            }
+        })
+        return Array.from(roles).sort()
+    }, [allEvents])
+
+    const suggestedContacts = useMemo(() => {
+        const query = (contactName || "").trim().toLowerCase()
+        if (!query || editingContact) return []
+        return existingEventContacts.filter(c => 
+            c.name?.toLowerCase().includes(query) ||
+            c.phone?.toLowerCase().includes(query) ||
+            (c.email && c.email.toLowerCase().includes(query))
+        ).slice(0, 5)
+    }, [contactName, existingEventContacts, editingContact])
+
+    const handleSelectSuggestedContact = (c: EventContact) => {
+        setContactName(c.name)
+        setContactRole(c.role)
+        setContactPhone(c.phone)
+        setContactEmail(c.email || "")
+        setContactNote(c.note || "")
+        setShowContactSuggestions(false)
+    }
 
     const handleAddTag = async (tag: string) => {
         if (!event) return;
@@ -754,9 +829,27 @@ export default function EventDetailPage() {
         await handleUpdateEvent({ [field]: currentList.filter((x: any) => x.id !== id) });
     };
 
-    const saveContact = async (f: FormData) => {
+    const saveContact = async () => {
         if (!event) return;
-        const item = { id: editingContact?.id || crypto.randomUUID(), name: f.get('name') as string, role: f.get('role') as string, phone: f.get('phone') as string, note: f.get('note') as string };
+
+        if (contactPhone) {
+            const parsed = parseE164(contactPhone)
+            const countryToValidate = parsed ? parsed.countryCode : ((userData?.country || "LK") as any)
+            const isValid = validatePhoneNumber(contactPhone, countryToValidate)
+            if (!isValid) {
+                Swal.fire({ icon: "warning", title: "Invalid Phone Number", text: "Please enter a valid phone number for the contact." })
+                return
+            }
+        }
+
+        const item: EventContact = {
+            id: editingContact?.id || crypto.randomUUID(),
+            name: contactName,
+            role: contactRole,
+            phone: contactPhone,
+            email: contactEmail,
+            note: contactNote
+        };
         const list = editingContact ? (event.contacts || []).map(c => c.id === item.id ? item : c) : [...(event.contacts || []), item];
         await handleUpdateEvent({ contacts: list }); setIsContactOpen(false); setEditingContact(null);
     }
@@ -957,7 +1050,11 @@ export default function EventDetailPage() {
 
                     {/* HERO SECTION */}
                     <div className="relative w-full h-80 rounded-2xl overflow-hidden group shadow-md border border-slate-200 bg-slate-900">
-                        <img src={event.couplePhotoUrl || ""} alt="Event Cover" className="w-full h-full object-cover opacity-90 transition-transform duration-700 group-hover:scale-105" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
+                        {event.couplePhotoUrl ? (
+                            <img src={event.couplePhotoUrl} alt="Event Cover" className="w-full h-full object-cover opacity-90 transition-transform duration-700 group-hover:scale-105" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
+                        ) : (
+                            <div className="absolute inset-0 bg-gradient-to-br from-[#0F2854] to-[#1C4D8D] opacity-80" />
+                        )}
                         <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent" />
                         <div className="absolute top-4 right-4">
                             <label className="cursor-pointer bg-white/10 hover:bg-white/20 backdrop-blur-md text-white px-3 py-1.5 rounded-full text-xs font-medium flex items-center gap-2 transition-all">
@@ -2274,13 +2371,72 @@ export default function EventDetailPage() {
 
             {/* --- GLOBAL DIALOGS --- */}
             <Dialog open={isContactOpen} onOpenChange={setIsContactOpen}>
-                <DialogContent>
+                <DialogContent className="sm:max-w-md">
                     <DialogHeader><DialogTitle>{editingContact ? 'Edit Contact' : 'Add New Contact'}</DialogTitle></DialogHeader>
-                    <form action={saveContact} className="space-y-4">
-                        <Input name="name" placeholder="Full Name" required defaultValue={editingContact?.name} />
-                        <Input name="role" placeholder="Role (e.g. Band, Makeup)" required defaultValue={editingContact?.role} />
-                        <Input name="phone" placeholder="Phone Number" defaultValue={editingContact?.phone} />
-                        <Textarea name="note" placeholder="Additional Notes" defaultValue={editingContact?.note} />
+                    <form onSubmit={(e) => { e.preventDefault(); saveContact(); }} className="space-y-4">
+                        <div className="relative">
+                            <Input
+                                placeholder="Full Name"
+                                required
+                                value={contactName}
+                                onChange={e => {
+                                    setContactName(e.target.value)
+                                    setShowContactSuggestions(true)
+                                }}
+                                onFocus={() => setShowContactSuggestions(true)}
+                                onBlur={() => {
+                                    setTimeout(() => setShowContactSuggestions(false), 200)
+                                }}
+                                className="bg-slate-50"
+                            />
+                            {showContactSuggestions && suggestedContacts.length > 0 && (
+                                <div className="absolute z-[100] left-0 right-0 mt-1 bg-white border border-slate-200 rounded-md shadow-lg max-h-40 overflow-y-auto">
+                                    {suggestedContacts.map((c, idx) => (
+                                        <div
+                                            key={idx}
+                                            className="p-2 hover:bg-slate-100 cursor-pointer flex flex-col border-b last:border-b-0 text-left text-xs"
+                                            onMouseDown={() => handleSelectSuggestedContact(c)}
+                                        >
+                                            <span className="font-semibold text-slate-800">{c.name}</span>
+                                            <span className="text-[10px] text-slate-500">{c.role} • {c.phone} {c.email ? `• ${c.email}` : ""}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                        <div className="relative">
+                            <Input
+                                placeholder="Role (e.g. Band, Makeup)"
+                                required
+                                value={contactRole}
+                                onChange={e => setContactRole(e.target.value)}
+                                list="event-roles-list"
+                                className="bg-slate-50"
+                            />
+                            <datalist id="event-roles-list">
+                                {existingRoles.map(role => (
+                                    <option key={role} value={role} />
+                                ))}
+                            </datalist>
+                        </div>
+                        <PhoneInput
+                            value={contactPhone}
+                            onChange={(val) => setContactPhone(val)}
+                            placeholder="Phone Number"
+                        />
+                        <Input
+                            placeholder="Email Address"
+                            type="email"
+                            value={contactEmail}
+                            onChange={e => setContactEmail(e.target.value)}
+                            className="bg-slate-50"
+                        />
+                        <Textarea
+                            placeholder="Additional Notes"
+                            value={contactNote}
+                            onChange={e => setContactNote(e.target.value)}
+                            className="bg-slate-50"
+                        />
                         <Button type="submit" className="w-full">{editingContact ? 'Update' : 'Add'}</Button>
                     </form>
                 </DialogContent>

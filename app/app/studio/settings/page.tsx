@@ -12,12 +12,18 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { 
     Building2, Save, Phone, Mail, Globe, MapPin, Upload, Camera, Crop as CropIcon, 
-    Loader2, Plus, Trash2, Briefcase, FileText, Hash, TrendingUp, Users 
+    Loader2, Plus, Trash2, Briefcase, FileText, Hash, TrendingUp, Users, Wrench,
+    CreditCard, ShieldCheck
 } from "lucide-react"
+import { Textarea } from "@/components/ui/textarea"
 import Image from "next/image"
 import Swal from "sweetalert2"
 import { doc, updateDoc } from "firebase/firestore"
+import { validateSlug, isSlugAvailable } from "@/services/studio-service"
 import { db } from "@/lib/firebase"
+import { PhoneInput } from "@/components/ui/phone-input"
+import { validatePhoneNumber, parseE164 } from "@/lib/phone-utils"
+import { runStudioPhoneMigration } from "@/lib/migration-utils"
 import { uploadFileToStorage } from "@/lib/storage-utils"
 import { compressImage, getCroppedImg } from "@/lib/image-utils"
 import Cropper from "react-easy-crop"
@@ -33,6 +39,12 @@ export default function StudioSettingsPage() {
   const [email, setEmail] = useState("")
   const [website, setWebsite] = useState("")
   const [address, setAddress] = useState("")
+
+  // --- SUBDOMAIN SLUG STATE ---
+  const [slug, setSlug] = useState("")
+  const [slugError, setSlugError] = useState<string | null>(null)
+  const [slugChecking, setSlugChecking] = useState(false)
+  const [slugAvailable, setSlugAvailable] = useState<boolean | null>(null)
   
   // --- CREW TAB STATE ---
   const [designations, setDesignations] = useState<string[]>([])
@@ -43,11 +55,24 @@ export default function StudioSettingsPage() {
   const [nextInvoiceNum, setNextInvoiceNum] = useState("1000")
   const [totalInvoices, setTotalInvoices] = useState("0") // Read-only
 
+  // --- BANKING TAB STATE ---
+  const [bankName, setBankName] = useState("")
+  const [branchName, setBranchName] = useState("")
+  const [accName, setAccName] = useState("")
+  const [accNumber, setAccNumber] = useState("")
+
+  // --- POLICIES TAB STATE ---
+  const [policyNotice, setPolicyNotice] = useState("")
+
   // --- IMAGE STATE ---
   const [logoFile, setLogoFile] = useState<File | null>(null)
   const [logoPreview, setLogoPreview] = useState("")
   const [coverFile, setCoverFile] = useState<File | null>(null)
   const [coverPreview, setCoverPreview] = useState("")
+
+  // --- SYSTEM UTILITIES STATE ---
+  const [migrationLogs, setMigrationLogs] = useState<string[]>([])
+  const [migrating, setMigrating] = useState(false)
 
   // --- CROPPER STATE ---
   const [cropModalOpen, setCropModalOpen] = useState(false)
@@ -73,6 +98,7 @@ export default function StudioSettingsPage() {
         setEmail(studioData.email || "")
         setWebsite(studioData.website || "")
         setAddress(studioData.address || "")
+        setSlug(studioData.slug || "")
         
         // Crew
         setDesignations(studioData.designations || [])
@@ -81,9 +107,42 @@ export default function StudioSettingsPage() {
         setInvoicePrefix(studioData.invoice_text || "INV")
         setNextInvoiceNum(studioData.invoice_number || "1000")
         setTotalInvoices(studioData.invoice_current || "0")
+
+        // Banking Details
+        const banking = studioData.banking_details || {}
+        setBankName(banking.bank_name || "")
+        setBranchName(banking.branch || "")
+        setAccName(banking.account_name || "")
+        setAccNumber(banking.account_number || "")
+
+        // Policies
+        setPolicyNotice(studioData.privacy_policy_notice || "")
       }
     }
   }, [userData, studioData, authLoading, router])
+
+  // --- SLUG HANDLERS ---
+  const handleSlugChange = (value: string) => {
+    const normalized = value.toLowerCase().replace(/[^a-z0-9-]/g, "")
+    setSlug(normalized)
+    setSlugAvailable(null)
+    const error = normalized ? validateSlug(normalized) : null
+    setSlugError(error)
+  }
+
+  const handleSlugBlur = async () => {
+    if (!slug || slugError) return
+    setSlugChecking(true)
+    try {
+      const available = await isSlugAvailable(slug, userData?.studioID)
+      setSlugAvailable(available)
+      if (!available) setSlugError("This subdomain is already taken")
+    } catch {
+      setSlugError("Could not verify availability")
+    } finally {
+      setSlugChecking(false)
+    }
+  }
 
   // --- HANDLERS ---
 
@@ -157,18 +216,52 @@ export default function StudioSettingsPage() {
     e.preventDefault()
     if (!userData?.studioID) return
 
+    if (phone) {
+      const parsed = parseE164(phone)
+      const countryToValidate = parsed ? parsed.countryCode : ((userData?.country || "LK") as any)
+      const isValid = validatePhoneNumber(phone, countryToValidate)
+      if (!isValid) {
+        Swal.fire({ icon: 'warning', title: 'Invalid Phone Number', text: 'Please enter a valid phone number for the studio.' })
+        return
+      }
+    }
+
     setIsLoading(true)
     try {
       const studioID = userData.studioID
+      // Validate slug before saving if it was set
+      if (slug) {
+        const slugValidation = validateSlug(slug)
+        if (slugValidation) {
+          Swal.fire({ icon: 'error', title: 'Invalid Subdomain', text: slugValidation })
+          setIsLoading(false)
+          return
+        }
+        const available = await isSlugAvailable(slug, studioID)
+        if (!available) {
+          Swal.fire({ icon: 'error', title: 'Subdomain Taken', text: 'This subdomain is already in use by another studio.' })
+          setIsLoading(false)
+          return
+        }
+      }
+
       const updates: any = {
         name,
         phone,
         email,
         website,
         address,
+        slug: slug || null,
         designations,
         invoice_text: invoicePrefix,
-        invoice_number: nextInvoiceNum
+        invoice_number: nextInvoiceNum,
+        banking_details: {
+          bank_name: bankName,
+          branch: branchName,
+          account_name: accName,
+          account_number: accNumber
+        },
+        privacy_policy_notice: policyNotice
       }
 
       if (logoFile) {
@@ -198,6 +291,44 @@ export default function StudioSettingsPage() {
       console.error("Save Error:", error)
       setIsLoading(false)
       Swal.fire({ icon: 'error', title: 'Error', text: 'Failed to save changes.' })
+    }
+  }
+
+  const handleMigratePhones = async () => {
+    if (!userData?.studioID) return
+    const result = await Swal.fire({
+      title: 'Run Phone Migration?',
+      text: "This script will inspect all stored events and consultations for this studio and convert any valid regional/local numbers into standard E.164 format. Continue?",
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonText: 'Yes, run migration',
+      cancelButtonText: 'Cancel'
+    })
+
+    if (!result.isConfirmed) return
+
+    setMigrating(true)
+    setMigrationLogs(["Initializing database migration..."])
+    try {
+      const defaultCountry = userData.country || "LK"
+      const { migratedEvents, migratedConsultations } = await runStudioPhoneMigration(
+        userData.studioID,
+        defaultCountry,
+        (msg) => {
+          setMigrationLogs(prev => [...prev, `${new Date().toLocaleTimeString()}: ${msg}`])
+        }
+      )
+      Swal.fire({
+        title: 'Success!',
+        text: `Migration completed: Updated ${migratedEvents} events and ${migratedConsultations} consultations.`,
+        icon: 'success'
+      })
+    } catch (err: any) {
+      console.error(err)
+      setMigrationLogs(prev => [...prev, `ERROR: ${err.message}`])
+      Swal.fire('Error', 'Migration failed. Check log output below.', 'error')
+    } finally {
+      setMigrating(false)
     }
   }
 
@@ -257,10 +388,13 @@ export default function StudioSettingsPage() {
 
       {/* TABS CONFIGURATION */}
       <Tabs defaultValue="general" className="space-y-6">
-        <TabsList className="bg-slate-100 p-1 rounded-lg grid grid-cols-3 w-full md:w-auto">
-          <TabsTrigger value="general" className="px-4 data-[state=active]:bg-white data-[state=active]:shadow-sm">General Profile</TabsTrigger>
-          <TabsTrigger value="crew" className="px-4 data-[state=active]:bg-white data-[state=active]:shadow-sm">Crew Management</TabsTrigger>
-          <TabsTrigger value="finance" className="px-4 data-[state=active]:bg-white data-[state=active]:shadow-sm">Finance & Config</TabsTrigger>
+        <TabsList className="bg-slate-100 p-1 rounded-lg grid grid-cols-3 md:grid-cols-6 w-full md:w-auto">
+          <TabsTrigger value="general" className="px-3 text-xs data-[state=active]:bg-white data-[state=active]:shadow-sm">General Profile</TabsTrigger>
+          <TabsTrigger value="crew" className="px-3 text-xs data-[state=active]:bg-white data-[state=active]:shadow-sm">Crew Management</TabsTrigger>
+          <TabsTrigger value="finance" className="px-3 text-xs data-[state=active]:bg-white data-[state=active]:shadow-sm">Finance & Config</TabsTrigger>
+          <TabsTrigger value="banking" className="px-3 text-xs data-[state=active]:bg-white data-[state=active]:shadow-sm">Banking Details</TabsTrigger>
+          <TabsTrigger value="policies" className="px-3 text-xs data-[state=active]:bg-white data-[state=active]:shadow-sm">Policies & Terms</TabsTrigger>
+          <TabsTrigger value="maintenance" className="px-3 text-xs data-[state=active]:bg-white data-[state=active]:shadow-sm">System Utilities</TabsTrigger>
         </TabsList>
 
         {/* ================= GENERAL TAB ================= */}
@@ -325,7 +459,11 @@ export default function StudioSettingsPage() {
                         </div>
                         <div className="space-y-2">
                             <Label htmlFor="phone">Contact Number</Label>
-                            <Input id="phone" value={phone} onChange={e => setPhone(e.target.value)} />
+                            <PhoneInput
+                                value={phone}
+                                onChange={val => setPhone(val)}
+                                placeholder="Contact Number"
+                            />
                         </div>
                         <div className="space-y-2">
                             <Label htmlFor="email">Business Email</Label>
@@ -339,6 +477,36 @@ export default function StudioSettingsPage() {
                     <div className="space-y-2">
                         <Label htmlFor="address">Physical Address</Label>
                         <Input id="address" value={address} onChange={e => setAddress(e.target.value)} />
+                    </div>
+                </CardContent>
+            </Card>
+
+            {/* SUBDOMAIN CARD */}
+            <Card>
+                <CardHeader>
+                    <CardTitle className="flex items-center gap-2"><Globe className="h-5 w-5 text-[#1C4D8D]"/>Subdomain URL</CardTitle>
+                    <CardDescription>Your registered custom subdomain. This field is read-only to prevent URL breakage.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                    <div className="space-y-2">
+                        <Label htmlFor="slug">Subdomain Slug</Label>
+                        <div className="flex items-center gap-0">
+                            <Input
+                                id="slug"
+                                value={slug}
+                                placeholder="my-studio"
+                                disabled
+                                className="rounded-r-none font-mono text-sm bg-slate-50 text-slate-500 cursor-not-allowed"
+                            />
+                            <span className="inline-flex items-center px-3 h-9 border border-l-0 border-slate-205 rounded-r-md bg-slate-50 text-xs text-slate-500 whitespace-nowrap">
+                                .shutterstudio.com
+                            </span>
+                        </div>
+                        {slug && (
+                            <p className="text-xs text-muted-foreground mt-1">
+                                Your studio page is available at: <strong className="text-[#1C4D8D]">{slug}.shutterstudio.com</strong>
+                            </p>
+                        )}
                     </div>
                 </CardContent>
             </Card>
@@ -471,6 +639,126 @@ export default function StudioSettingsPage() {
                     </CardContent>
                 </Card>
             </div>
+        </TabsContent>
+        
+        {/* ================= BANKING DETAILS TAB ================= */}
+        <TabsContent value="banking" className="space-y-6">
+            <Card>
+                <CardHeader>
+                    <CardTitle className="flex items-center gap-2"><CreditCard className="h-5 w-5 text-[#1C4D8D]"/> Banking Settings</CardTitle>
+                    <CardDescription>Setup bank deposit details for your clients to settle invoices.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                            <Label htmlFor="bankName">Bank / Institution</Label>
+                            <Input 
+                              id="bankName" 
+                              placeholder="e.g. Commercial Bank" 
+                              value={bankName} 
+                              onChange={e => setBankName(e.target.value)} 
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="branchName">Branch Name</Label>
+                            <Input 
+                              id="branchName" 
+                              placeholder="e.g. Ambalantota" 
+                              value={branchName} 
+                              onChange={e => setBranchName(e.target.value)} 
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="accName">Account Holder Name</Label>
+                            <Input 
+                              id="accName" 
+                              placeholder="e.g. MGCPK KUMARA" 
+                              value={accName} 
+                              onChange={e => setAccName(e.target.value)} 
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="accNumber">Account Number</Label>
+                            <Input 
+                              id="accNumber" 
+                              placeholder="e.g. 8008334288" 
+                              value={accNumber} 
+                              onChange={e => setAccNumber(e.target.value)} 
+                            />
+                        </div>
+                    </div>
+                </CardContent>
+            </Card>
+        </TabsContent>
+
+        {/* ================= POLICIES & TERMS TAB ================= */}
+        <TabsContent value="policies" className="space-y-6">
+            <Card>
+                <CardHeader>
+                    <CardTitle className="flex items-center gap-2"><ShieldCheck className="h-5 w-5 text-[#1C4D8D]"/> Terms & Policy Agreement</CardTitle>
+                    <CardDescription>Specify the terms of services, booking policies, and conditions shown on the client portal.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <div className="space-y-2">
+                        <Label htmlFor="policyNotice">Terms Agreement Text</Label>
+                        <Textarea
+                            id="policyNotice"
+                            value={policyNotice}
+                            onChange={e => setPolicyNotice(e.target.value)}
+                            placeholder="Write your terms of service, payment deadlines, deposit refunds rules here..."
+                            rows={12}
+                            className="min-h-[250px]"
+                        />
+                    </div>
+                </CardContent>
+            </Card>
+        </TabsContent>
+
+        {/* ================= MAINTENANCE TAB ================= */}
+        <TabsContent value="maintenance" className="space-y-6">
+            <Card>
+                <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                        <Wrench className="h-5 w-5 text-[#1C4D8D]" />
+                        System Maintenance Utilities
+                    </CardTitle>
+                    <CardDescription>
+                        Perform database schema migrations and validation operations.
+                    </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                    <div className="p-4 rounded-xl border border-blue-100 bg-blue-50/50 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                        <div className="space-y-1">
+                            <h4 className="text-sm font-semibold text-[#0F2854]">Normalize & Format Phone Numbers to E.164</h4>
+                            <p className="text-xs text-slate-500 max-w-xl">
+                                This will parse all events and consultations for this studio, check phone number fields, and convert them to the standardized international E.164 format. Unparseable phone numbers will be skipped to protect your data.
+                            </p>
+                        </div>
+                        <Button 
+                            type="button"
+                            onClick={handleMigratePhones} 
+                            disabled={migrating}
+                            className="bg-[#1C4D8D] text-white hover:bg-[#163b6b] shrink-0 self-start md:self-center"
+                        >
+                            {migrating ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Wrench className="h-4 w-4 mr-2" />}
+                            Run Migration
+                        </Button>
+                    </div>
+
+                    {migrationLogs.length > 0 && (
+                        <div className="space-y-2">
+                            <Label className="text-xs font-semibold text-slate-650 font-bold">Migration Console Log Output</Label>
+                            <div className="p-4 bg-slate-900 text-slate-100 rounded-xl font-mono text-xs h-72 overflow-y-auto space-y-1 border border-slate-800">
+                                {migrationLogs.map((log, index) => (
+                                    <div key={index} className={log.includes("ERROR") ? "text-rose-400" : log.includes("finished") ? "text-emerald-400 font-bold" : ""}>
+                                        {log}
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                </CardContent>
+            </Card>
         </TabsContent>
       </Tabs>
     </div>

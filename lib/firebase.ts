@@ -19,3 +19,16 @@ export const auth: Auth = getAuth(app)
 export const db: Firestore = getFirestore(app)
 export const storage: FirebaseStorage = getStorage(app)
 export { app }
+
+import { signInAnonymously } from "firebase/auth"
+
+export async function ensureServerAuth() {
+  if (!auth.currentUser) {
+    try {
+      await signInAnonymously(auth)
+    } catch (err) {
+      console.error("Firebase Server-side signInAnonymously error:", err)
+    }
+  }
+}
+

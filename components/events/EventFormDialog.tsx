@@ -5,7 +5,7 @@ import { useAuth } from "@/context/AuthContext"
 import { useMediaQuery } from "@/hooks/use-media-query"
 import {
     createEvent, updateEvent,
-    fetchStudioSettingsList, fetchPackagesList, fetchPackageConfig,
+    fetchStudioSettingsList, fetchPackagesList, fetchPackageConfig, fetchEvents,
     EventData, EventDayConfig, CustomItem, PackageData, PackageConfigParameter
 } from "@/services/event-service"
 import { validateSubscriptionAction } from "@/services/subscription-service"
@@ -33,6 +33,9 @@ import { Plus, Calendar as CalendarIcon, Loader2, Check, Trash2, Lock } from "lu
 import { format } from "date-fns"
 import { cn } from "@/lib/utils"
 import Swal from "sweetalert2"
+
+import { PhoneInput } from "@/components/ui/phone-input"
+import { validatePhoneNumber, parseE164 } from "@/lib/phone-utils"
 
 const DEFAULT_TYPES = ["Wedding", "Homecoming", "Preshoot", "Engagement", "Birthday", "Corporate", "Other"]
 
@@ -73,7 +76,11 @@ export function EventFormDialog({ open, onOpenChange, initialData, onSuccess }: 
     if (isDesktop) {
         return (
             <Dialog open={open} onOpenChange={onOpenChange}>
-                <DialogContent className="sm:max-w-[780px] p-0 flex flex-col max-h-[90vh] gap-0">
+                <DialogContent 
+                    className="sm:max-w-[780px] p-0 flex flex-col max-h-[90vh] gap-0"
+                    onPointerDownOutside={(e) => e.preventDefault()}
+                    onInteractOutside={(e) => e.preventDefault()}
+                >
                     <DialogHeader className="px-6 py-4 border-b shrink-0">
                         <DialogTitle>{title}</DialogTitle>
                         <DialogDescription>{description}</DialogDescription>
@@ -86,7 +93,11 @@ export function EventFormDialog({ open, onOpenChange, initialData, onSuccess }: 
 
     return (
         <Drawer open={open} onOpenChange={onOpenChange}>
-            <DrawerContent className="h-[95vh] flex flex-col p-0 rounded-t-xl">
+            <DrawerContent 
+                className="h-[95vh] flex flex-col p-0 rounded-t-xl"
+                onPointerDownOutside={(e) => e.preventDefault()}
+                onInteractOutside={(e) => e.preventDefault()}
+            >
                 <DrawerHeader className="px-6 py-4 border-b text-left shrink-0">
                     <DrawerTitle>{title}</DrawerTitle>
                     <DrawerDescription>{description}</DrawerDescription>
@@ -121,6 +132,8 @@ function EventForm({
     const [typeList, setTypeList] = useState<string[]>(DEFAULT_TYPES)
     const [packages, setPackages] = useState<PackageData[]>([])
     const [configParams, setConfigParams] = useState<PackageConfigParameter[]>([])
+    const [allEvents, setAllEvents] = useState<EventData[]>([])
+    const [showCustomerSuggestions, setShowCustomerSuggestions] = useState(false)
 
     // For a new event the only valid starting status is "Quotation"
     const isNew = !initialData
@@ -155,14 +168,16 @@ function EventForm({
         const init = async () => {
             if (!userData?.studioID) return
             try {
-                const [types, pkgs, cfgParams] = await Promise.all([
+                const [types, pkgs, cfgParams, eventsList] = await Promise.all([
                     fetchStudioSettingsList(userData.studioID, "EVENT_TYPES"),
                     fetchPackagesList(userData.studioID),
                     fetchPackageConfig(userData.studioID),
+                    fetchEvents(userData.studioID),
                 ])
                 if (types.length) setTypeList(types)
                 setPackages(pkgs as PackageData[])
                 setConfigParams(cfgParams as PackageConfigParameter[])
+                setAllEvents(eventsList as EventData[])
             } catch (e) {
                 console.error(e)
             }
@@ -170,6 +185,44 @@ function EventForm({
         }
         init()
     }, [userData])
+
+    const uniqueCustomers = useMemo(() => {
+        const map = new Map<string, { name: string, phone: string, email: string }>()
+        allEvents.forEach(e => {
+            const name = e.customerName?.trim()
+            const phone = e.customerMobile?.trim()
+            const email = e.customerEmail?.trim() || ""
+            if (name) {
+                // Unique check by normalized phone (if exists) or email or name
+                const cleanPhone = phone ? phone.replace(/\D/g, "") : ""
+                const key = cleanPhone || email.toLowerCase() || name.toLowerCase()
+                if (key && !map.has(key)) {
+                    map.set(key, { name, phone: e.customerMobile, email })
+                }
+            }
+        })
+        return Array.from(map.values())
+    }, [allEvents])
+
+    const customerSuggestions = useMemo(() => {
+        const query = (formData.customerName || "").trim().toLowerCase()
+        if (!query || initialData) return []
+        return uniqueCustomers.filter(c => 
+            c.name.toLowerCase().includes(query) ||
+            c.phone.toLowerCase().includes(query) ||
+            c.email.toLowerCase().includes(query)
+        ).slice(0, 5)
+    }, [formData.customerName, uniqueCustomers, initialData])
+
+    const handleSelectCustomer = (c: { name: string, phone: string, email: string }) => {
+        setFormData(prev => ({
+            ...prev,
+            customerName: c.name,
+            customerMobile: c.phone,
+            customerEmail: c.email
+        }))
+        setShowCustomerSuggestions(false)
+    }
 
     // Disable "Quotation" option when editing an event that has already moved past it
     const quotationLocked = !isNew && formData.status !== "Quotation"
@@ -242,6 +295,16 @@ function EventForm({
         if (!formData.eventName || !formData.customerName) {
             Swal.fire({ icon: "warning", title: "Missing required fields", text: "Event Name and Customer Name are required." })
             return
+        }
+
+        if (formData.customerMobile) {
+            const parsed = parseE164(formData.customerMobile)
+            const countryToValidate = parsed ? parsed.countryCode : ((userData?.country || "LK") as any)
+            const isValid = validatePhoneNumber(formData.customerMobile, countryToValidate)
+            if (!isValid) {
+                Swal.fire({ icon: "warning", title: "Invalid Phone Number", text: "Please enter a valid phone number for the customer." })
+                return
+            }
         }
 
         setSubmitting(true)
@@ -344,15 +407,43 @@ function EventForm({
                         </div>
                     </div>
 
-                    <Input
-                        placeholder="Customer Name *"
-                        value={formData.customerName}
-                        onChange={e => setFormData({ ...formData, customerName: e.target.value })}
-                        className="bg-slate-50"
-                    />
+                    <div className="relative">
+                        <Input
+                            placeholder="Customer Name *"
+                            value={formData.customerName || ""}
+                            onChange={e => {
+                                setFormData({ ...formData, customerName: e.target.value })
+                                setShowCustomerSuggestions(true)
+                            }}
+                            onFocus={() => setShowCustomerSuggestions(true)}
+                            onBlur={() => {
+                                // Small timeout to allow mousedown to be clicked
+                                setTimeout(() => setShowCustomerSuggestions(false), 200)
+                            }}
+                            className="bg-slate-50"
+                        />
+                        {showCustomerSuggestions && customerSuggestions.length > 0 && (
+                            <div className="absolute z-[100] left-0 right-0 mt-1 bg-white border border-slate-200 rounded-md shadow-lg max-h-60 overflow-y-auto">
+                                {customerSuggestions.map((c, idx) => (
+                                    <div
+                                        key={idx}
+                                        className="p-2.5 hover:bg-slate-100 cursor-pointer flex flex-col border-b last:border-b-0 text-left"
+                                        onMouseDown={() => handleSelectCustomer(c)}
+                                    >
+                                        <span className="font-semibold text-slate-800 text-sm">{c.name}</span>
+                                        <span className="text-xs text-slate-500">{c.phone} {c.email ? `• ${c.email}` : ""}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
                     <div className="grid grid-cols-2 gap-3">
-                        <Input placeholder="Mobile" value={formData.customerMobile} onChange={e => setFormData({ ...formData, customerMobile: e.target.value })} className="bg-slate-50" />
-                        <Input placeholder="Email" value={formData.customerEmail} onChange={e => setFormData({ ...formData, customerEmail: e.target.value })} className="bg-slate-50" />
+                        <PhoneInput
+                            value={formData.customerMobile || ""}
+                            onChange={(val) => setFormData({ ...formData, customerMobile: val })}
+                            placeholder="Mobile"
+                        />
+                        <Input placeholder="Email" value={formData.customerEmail || ""} onChange={e => setFormData({ ...formData, customerEmail: e.target.value })} className="bg-slate-50" />
                     </div>
                 </div>
 
@@ -621,7 +712,7 @@ function EventForm({
             <div className="p-4 border-t bg-white flex gap-3 shrink-0">
                 <Button variant="outline" className="flex-1" onClick={onCancel}>Cancel</Button>
                 <Button
-                    className="bg-brand-primary hover:bg-brand-primary-hover flex-1"
+                    className="bg-brand-primary text-white hover:bg-brand-primary-hover flex-1"
                     onClick={handleSubmit}
                     disabled={submitting}
                 >

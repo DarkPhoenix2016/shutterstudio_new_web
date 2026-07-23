@@ -4,9 +4,9 @@
   "private": true,
   "scripts": {
     "build": "next build",
-    "dev": "next dev --turbo -p ${PORT:-5000}",
+    "dev": "next dev --turbo",
     "lint": "eslint .",
-    "start": "next start -p ${PORT:-5000}"
+    "start": "next start -p"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
@@ -53,8 +53,9 @@
     "immer": "latest",
     "input-otp": "1.4.1",
     "jspdf": "^4.0.0",
+    "libphonenumber-js": "^1.13.9",
     "lucide-react": "^0.454.0",
-    "next": "16.0.10",
+    "next": "^16.2.10",
     "next-qrcode": "^2.5.1",
     "next-themes": "^0.4.6",
     "react": "19.2.0",

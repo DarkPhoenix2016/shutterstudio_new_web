@@ -101,7 +101,7 @@ export function AdminSidebar() {
       <SidebarContent className="bg-brand-dark py-4">
         {/* GROUP 1: OVERVIEW */}
         <SidebarGroup>
-          <SidebarGroupLabel className="text-brand-primary text-[10px] uppercase tracking-widest font-bold px-3 mb-2">
+          <SidebarGroupLabel className="text-[#82b0e6] text-[11px] uppercase tracking-widest font-bold px-3 mb-2 flex items-center">
             Overview
           </SidebarGroupLabel>
           <SidebarGroupContent>
@@ -115,15 +115,15 @@ export function AdminSidebar() {
                       isActive={isActive}
                       tooltip={item.label}
                       className={cn(
-                        "transition-all duration-200 mx-2 rounded-lg",
+                        "h-9 px-3 transition-all duration-200 mx-2 rounded-lg group",
                         isActive
                           ? "bg-brand-primary text-white font-semibold shadow-sm"
-                          : "text-brand-accent hover:text-white hover:bg-brand-dark-hover",
+                          : "text-white/80 hover:text-white hover:bg-brand-dark-hover",
                       )}
                     >
                       <button onClick={() => router.push(item.path)}>
-                        <item.icon className={cn("h-4 w-4", isActive ? "text-white" : "text-brand-accent")} />
-                        <span>{item.label}</span>
+                        <item.icon className={cn("h-4 w-4 shrink-0", isActive ? "text-[#bde8f5]" : "text-white/50 group-hover:text-white")} />
+                        <span className="text-sm font-medium">{item.label}</span>
                       </button>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
@@ -134,8 +134,8 @@ export function AdminSidebar() {
         </SidebarGroup>
 
         {/* GROUP 2: TENANT MANAGEMENT */}
-        <SidebarGroup className="mt-6">
-          <SidebarGroupLabel className="text-brand-primary text-[10px] uppercase tracking-widest font-bold px-3 mb-2">
+        <SidebarGroup className="mt-5">
+          <SidebarGroupLabel className="text-[#82b0e6] text-[11px] uppercase tracking-widest font-bold px-3 mb-2 flex items-center">
             Tenant Management
           </SidebarGroupLabel>
           <SidebarGroupContent>
@@ -149,15 +149,15 @@ export function AdminSidebar() {
                       isActive={isActive}
                       tooltip={item.label}
                       className={cn(
-                        "transition-all duration-200 mx-2 rounded-lg",
+                        "h-9 px-3 transition-all duration-200 mx-2 rounded-lg group",
                         isActive
                           ? "bg-brand-primary text-white font-semibold shadow-sm"
-                          : "text-brand-accent hover:text-white hover:bg-brand-dark-hover",
+                          : "text-white/80 hover:text-white hover:bg-brand-dark-hover",
                       )}
                     >
                       <button onClick={() => router.push(item.path)}>
-                        <item.icon className={cn("h-4 w-4", isActive ? "text-white" : "text-brand-accent")} />
-                        <span>{item.label}</span>
+                        <item.icon className={cn("h-4 w-4 shrink-0", isActive ? "text-[#bde8f5]" : "text-white/50 group-hover:text-white")} />
+                        <span className="text-sm font-medium">{item.label}</span>
                       </button>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
@@ -168,8 +168,8 @@ export function AdminSidebar() {
         </SidebarGroup>
 
         {/* GROUP 3: PLATFORM CONFIG */}
-        <SidebarGroup className="mt-6">
-          <SidebarGroupLabel className="text-brand-primary text-[10px] uppercase tracking-widest font-bold px-3 mb-2">
+        <SidebarGroup className="mt-5">
+          <SidebarGroupLabel className="text-[#82b0e6] text-[11px] uppercase tracking-widest font-bold px-3 mb-2 flex items-center">
             Platform Config
           </SidebarGroupLabel>
           <SidebarGroupContent>
@@ -183,15 +183,15 @@ export function AdminSidebar() {
                       isActive={isActive}
                       tooltip={item.label}
                       className={cn(
-                        "transition-all duration-200 mx-2 rounded-lg",
+                        "h-9 px-3 transition-all duration-200 mx-2 rounded-lg group",
                         isActive
                           ? "bg-brand-primary text-white font-semibold shadow-sm"
-                          : "text-brand-accent hover:text-white hover:bg-brand-dark-hover",
+                          : "text-white/80 hover:text-white hover:bg-brand-dark-hover",
                       )}
                     >
                       <button onClick={() => router.push(item.path)}>
-                        <item.icon className={cn("h-4 w-4", isActive ? "text-white" : "text-brand-accent")} />
-                        <span>{item.label}</span>
+                        <item.icon className={cn("h-4 w-4 shrink-0", isActive ? "text-[#bde8f5]" : "text-white/50 group-hover:text-white")} />
+                        <span className="text-sm font-medium">{item.label}</span>
                       </button>
                     </SidebarMenuButton>
                   </SidebarMenuItem>

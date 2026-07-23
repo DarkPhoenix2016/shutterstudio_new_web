@@ -24,6 +24,9 @@ import {
     Loader2, Search, Mail, Phone, Ban, CheckCircle, UserPlus, AlertTriangle, Pencil, MessageCircle 
 } from "lucide-react"
 import Swal from "sweetalert2"
+import { PhoneInput } from "@/components/ui/phone-input"
+import { validatePhoneNumber, parseE164 } from "@/lib/phone-utils"
+import { CountryCode } from "libphonenumber-js"
 
 const Toast = Swal.mixin({
   toast: true,
@@ -154,6 +157,16 @@ export default function StudioManagersPage() {
           return;
       }
 
+      if (newUser.phone) {
+          const parsed = parseE164(newUser.phone)
+          const countryToValidate = parsed ? parsed.countryCode : ((userData?.country || "LK") as any)
+          const isValid = validatePhoneNumber(newUser.phone, countryToValidate)
+          if (!isValid) {
+              Toast.fire({ icon: 'warning', title: 'Please enter a valid phone number' });
+              return;
+          }
+      }
+
       setIsSubmitting(true);
 
       try {
@@ -189,6 +202,17 @@ export default function StudioManagersPage() {
 
   const handleUpdateUser = async () => {
       if (!editingUser) return;
+
+      if (editingUser.phoneNumber) {
+          const parsed = parseE164(editingUser.phoneNumber)
+          const countryToValidate = parsed ? parsed.countryCode : ((userData?.country || "LK") as any)
+          const isValid = validatePhoneNumber(editingUser.phoneNumber, countryToValidate)
+          if (!isValid) {
+              Toast.fire({ icon: 'warning', title: 'Please enter a valid phone number' });
+              return;
+          }
+      }
+
       setIsSubmitting(true);
 
       try {
@@ -310,7 +334,16 @@ export default function StudioManagersPage() {
                     <div className="grid gap-4 py-4">
                         <div className="grid grid-cols-4 items-center gap-4"><Label className="text-right">Name *</Label><Input className="col-span-3" value={newUser.displayName} onChange={e => setNewUser({...newUser, displayName: e.target.value})}/></div>
                         <div className="grid grid-cols-4 items-center gap-4"><Label className="text-right">Email *</Label><Input type="email" className="col-span-3" value={newUser.email} onChange={e => setNewUser({...newUser, email: e.target.value})}/></div>
-                        <div className="grid grid-cols-4 items-center gap-4"><Label className="text-right">Phone *</Label><Input className="col-span-3" placeholder="+1 555 0199" value={newUser.phone} onChange={e => setNewUser({...newUser, phone: e.target.value})} /></div>
+                        <div className="grid grid-cols-4 items-center gap-4">
+                            <Label className="text-right">Phone *</Label>
+                            <div className="col-span-3">
+                                <PhoneInput
+                                    value={newUser.phone}
+                                    onChange={val => setNewUser({...newUser, phone: val})}
+                                    placeholder="Phone Number"
+                                />
+                            </div>
+                        </div>
                         <div className="grid grid-cols-4 items-center gap-4"><Label className="text-right">Password *</Label><Input type="password" className="col-span-3" value={newUser.password} onChange={e => setNewUser({...newUser, password: e.target.value})}/></div>
                         
                         <div className="grid grid-cols-4 items-center gap-4">
@@ -352,7 +385,16 @@ export default function StudioManagersPage() {
               {editingUser && (
                   <div className="grid gap-4 py-4">
                       <div className="grid grid-cols-4 items-center gap-4"><Label className="text-right">Name</Label><Input className="col-span-3" value={editingUser.displayName} onChange={e => setEditingUser({...editingUser, displayName: e.target.value})}/></div>
-                      <div className="grid grid-cols-4 items-center gap-4"><Label className="text-right">Phone</Label><Input className="col-span-3" value={editingUser.phoneNumber} onChange={e => setEditingUser({...editingUser, phoneNumber: e.target.value})}/></div>
+                      <div className="grid grid-cols-4 items-center gap-4">
+                          <Label className="text-right">Phone</Label>
+                          <div className="col-span-3">
+                              <PhoneInput
+                                  value={editingUser.phoneNumber || ""}
+                                  onChange={val => setEditingUser({...editingUser, phoneNumber: val})}
+                                  placeholder="Phone Number"
+                              />
+                          </div>
+                      </div>
                       <div className="grid grid-cols-4 items-center gap-4">
                           <Label className="text-right">Role</Label>
                           <Select value={editingUser.role} onValueChange={(val) => setEditingUser({...editingUser, role: val})}>

@@ -4,8 +4,8 @@ import { EventFormDialog } from "@/components/events/EventFormDialog"
 import { useAuth } from "@/context/AuthContext"
 import { getStatusColor } from "@/lib/event-utils"
 import { deleteEvent, EventData, fetchEvents } from "@/services/event-service"
-import { useRouter } from "next/navigation"
-import { useEffect, useMemo, useState } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
+import { useEffect, useMemo, useState, Suspense } from "react"
 
 // UI Components
 import { Badge } from "@/components/ui/badge"
@@ -22,9 +22,18 @@ import Swal from "sweetalert2"
 
 const EVENTS_PER_PAGE = 20
 
-export default function EventsPage() {
+export default function EventsPageWrapper() {
+    return (
+        <Suspense fallback={<div className="flex h-96 items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-[#1C4D8D]" /></div>}>
+            <EventsPage />
+        </Suspense>
+    )
+}
+
+function EventsPage() {
     const { userData } = useAuth()
     const router = useRouter()
+    const searchParams = useSearchParams()
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
     const [events, setEvents] = useState<EventData[]>([])
@@ -37,6 +46,13 @@ export default function EventsPage() {
     useEffect(() => {
         if (userData?.studioID) loadData()
     }, [userData])
+
+    useEffect(() => {
+        if (searchParams.get("action") === "new") {
+            setTimeout(() => setIsFormOpen(true), 300)
+            router.replace('/app/events', { scroll: false })
+        }
+    }, [searchParams, router])
 
     const loadData = async () => {
         setError(null)
@@ -145,7 +161,7 @@ export default function EventsPage() {
                 </div>
             )}
 
-            <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                 {pagedEvents.map(event => {
                     const isIncomplete = (!event.assignedCrew?.length || !event.assignedEquipment?.length) && event.status !== "Inquiry"
                     return (

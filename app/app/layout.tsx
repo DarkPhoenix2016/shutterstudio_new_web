@@ -3,6 +3,7 @@
 import { useEffect, useState, Suspense } from "react"
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar"
 import { DashboardSidebar } from "@/components/dashboard-sidebar"
+import { MobileNavigationBar } from "@/components/mobile-navigation"
 import { useAuth } from "@/context/AuthContext"
 import { useRouter, usePathname } from "next/navigation"
 import { Bell, User, Loader2, AlertTriangle, ShieldAlert } from "lucide-react"
@@ -157,8 +158,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
            <header className="flex items-center justify-between px-6 py-3 bg-card border-b border-border shadow-xs shrink-0">
               <div className="flex items-center gap-4">
-                  <SidebarTrigger className="-ml-2" />
-                  
+                  <SidebarTrigger className="-ml-2 flex z-50 relative" />
                   <GlobalSearch />
               </div>
 
@@ -172,7 +172,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     <DropdownMenuTrigger asChild>
                         <Button variant="ghost" className="relative h-8 w-8 rounded-full">
                             <Avatar className="h-8 w-8 border border-border">
-                                <AvatarImage src={userData?.photoURL || ""} alt={userData?.displayName || ""} />
+                                <AvatarImage src={userData?.photoURL || undefined} alt={userData?.displayName || ""} />
                                 <AvatarFallback className="bg-brand-primary text-white">
                                     {(userData?.displayName || "U").charAt(0).toUpperCase()}
                                 </AvatarFallback>
@@ -207,6 +207,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 {children}
              </Suspense>
            </div>
+
+           <MobileNavigationBar />
 
         </main>
       </div>

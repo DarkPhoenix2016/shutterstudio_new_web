@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/dialog"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { cn } from "@/lib/utils"
-
+import { MobileNavConfigPanel } from "@/components/admin/mobile-nav-config"
 import Swal from "sweetalert2"
 import { doc, getDoc, updateDoc, setDoc, arrayUnion, arrayRemove, deleteField } from "firebase/firestore"
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage"
@@ -534,14 +534,20 @@ export default function SettingsPage() {
       </div>
 
       <Tabs defaultValue="navigation" className="w-full">
-        <TabsList className="grid w-full grid-cols-6 lg:w-[900px] mb-6">
+        <TabsList className="grid w-full grid-cols-7 lg:w-[1050px] mb-6">
           <TabsTrigger value="general">General</TabsTrigger>
           <TabsTrigger value="defaults">Defaults</TabsTrigger>
           <TabsTrigger value="navigation">Navigation</TabsTrigger>
+          <TabsTrigger value="mobilenav">Mobile Nav</TabsTrigger>
           <TabsTrigger value="permissions">Permissions</TabsTrigger>
           <TabsTrigger value="roles">Roles</TabsTrigger>
           <TabsTrigger value="features">Features</TabsTrigger>
         </TabsList>
+
+        {/* --- TAB: MOBILE NAV --- */}
+        <TabsContent value="mobilenav">
+          <MobileNavConfigPanel />
+        </TabsContent>
 
         {/* --- TAB 1: GENERAL --- */}
         <TabsContent value="general">

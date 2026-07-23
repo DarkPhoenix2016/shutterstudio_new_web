@@ -104,17 +104,17 @@ function pipelineStage(status: string): number {
 }
 
 const PIPELINE_STAGES = [
-  { label: "Quotation",   color: "#8b5cf6", bg: "bg-violet-500" },
-  { label: "Confirmed",   color: "#3b82f6", bg: "bg-blue-500" },
+  { label: "Quotation", color: "#8b5cf6", bg: "bg-violet-500" },
+  { label: "Confirmed", color: "#3b82f6", bg: "bg-blue-500" },
   { label: "In Progress", color: "#f59e0b", bg: "bg-amber-500" },
-  { label: "Completed",   color: "#22c55e", bg: "bg-emerald-500" },
+  { label: "Completed", color: "#22c55e", bg: "bg-emerald-500" },
 ]
 
 const PRIORITY_CONFIG: Record<string, { label: string; color: string; dot: string }> = {
-  urgent: { label: "Urgent",  color: "text-red-600",    dot: "bg-red-500" },
-  high:   { label: "High",    color: "text-orange-600", dot: "bg-orange-400" },
-  medium: { label: "Medium",  color: "text-amber-600",  dot: "bg-amber-400" },
-  low:    { label: "Low",     color: "text-slate-500",  dot: "bg-slate-300" },
+  urgent: { label: "Urgent", color: "text-red-600", dot: "bg-red-500" },
+  high: { label: "High", color: "text-orange-600", dot: "bg-orange-400" },
+  medium: { label: "Medium", color: "text-amber-600", dot: "bg-amber-400" },
+  low: { label: "Low", color: "text-slate-500", dot: "bg-slate-300" },
 }
 
 function fmtMoney(n: number, currency: string) {
@@ -317,7 +317,7 @@ export default function DashboardPage() {
           </p>
         </div>
         <Button
-          className="bg-brand-primary text-white hover:bg-brand-primary-hover gap-2 shadow-sm"
+          className="bg-white text-foreground hover:bg-brand-primary-hover gap-2 shadow-sm"
           onClick={() => setNewEventOpen(true)}
         >
           <Plus className="h-4 w-4" /> New Booking
@@ -569,12 +569,12 @@ export default function DashboardPage() {
             <CardContent className="p-3">
               <div className="grid grid-cols-2 gap-2">
                 {[
-                  { label: "New Booking",  icon: Calendar,   action: () => setNewEventOpen(true),               accent: "#d97706" },
-                  { label: "Crew",         icon: Users,       action: () => router.push("/app/crew/overview"),    accent: "#18181b" },
-                  { label: "Inventory",    icon: Package,     action: () => router.push("/app/inventory/overview"), accent: "#f59e0b" },
-                  { label: "Analytics",   icon: BarChart2,   action: () => router.push("/app/analytics"),        accent: "#8b5cf6" },
-                  { label: "Tasks",        icon: CheckSquare, action: () => router.push("/app/tasks"),            accent: "#22c55e" },
-                  { label: "Catalogue",   icon: Star,        action: () => router.push("/app/catalogue/overview"), accent: "#f59e0b" },
+                  { label: "New Booking", icon: Calendar, action: () => setNewEventOpen(true), accent: "#d97706" },
+                  { label: "Crew", icon: Users, action: () => router.push("/app/crew/overview"), accent: "#18181b" },
+                  { label: "Inventory", icon: Package, action: () => router.push("/app/inventory/overview"), accent: "#f59e0b" },
+                  { label: "Analytics", icon: BarChart2, action: () => router.push("/app/analytics"), accent: "#8b5cf6" },
+                  { label: "Tasks", icon: CheckSquare, action: () => router.push("/app/tasks"), accent: "#22c55e" },
+                  { label: "Catalogue", icon: Star, action: () => router.push("/app/catalogue/overview"), accent: "#f59e0b" },
                 ].map((item) => (
                   <button
                     key={item.label}

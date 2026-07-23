@@ -89,7 +89,7 @@ export function DashboardSidebar() {
     const allowedFeatures = rolePermissions[userRole] || []
     const isSuperAdmin = userRole === "super_admin"
 
-    return globalSettings.navigation.map(group => {
+    const baseNav = globalSettings.navigation.map(group => {
       const validItems = group.items.filter(item => {
         if (!item.feature) return true
         return isSuperAdmin || allowedFeatures.includes(item.feature)
@@ -97,29 +97,42 @@ export function DashboardSidebar() {
       return { ...group, items: validItems }
     }).filter(group => group.items.length > 0) 
 
+    return baseNav
   }, [userData, rolePermissions, globalSettings])
 
+  // Find the most specific active item to avoid multi-highlighting
+  const activeItemPath = useMemo(() => {
+    let bestMatch = "";
+    for (const group of navStructure) {
+      for (const item of group.items) {
+        if (pathname === item.path) return item.path;
+        if (item.path !== '/app' && item.path !== '/' && pathname.startsWith(`${item.path}/`)) {
+          if (item.path.length > bestMatch.length) {
+            bestMatch = item.path;
+          }
+        }
+      }
+    }
+    return bestMatch;
+  }, [pathname, navStructure]);
+
   // Helper: Determine if an item is active
-  const isItemActive = (itemPath: string, currentPath: string) => {
-     if (currentPath === itemPath) return true;
-     if (itemPath !== '/app' && itemPath !== '/' && currentPath.startsWith(`${itemPath}/`)) {
-        return true;
-     }
-     return false;
+  const isItemActive = (itemPath: string) => {
+     return itemPath === activeItemPath;
   }
 
   // Logic: Auto-expand active group
   useEffect(() => {
     if (navStructure.length > 0) {
       const activeGroup = navStructure.find(group => 
-        group.items.some(item => isItemActive(item.path, pathname))
+        group.items.some(item => isItemActive(item.path))
       )
       
       if (activeGroup) {
         setOpenGroupLabel(activeGroup.label)
       }
     }
-  }, [pathname, navStructure])
+  }, [navStructure, activeItemPath])
 
   // Display Variables
   const studioName = studioData?.name || "ShutterStudio"
@@ -145,8 +158,8 @@ export function DashboardSidebar() {
               <span className="font-bold truncate leading-none text-sm text-white mb-0.5">
                  {studioName}
               </span>
-              {/* [!code highlight] Dynamic Plan Name */}
-              <span className="text-[9px] text-brand-primary font-bold uppercase tracking-widest leading-none">
+              {/* Dynamic Plan Name */}
+              <span className="text-[9px] text-brand-accent font-bold uppercase tracking-widest leading-none">
                  {planName} LICENSE
               </span>
             </div>
@@ -167,12 +180,12 @@ export function DashboardSidebar() {
               key={group.id || group.label} 
               open={openGroupLabel === group.label} 
               onOpenChange={(isOpen) => {
-                setOpenGroupLabel(isOpen ? group.label : null)
+                 setOpenGroupLabel(isOpen ? group.label : null)
               }}
               className="group/collapsible"
             >
               <SidebarGroup className="py-0">
-                <SidebarGroupLabel asChild className="group/label text-brand-primary hover:text-white hover:bg-white/5 cursor-pointer text-[10px] font-bold tracking-widest px-2 h-8 mb-0.5 uppercase flex items-center">
+                <SidebarGroupLabel asChild className="group/label text-[#82b0e6] hover:text-white hover:bg-white/5 cursor-pointer text-[11px] font-bold tracking-widest px-2 h-9 mb-1 uppercase flex items-center">
                   <CollapsibleTrigger>
                     {group.label}
                     <ChevronDown className="ml-auto h-3 w-3 transition-transform duration-200 group-data-[state=open]/collapsible:rotate-180" />
@@ -183,7 +196,7 @@ export function DashboardSidebar() {
                   <SidebarGroupContent>
                     <SidebarMenu className="gap-0.5">
                       {group.items.map((item) => {
-                        const isActive = isItemActive(item.path, pathname);
+                        const isActive = isItemActive(item.path);
                         const IconComponent = ICON_MAP[item.icon] || Camera 
 
                         return (
@@ -192,18 +205,18 @@ export function DashboardSidebar() {
                               asChild
                               isActive={isActive}
                               className={cn(
-                                "h-8 px-2.5 transition-all duration-200 group relative",
+                                "h-9 px-2.5 transition-all duration-200 group relative rounded-md",
                                 isActive
-                                  ? "bg-brand-primary text-white font-medium shadow-sm"
-                                  : "text-white/70 hover:text-white hover:bg-brand-dark-hover",
+                                  ? "bg-brand-primary text-white font-semibold shadow-sm"
+                                  : "text-white/80 hover:text-white hover:bg-brand-dark-hover",
                               )}
                             >
                               <button onClick={() => router.push(item.path)} className="w-full flex items-center gap-2.5">
                                 {isActive && <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-brand-accent" />}
                                 <IconComponent
-                                  className={cn("h-4 w-4 shrink-0", isActive ? "text-brand-accent" : "text-white/40")}
+                                  className={cn("h-4 w-4 shrink-0", isActive ? "text-brand-accent" : "text-white/60 group-hover:text-white")}
                                 />
-                                <span className="truncate text-xs">{item.label}</span>
+                                <span className="truncate text-sm font-medium">{item.label}</span>
                                 {isActive && <ChevronRight className="ml-auto h-3 w-3 text-brand-accent/50" />}
                               </button>
                             </SidebarMenuButton>
@@ -237,7 +250,7 @@ export function DashboardSidebar() {
             <span className="text-xs font-medium truncate text-white">
               {userName}
             </span>
-            <span className="text-[9px] text-brand-primary font-bold uppercase tracking-wider truncate">
+            <span className="text-[9px] text-brand-accent font-bold uppercase tracking-wider truncate">
               {formatRole(userRole)}
             </span>
           </div>

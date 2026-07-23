@@ -6,7 +6,8 @@
 :root {
   /* Applied specific professional blue palette: #1C4D8D, #0F2854, #4988C4, #BDE8F5 */
   --background: oklch(0.99 0 0);
-  --foreground: #0f2854; /* Dark Background color used for text contrast */
+  --foreground: #0f2854;
+  /* Dark Background color used for text contrast */
 
   --card: oklch(1 0 0);
   --card-foreground: #0f2854;
@@ -15,11 +16,11 @@
   --popover-foreground: #0f2854;
 
   /* Primary: #1C4D8D */
-  --primary: #1c4d8d;
+  --primary: #130047;
   --primary-foreground: oklch(1 0 0);
 
   /* Secondary: #4988C4 (Accent color) */
-  --secondary: #4988c4;
+  --secondary: #255f96;
   --secondary-foreground: oklch(1 0 0);
 
   /* Muted: #BDE8F5 (Light Highlight) */
@@ -55,10 +56,15 @@
   --sidebar-accent-foreground: #bde8f5;
   --sidebar-border: #1c4d8d;
   --sidebar-ring: #4988c4;
+  --brand-primary: #1c4d8d;
+  --brand-primary-hover: #153b6c;
+  --brand-primary-light: #e6f0fa;
+  --brand-accent: #255f96;
 }
 
 .dark {
-  --background: #0f0f10; /* Charcoal / Obsidian */
+  --background: #0f0f10;
+  /* Charcoal / Obsidian */
   --foreground: #fafaf9;
   --card: #18181b;
   --card-foreground: #fafaf9;
@@ -90,32 +96,131 @@
   --sidebar-accent-foreground: #fafaf9;
   --sidebar-border: #27272a;
   --sidebar-ring: #d97706;
+  --brand-primary: #4988c4;
+  --brand-primary-hover: #5aa1df;
+  --brand-primary-light: #182230;
+  --brand-accent: #bde8f5;
 }
 
 /* Auto-mapping utility fallbacks to respect dark mode */
 .dark .bg-white {
   background-color: var(--card) !important;
 }
-.dark .text-slate-900, .dark .text-gray-900, .dark .text-zinc-900 {
+
+.dark .text-slate-900,
+.dark .text-gray-900,
+.dark .text-zinc-900 {
   color: var(--foreground) !important;
 }
-.dark .text-slate-700, .dark .text-gray-700, .dark .text-zinc-700 {
+
+.dark .text-slate-700,
+.dark .text-gray-700,
+.dark .text-zinc-700 {
   color: var(--muted-foreground) !important;
 }
-.dark .text-slate-600, .dark .text-slate-500, .dark .text-gray-600, .dark .text-gray-500, .dark .text-zinc-500, .dark .text-slate-400 {
+
+.dark .text-slate-600,
+.dark .text-slate-500,
+.dark .text-gray-600,
+.dark .text-gray-500,
+.dark .text-zinc-500,
+.dark .text-slate-400 {
   color: var(--muted-foreground) !important;
 }
-.dark .border-slate-200, .dark .border-gray-200, .dark .border-zinc-200, .dark .border-slate-100 {
+
+.dark .border-slate-200,
+.dark .border-gray-200,
+.dark .border-zinc-200,
+.dark .border-slate-100 {
   border-color: var(--border) !important;
 }
-.dark .bg-slate-50, .dark .bg-gray-50, .dark .bg-zinc-50, .dark .bg-slate-50\/50, .dark .bg-slate-50\/80 {
+
+.dark .bg-slate-50,
+.dark .bg-gray-50,
+.dark .bg-zinc-50,
+.dark .bg-slate-50\/50,
+.dark .bg-slate-50\/80 {
   background-color: var(--background) !important;
 }
-.dark .bg-slate-100, .dark .bg-gray-100, .dark .bg-zinc-100 {
+
+.dark .bg-slate-100,
+.dark .bg-gray-100,
+.dark .bg-zinc-100 {
   background-color: var(--secondary) !important;
 }
-.dark .hover\:bg-slate-50:hover, .dark .hover\:bg-gray-50:hover {
+
+.dark .hover\:bg-slate-50:hover,
+.dark .hover\:bg-gray-50:hover {
   background-color: var(--secondary) !important;
+}
+
+/* Force light theme overrides inside any container with the .light class */
+.light {
+  --background: #f8fafc;
+  --foreground: #0f172a;
+  --card: #ffffff;
+  --card-foreground: #0f172a;
+  --border: #e2e8f0;
+  --muted-foreground: #64748b;
+}
+
+.light .bg-white {
+  background-color: #ffffff !important;
+}
+
+.light .bg-slate-50,
+.light .bg-slate-50\/50,
+.light .bg-slate-55 {
+  background-color: #f8fafc !important;
+}
+
+.light .bg-slate-100 {
+  background-color: #f1f5f9 !important;
+}
+
+.light .hover\:bg-slate-50:hover {
+  background-color: #f8fafc !important;
+}
+
+.light .text-slate-900,
+.light .text-gray-900,
+.light .text-zinc-900 {
+  color: #0f172a !important;
+}
+
+.light .text-slate-800,
+.light .text-gray-800,
+.light .text-zinc-800 {
+  color: #1e293b !important;
+}
+
+.light .text-slate-700,
+.light .text-gray-700,
+.light .text-zinc-700 {
+  color: #334155 !important;
+}
+
+.light .text-slate-600,
+.light .text-gray-600 {
+  color: #475569 !important;
+}
+
+.light .text-slate-550,
+.light .text-slate-500,
+.light .text-gray-500 {
+  color: #64748b !important;
+}
+
+.light .text-slate-400,
+.light .text-gray-400 {
+  color: #94a3b8 !important;
+}
+
+.light .border-slate-200,
+.light .border-gray-200,
+.light .border-zinc-200,
+.light .border-slate-100 {
+  border-color: #e2e8f0 !important;
 }
 
 @theme inline {
@@ -157,18 +262,24 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+  --color-brand-primary: var(--brand-primary);
+  --color-brand-primary-hover: var(--brand-primary-hover);
+  --color-brand-primary-light: var(--brand-primary-light);
+  --color-brand-accent: var(--brand-accent);
 }
 
 @layer base {
   * {
     @apply border-border outline-ring/50;
   }
+
   body {
     @apply bg-background text-foreground;
   }
 }
 
 @media print {
+
   /* Hide navigation chrome when printing analytics report */
   aside,
   nav,
@@ -177,10 +288,12 @@
   .print\:hidden {
     display: none !important;
   }
+
   body {
     background: white !important;
     color: black !important;
   }
+
   .shadow-md,
   .shadow-lg,
   .shadow-xl,
@@ -188,4 +301,13 @@
     box-shadow: none !important;
     border: 1px solid #e2e8f0 !important;
   }
+}
+
+/* Fix Radix UI Dialog pointer-events trap blocking SweetAlert2 clicks */
+body.swal2-shown,
+body.swal2-shown[style] {
+  pointer-events: auto !important;
+}
+.swal2-container {
+  pointer-events: auto !important;
 }

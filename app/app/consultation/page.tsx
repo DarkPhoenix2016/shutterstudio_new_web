@@ -46,6 +46,15 @@ import {
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import Swal from "sweetalert2"
+const Toast = Swal.mixin({
+    toast: true,
+    position: 'top-end',
+    showConfirmButton: false,
+    timer: 3000
+})
+import { PhoneInput } from "@/components/ui/phone-input"
+import { validatePhoneNumber, parseE164 } from "@/lib/phone-utils"
+import { CountryCode } from "libphonenumber-js"
 import { safeDate } from "@/lib/date-utils"
 
 // --- TYPES ---
@@ -425,7 +434,19 @@ export default function ConsultationPage() {
     const totalPages = Math.ceil(filteredDrafts.length / DRAFTS_PER_PAGE)
 
     const handleNext = () => {
-        if (step === 1 && !consultation.client.name) return Swal.fire({ icon: 'warning', title: 'Required', text: 'Client name is missing.' })
+        if (step === 1) {
+            if (!consultation.client.name) {
+                return Swal.fire({ icon: 'warning', title: 'Required', text: 'Client name is missing.' })
+            }
+            if (consultation.client.mobile) {
+                const parsed = parseE164(consultation.client.mobile)
+                const countryToValidate = parsed ? parsed.countryCode : ((userData?.country || "LK") as any)
+                const isValid = validatePhoneNumber(consultation.client.mobile, countryToValidate)
+                if (!isValid) {
+                    return Swal.fire({ icon: 'warning', title: 'Invalid Phone Number', text: 'Please enter a valid phone number for the client.' })
+                }
+            }
+        }
         if (step > 0) handleAutoSave()
         setStep(s => Math.min(s + 1, 4))
     }
@@ -656,15 +677,11 @@ export default function ConsultationPage() {
                                             </div>
                                             <div className="space-y-1.5">
                                                 <Label className="text-xs font-medium text-slate-600">Mobile</Label>
-                                                <div className="relative">
-                                                    <Phone className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
-                                                    <Input
-                                                        value={consultation.client.mobile}
-                                                        onChange={e => setConsultation({ ...consultation, client: { ...consultation.client, mobile: e.target.value } })}
-                                                        className="h-10 pl-9 bg-slate-50 border-slate-200"
-                                                        placeholder="07x xxxxxxx"
-                                                    />
-                                                </div>
+                                                <PhoneInput
+                                                    value={consultation.client.mobile || ""}
+                                                    onChange={val => setConsultation({ ...consultation, client: { ...consultation.client, mobile: val } })}
+                                                    placeholder="Phone Number"
+                                                />
                                             </div>
                                             <div className="space-y-1.5 md:col-span-2">
                                                 <Label className="text-xs font-medium text-slate-600">Email</Label>
